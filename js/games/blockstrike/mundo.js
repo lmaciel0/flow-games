@@ -6,6 +6,7 @@
 import { JOGADOR, NOMES_BOTS, ARMAS } from './config.js';
 import { moverComColisao, direcao, olho, hitboxes, raycastCaixas, raycastEntidades } from './fisica.js';
 import { criarArma, podeAtirar, disparar, atualizarArma, iniciarRecarga, danoDe } from './armas.js';
+import { escolherPrimaria } from './bots.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 0.4;
@@ -25,9 +26,11 @@ function criarEntidade(id, nome, time, bot, primariaEscolhida) {
 
 export function criarMundo({ mapa, primariaJogador, dificuldade, rng }) {
   const entidades = [criarEntidade(ID_JOGADOR, 'Você', 'azul', false, primariaJogador)];
+  // Índice entre os bots do time: o 0 (sniper) é o primeiro bot, já que o jogador fica com a dele.
   for (let i = 1; i < 10; i++) {
     const time = i < 5 ? 'azul' : 'laranja';
-    entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, 'rifle'));
+    const indice = i < 5 ? i - 1 : i - 5;
+    entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
   return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng };
 }
@@ -133,6 +136,7 @@ function aplicarDano(atirador, tipo, golpe, eventos) {
   const dano = danoDe(tipo, golpe.parte);
   alvo.hp = Math.max(0, alvo.hp - dano);
   eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano });
+  if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
   if (alvo.hp > 0) return;
   alvo.vivo = false;
   atirador.kills += 1;

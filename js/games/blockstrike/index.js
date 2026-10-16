@@ -1,7 +1,7 @@
 /**
  * Block Strike — FPS 5x5 contra bots (Three.js).
  * Menu, avisos de compatibilidade e, por enquanto, um loop provisório:
- * o jogador anda pelo mapa e os bots ficam parados nos spawns.
+ * o jogador anda e atira pelo mapa e os bots jogam sozinhos (bots.js).
  */
 
 import { MAPA } from './mapa.js';
@@ -11,6 +11,8 @@ import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
 import { ARMAS } from './config.js';
 import { olho } from './fisica.js';
+import { criarGrafo } from './navegacao.js';
+import { criarCerebro, pensar } from './bots.js';
 
 const DT_MAX = 0.05;
 
@@ -116,7 +118,11 @@ function montar(raiz, ctx) {
     p.antes = agora;
     const jogador = p.mundo.entidades[p.mundo.jogadorId];
     const cmd = p.entrada.comando(jogador.yaw, jogador.pitch);
-    const eventos = passo(p.mundo, dt, new Map([[jogador.id, cmd]]), { congelado: false });
+    const comandos = new Map([[jogador.id, cmd]]);
+    for (const e of p.mundo.entidades) {
+      if (e.bot && e.vivo) comandos.set(e.id, pensar(e, p.mundo, p.grafo, p.mundo.dificuldade, dt, p.rngBots));
+    }
+    const eventos = passo(p.mundo, dt, comandos, { congelado: false });
     reagir(p, eventos);
     const zoomFov = cmd.zoom && jogador.vivo ? ARMAS[jogador.armas[jogador.slot].tipo].zoomFov : undefined;
     p.render.desenhar(p.mundo, p.mundo.jogadorId, { zoomFov });
@@ -159,9 +165,12 @@ function montar(raiz, ctx) {
         mapa: MAPA, primariaJogador: 'rifle', dificuldade: 'medio', rng: criarRng(Date.now()),
       });
       posicionarParaRound(mundo, 'A');
+      const grafo = criarGrafo(MAPA.waypoints, MAPA.arestas);
+      const rngBots = criarRng(Date.now() ^ 0x5bd1e995);
+      for (const e of mundo.entidades) if (e.bot) e.cerebro = criarCerebro(e, grafo, rngBots, MAPA.caixas);
       const render = criarRender(canvas, MAPA);
       entrada.aoPerderTrava(pausarPartida);
-      partida = { mundo, render, entrada, raf: null, antes: 0 };
+      partida = { mundo, render, entrada, grafo, rngBots, raf: null, antes: 0 };
       menu.hidden = true;
       raiz.dataset.fase = 'jogo';
       raiz.dataset.pausado = 'false';
