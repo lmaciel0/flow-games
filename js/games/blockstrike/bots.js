@@ -142,7 +142,8 @@ function atacar(ent, c, alvo, mundo, dif, dt, rng, cmd, { strafe }) {
   let ponto = c.cabeca ? p.cabeca : p.tronco;
   if (!temVisada(o, ponto, mundo.mapa.caixas)) ponto = c.cabeca ? p.tronco : p.cabeca;
   const yawAlvo = yawPara(o, ponto) + c.erro.yaw;
-  const compensa = Math.min(arma.recuoAcum, RECUO_MAX) * 0.7;
+  // `disparar` soma o recuo antes de aplicar: compensa o valor que o próximo tiro vai usar.
+  const compensa = Math.min(arma.recuoAcum + def.recuo, RECUO_MAX);
   const pitchAlvo = Math.atan2(ponto.y - o.y, distXZ(o, ponto)) + c.erro.pitch - compensa;
   cmd.yaw = girar(ent.yaw, yawAlvo, dt);
   cmd.pitch = ent.pitch + Math.max(-GIRO_MAX * dt, Math.min(GIRO_MAX * dt, pitchAlvo - ent.pitch));
