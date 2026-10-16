@@ -80,6 +80,10 @@ export function iniciarNav({ app, audio, confetti, escopo }) {
     if (drawer.classList.contains('open')) fecharDrawer();
     else abrirDrawer();
   });
+  // Clicar no item da rota atual não dispara hashchange: fecha o drawer aqui também.
+  nav.addEventListener('click', (e) => {
+    if (e.target.closest('.nav-item')) fecharDrawer();
+  });
   closeBtn.addEventListener('click', fecharDrawer);
   backdrop.addEventListener('click', fecharDrawer);
   somBtn.addEventListener('click', () => audio.toggleSound());
