@@ -14,7 +14,7 @@ Seis jogos clássicos em **HTML, CSS e JavaScript puros**: sem dependências, se
 |---|---|
 | **Jogo da Velha** | IA minimax com poda alfa-beta: no modo Força Máxima é impossível vencer (o melhor resultado é empate). Também tem Difícil, Médio e 2 jogadores, e você escolhe jogar de X ou de O. |
 | **2048** | Teclado (setas ou WASD) e gestos de arrastar, botão desfazer e recorde salvo. |
-| **Snake Neon** | Canvas com visual neon, maçãs douradas bônus com contagem regressiva e D-pad virtual para celular. |
+| **Snake Neon** | Canvas com visual neon, maçãs douradas bônus que somem depois de alguns passos e D-pad virtual para celular. |
 | **Campo Minado** | Primeiro clique sempre seguro, três dificuldades, modo bandeira para toque e melhor tempo salvo por dificuldade. |
 | **Tetris Neon** | Os 7 tetraminós, peça fantasma, próxima peça, hard drop, níveis e recorde salvo. |
 | **Termo** | Palavras de 5 letras em 6 tentativas, dicionário pt-BR com cerca de 10 mil palavras, teclado com cores e estatísticas salvas. |
@@ -27,7 +27,7 @@ Seis jogos clássicos em **HTML, CSS e JavaScript puros**: sem dependências, se
 - **Áudio sintetizado** com Web Audio API (osciladores, sem arquivos de som)
 - **Canvas 2D** para Snake, Tetris e confete
 - **Persistência tolerante a falhas:** chaves `arcade:<jogo>:<chave>`, migração das chaves antigas sem apagá-las, e os jogos seguem funcionando se o `localStorage` estiver bloqueado ou corrompido
-- Responsivo até 360 px, foco visível, `aria-current` na navegação e `prefers-reduced-motion` respeitado
+- Responsivo até 360 px, foco visível, `aria-current` na navegação e animações dos cards e confete desligadas com `prefers-reduced-motion`
 
 ## Como rodar
 
@@ -42,7 +42,7 @@ Depois abra <http://localhost:8000>.
 ## Estrutura
 
 ```
-index.html            casca mínima: header, drawer e <main id="app">
+index.html            casca mínima: botão de menu, drawer e <main id="app">
 css/
   base.css            tokens, reset, glass, @font-face
   layout.css          drawer, home e cards
