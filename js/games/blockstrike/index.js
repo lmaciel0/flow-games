@@ -8,8 +8,13 @@ import { MAPA } from './mapa.js';
 import { criarMundo, posicionarParaRound, passo } from './mundo.js';
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
+import { criarSons } from './sons.js';
+import { ARMAS } from './config.js';
+import { olho } from './fisica.js';
 
 const DT_MAX = 0.05;
+
+const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
 const HTML = `
       <header class="app-header">
@@ -48,7 +53,7 @@ function temWebGL() {
   }
 }
 
-function montar(raiz) {
+function montar(raiz, ctx) {
   raiz.dataset.fase = 'menu';
   raiz.dataset.pausado = 'false';
   const menu = raiz.querySelector('#bs-menu');
@@ -68,6 +73,7 @@ function montar(raiz) {
   const canvas = raiz.querySelector('#bs-canvas');
   const botao = raiz.querySelector('#bs-jogar');
   const texto = raiz.querySelector('#bs-menu-texto');
+  const sons = criarSons(ctx.audio);
   let partida = null; // { mundo, render, entrada, raf, antes }
   let iniciando = false;
 
@@ -77,14 +83,43 @@ function montar(raiz) {
     menu.hidden = false;
   };
 
+  // Liga os eventos do passo a som e efeitos visuais, do ponto de vista do jogador.
+  function reagir(p, eventos) {
+    const { mundo, render } = p;
+    const eu = mundo.entidades[mundo.jogadorId];
+    const ouvido = olho(eu);
+    const distDe = (id) => distancia(ouvido, mundo.entidades[id].pos);
+    for (const ev of eventos) {
+      if (ev.tipo === 'tiro') {
+        sons.tiro(ev.arma, distDe(ev.atirador));
+        if (ev.atirador === eu.id) {
+          render.flash();
+          render.recuoVisual();
+        }
+      } else if (ev.tipo === 'impacto') {
+        render.impacto(ev.ponto, ev.normal);
+      } else if (ev.tipo === 'acerto') {
+        if (ev.atirador === eu.id) sons.acerto(ev.parte === 'cabeca');
+      } else if (ev.tipo === 'morte') {
+        if (ev.assassino === eu.id || ev.vitima === eu.id) sons.morte();
+      } else if (ev.tipo === 'recarga') {
+        if (ev.atirador === eu.id) sons.recarga();
+      } else if (ev.tipo === 'passo') {
+        sons.passo(distDe(ev.id));
+      }
+    }
+  }
+
   function quadro(agora) {
     const p = partida;
     const dt = Math.min((agora - p.antes) / 1000, DT_MAX);
     p.antes = agora;
     const jogador = p.mundo.entidades[p.mundo.jogadorId];
     const cmd = p.entrada.comando(jogador.yaw, jogador.pitch);
-    passo(p.mundo, dt, new Map([[jogador.id, cmd]]), { congelado: false });
-    p.render.desenhar(p.mundo, p.mundo.jogadorId, {});
+    const eventos = passo(p.mundo, dt, new Map([[jogador.id, cmd]]), { congelado: false });
+    reagir(p, eventos);
+    const zoomFov = cmd.zoom && jogador.vivo ? ARMAS[jogador.armas[jogador.slot].tipo].zoomFov : undefined;
+    p.render.desenhar(p.mundo, p.mundo.jogadorId, { zoomFov });
     p.raf = requestAnimationFrame(quadro);
   }
 
