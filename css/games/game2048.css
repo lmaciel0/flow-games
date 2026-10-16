@@ -146,6 +146,11 @@
 
 
 @media (max-width: 480px) {
+  .g2048-top-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
   .g2048-container {
     gap: 8px;
     padding: 10px;

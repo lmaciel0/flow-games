@@ -149,9 +149,25 @@
 
 
 @media (max-width: 480px) {
+  .mine-top-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
   .mine-cell {
     width: 32px;
     height: 32px;
     font-size: 0.95rem;
   }
+}
+
+.mine-best-line {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.mine-best-line strong {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--color-gold);
 }
