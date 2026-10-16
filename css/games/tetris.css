@@ -95,14 +95,29 @@
     gap: 0.5rem;
   }
 
+  /* a altura acompanha a tela: tabuleiro e botões cabem sem rolar */
   #tetris-canvas {
-    width: 180px;
-    height: 360px;
+    width: auto;
+    height: clamp(260px, calc(100dvh - 340px), 420px);
   }
 
   .tetris-sidebar {
     width: 90px;
+    gap: 0.4rem;
   }
+
+  .tetris-stat-card { padding: 0.35rem 0.3rem; }
+  .tetris-stat-val { font-size: 1rem; }
+
+  #tetris-next-canvas {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+/* telas baixas: libera espaço para que os botões fiquem visíveis sem rolar */
+@media (max-width: 480px) and (max-height: 700px) {
+  #view-tetris .app-subtitle { display: none; }
 }
 
 .tetris-record-msg {
