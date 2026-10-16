@@ -1,6 +1,6 @@
 # Arcade Hub
 
-Seis jogos clássicos em **HTML, CSS e JavaScript puros**: sem dependências, sem build, sem framework.
+Sete jogos em **HTML, CSS e JavaScript puros**: sem build e sem framework, e a única dependência é o Three.js vendorizado, usado só no Block Strike.
 
 **Demo:** <https://flow-games-tau.vercel.app>
 
@@ -18,16 +18,33 @@ Seis jogos clássicos em **HTML, CSS e JavaScript puros**: sem dependências, se
 | **Campo Minado** | Primeiro clique sempre seguro, três dificuldades, modo bandeira para toque e melhor tempo salvo por dificuldade. |
 | **Tetris Neon** | Os 7 tetraminós, peça fantasma, próxima peça, hard drop, níveis e recorde salvo. |
 | **Termo** | Palavras de 5 letras em 6 tentativas, dicionário pt-BR com cerca de 10 mil palavras, teclado com cores e estatísticas salvas. |
+| **Block Strike** | FPS 5x5 contra bots em 3D (Three.js), com 3 dificuldades, rounds MR12 com troca de lados, loadout a cada round, 4 armas primárias, bots com rotas e mira humana, placar e modo espectador. Só para computador. |
 
 ## Destaques técnicos
 
-- **JavaScript puro com ES modules**, zero dependências e nenhuma etapa de build
+- **JavaScript puro com ES modules**, zero dependências (exceto o Three.js vendorizado, usado só no Block Strike) e nenhuma etapa de build
 - **Registro de jogos:** cada jogo é um módulo que exporta um contrato (`mount`, `pause`, `resume`, `recorde`); a navegação não conhece nenhum jogo
 - **Roteamento por hash** (`#/` e `#/<jogo>`) com deep link e botão voltar funcionando
 - **Áudio sintetizado** com Web Audio API (osciladores, sem arquivos de som)
 - **Canvas 2D** para Snake, Tetris e confete
+- **WebGL com Three.js** no Block Strike, carregado sob demanda (`import()`) só quando você clica em Jogar; as regras, a física, a navegação e os bots são módulos puros testáveis em Node
 - **Persistência tolerante a falhas:** chaves `arcade:<jogo>:<chave>`, migração das chaves antigas sem apagá-las, e os jogos seguem funcionando se o `localStorage` estiver bloqueado ou corrompido
 - Responsivo até 360 px, foco visível, `aria-current` na navegação e animações dos cards e confete desligadas com `prefers-reduced-motion`
+
+## Controles do Block Strike
+
+| Ação | Tecla |
+|---|---|
+| Mover | `W` `A` `S` `D` |
+| Mirar | mouse (o clique em Jogar prende o cursor; `Esc` solta e pausa) |
+| Atirar / zoom | botão esquerdo / botão direito |
+| Pular / agachar / andar devagar | `Espaço` / `C` / `Shift` |
+| Recarregar | `R` |
+| Armas | `1` primária, `2` pistola, `3` faca (no início do round, `1`–`4` escolhem a primária) |
+| Placar | segure `Tab` |
+| Espectador | clique do mouse para trocar de aliado depois de morrer |
+
+Sair da rota pausa a partida e o botão Continuar retoma.
 
 ## Como rodar
 
@@ -51,7 +68,8 @@ fonts/                Outfit e JetBrains Mono (woff2, subset latin)
 js/
   main.js             boot: migração, registro dos jogos, navegação
   core/               registry, nav, storage, audio, confetti
-  games/              tictactoe, game2048, snake, minesweeper, tetris, termo
+  games/              tictactoe, game2048, snake, minesweeper, tetris, termo, blockstrike
+  vendor/             Three.js (módulo minificado e licença)
   data/palavras.js    dicionário do Termo
 docs/                 specs, planos e capturas de tela
 ```
@@ -80,4 +98,4 @@ docs/                 specs, planos e capturas de tela
 
 ## Créditos e licença
 
-Código sob licença [MIT](LICENSE). As fontes **Outfit** e **JetBrains Mono** são distribuídas sob a [SIL Open Font License 1.1](https://openfontlicense.org). O dicionário do Termo vem da lista de palavras do LibreOffice VERO pt-BR.
+Código sob licença [MIT](LICENSE). As fontes **Outfit** e **JetBrains Mono** são distribuídas sob a [SIL Open Font License 1.1](https://openfontlicense.org). O dicionário do Termo vem da lista de palavras do LibreOffice VERO pt-BR. O [Three.js](https://threejs.org) em `js/vendor/` é distribuído sob a licença MIT; o aviso está em `js/vendor/three-LICENSE`.
