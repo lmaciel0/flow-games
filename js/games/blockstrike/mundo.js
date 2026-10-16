@@ -9,7 +9,7 @@ import { criarArma, podeAtirar, disparar, atualizarArma, iniciarRecarga, danoDe 
 import { escolherPrimaria } from './bots.js';
 
 const PITCH_MAX = 1.5;
-const DIST_PASSO = 0.4;
+const DIST_PASSO = 1.8;
 const ID_JOGADOR = 0;
 const ALCANCE_TIRO = 200;
 
@@ -133,12 +133,13 @@ function alvoColado(o, entidades, ignorarId) {
 function aplicarDano(atirador, tipo, golpe, eventos) {
   const alvo = golpe.ent;
   if (alvo.time === atirador.time) return; // fogo amigo desligado (mas o corpo bloqueia o tiro)
+  if (alvo.hp <= 0) return; // morte já registrada neste passo, só falta o `vivo` cair
   const dano = danoDe(tipo, golpe.parte);
   alvo.hp = Math.max(0, alvo.hp - dano);
   eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano });
   if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
   if (alvo.hp > 0) return;
-  alvo.vivo = false;
+  // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.
   atirador.kills += 1;
   alvo.mortes += 1;
   const cabeca = golpe.parte === 'cabeca';
@@ -162,6 +163,7 @@ function combate(mundo, e, cmd, dt, eventos) {
   if (!e.armas) return;
   if (cmd.slot && cmd.slot !== e.slot && e.armas[cmd.slot]) {
     e.armas[e.slot].recarregandoAte = 0; // trocar de arma cancela a recarga
+    e.armas[e.slot].recuoAcum = 0; // e só a arma em mãos perde o recuo: sem isso a mira pularia ao voltar
     e.slot = cmd.slot;
   }
   const arma = e.armas[e.slot];
@@ -188,6 +190,8 @@ export function passo(mundo, dt, comandos, { congelado = false } = {}) {
     moverEntidade(e, cmd, dt, mundo.mapa.caixas, congelado, eventos);
     if (!congelado) combate(mundo, e, cmd, dt, eventos);
   }
+  // Trocas no mesmo passo valem para os dois lados: as mortes só têm efeito depois de todos agirem.
+  for (const e of mundo.entidades) if (e.vivo && e.hp <= 0) e.vivo = false;
   mundo.tempo += dt;
   return eventos;
 }

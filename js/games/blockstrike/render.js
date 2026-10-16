@@ -7,6 +7,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { olho } from './fisica.js';
 
 const FOV_PADRAO = 75;
+const PITCH_CAM = Math.PI / 2 - 0.01; // pitch + recuo nunca passa da vertical
 const COR_CABECA = 0xf5cd30;
 const COR_TIME = { azul: 0x2f6fde, laranja: 0xf08a24 };
 const MAX_IMPACTOS = 64;
@@ -267,7 +268,8 @@ export function criarRender(canvas, mapa) {
     const o = olho(vista);
     camera.position.set(o.x, o.y, o.z);
     const subida = vista.vivo && vista.armas ? vista.armas[vista.slot].recuoAcum : 0; // a mira acompanha o spray
-    camera.rotation.set(vista.pitch + subida + recuo, vista.yaw, 0);
+    const inclina = vista.pitch + subida + recuo;
+    camera.rotation.set(Math.max(-PITCH_CAM, Math.min(PITCH_CAM, inclina)), vista.yaw, 0);
     recuo = Math.max(0, recuo - dt * 0.3);
 
     // Arma na mão: some com o zoom da sniper (mira de luneta) e sai do campo de visão ao morrer.
