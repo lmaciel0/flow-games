@@ -1,7 +1,15 @@
 /**
  * Block Strike — FPS 5x5 contra bots (Three.js).
- * Esqueleto: menu e avisos de compatibilidade. A partida entra nas próximas tasks.
+ * Menu, avisos de compatibilidade e, por enquanto, um loop provisório:
+ * o jogador anda pelo mapa e os bots ficam parados nos spawns.
  */
+
+import { MAPA } from './mapa.js';
+import { criarMundo, posicionarParaRound, passo } from './mundo.js';
+import { criarEntrada } from './entrada.js';
+import { criarRng } from './rng.js';
+
+const DT_MAX = 0.05;
 
 const HTML = `
       <header class="app-header">
@@ -17,8 +25,8 @@ const HTML = `
         <canvas id="bs-canvas"></canvas>
         <div class="bs-menu" id="bs-menu">
           <h2 class="bs-menu-titulo">Block Strike</h2>
-          <p class="bs-menu-texto">FPS 5x5 contra bots</p>
-          <button id="bs-jogar" class="action-btn primary-btn" disabled>Jogar</button>
+          <p class="bs-menu-texto" id="bs-menu-texto">FPS 5x5 contra bots</p>
+          <button id="bs-jogar" class="action-btn primary-btn">Jogar</button>
         </div>
         <div class="bs-aviso" id="bs-aviso" role="alert" hidden></div>
       </div>`;
@@ -54,7 +62,94 @@ function montar(raiz) {
   if (soToque()) bloquear('Disponível apenas no computador');
   else if (!temWebGL()) bloquear('Seu navegador não suporta WebGL');
 
-  return { pause() {}, resume() {} };
+  if (menu.hidden) return { pause() {}, resume() {}, destruir() {} };
+
+  const canvas = raiz.querySelector('#bs-canvas');
+  const botao = raiz.querySelector('#bs-jogar');
+  const texto = raiz.querySelector('#bs-menu-texto');
+  let partida = null; // { mundo, render, entrada, raf, antes }
+  let iniciando = false;
+
+  const mostrarMenu = (titulo, rotulo) => {
+    texto.textContent = titulo;
+    botao.textContent = rotulo;
+    menu.hidden = false;
+  };
+
+  function quadro(agora) {
+    const p = partida;
+    const dt = Math.min((agora - p.antes) / 1000, DT_MAX);
+    p.antes = agora;
+    const jogador = p.mundo.entidades[p.mundo.jogadorId];
+    const cmd = p.entrada.comando(jogador.yaw, jogador.pitch);
+    passo(p.mundo, dt, new Map([[jogador.id, cmd]]), { congelado: false });
+    p.render.desenhar(p.mundo, p.mundo.jogadorId, {});
+    p.raf = requestAnimationFrame(quadro);
+  }
+
+  function agendar() {
+    partida.entrada.ativar(true);
+    partida.antes = performance.now();
+    partida.raf = requestAnimationFrame(quadro);
+  }
+
+  function pausarPartida() {
+    if (!partida || partida.raf === null) return;
+    cancelAnimationFrame(partida.raf);
+    partida.raf = null;
+    partida.entrada.ativar(false);
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    raiz.dataset.fase = 'pausa';
+    mostrarMenu('Pausado', 'Continuar');
+  }
+
+  function destruirPartida() {
+    if (!partida) return;
+    if (partida.raf !== null) cancelAnimationFrame(partida.raf);
+    partida.entrada.destruir();
+    partida.render.destruir();
+    partida = null;
+  }
+
+  async function iniciar() {
+    if (iniciando) return;
+    iniciando = true;
+    destruirPartida();
+    const entrada = criarEntrada(canvas, { sensibilidade: 1 });
+    entrada.travar(); // precisa estar dentro do gesto de clique
+    try {
+      const { criarRender } = await import('./render.js');
+      const mundo = criarMundo({
+        mapa: MAPA, primariaJogador: 'rifle', dificuldade: 'medio', rng: criarRng(Date.now()),
+      });
+      posicionarParaRound(mundo, 'A');
+      const render = criarRender(canvas, MAPA);
+      entrada.aoPerderTrava(pausarPartida);
+      partida = { mundo, render, entrada, raf: null, antes: 0 };
+      menu.hidden = true;
+      raiz.dataset.fase = 'jogo';
+      agendar();
+    } catch (erro) {
+      entrada.destruir();
+      bloquear('Não foi possível iniciar o jogo');
+      console.error(erro);
+    } finally {
+      iniciando = false;
+    }
+  }
+
+  botao.addEventListener('click', () => {
+    if (partida && partida.raf === null) {
+      partida.entrada.travar();
+      menu.hidden = true;
+      raiz.dataset.fase = 'jogo';
+      agendar();
+    } else if (!partida) {
+      iniciar();
+    }
+  });
+
+  return { pause: pausarPartida, resume() {}, destruir: destruirPartida };
 }
 
 let instancia = null;
@@ -67,6 +162,7 @@ export default {
   descricao: 'FPS 5x5 contra bots',
   badge: { texto: 'FPS', cor: 'orange' },
   mount(raiz, ctx) {
+    if (instancia) instancia.destruir();
     raiz.innerHTML = HTML;
     instancia = montar(raiz, ctx);
   },

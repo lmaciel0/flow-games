@@ -3,6 +3,8 @@
  * Módulo puro: sem Three.js e sem DOM. y é para cima; `pos` fica nos pés.
  */
 
+import { JOGADOR } from './config.js';
+
 const PASSO_MAX = 0.1;
 const EPS = 1e-9;
 const EIXOS = ['x', 'y', 'z'];
@@ -156,4 +158,16 @@ export function temVisada(a, b, caixas) {
   if (dist < EPS) return true;
   const dir = { x: dx / dist, y: dy / dist, z: dz / dist };
   return raycastCaixas(a, dir, caixas, dist) === null;
+}
+
+// Posição do olho (câmera / origem dos tiros).
+export function olho(ent) {
+  const h = ent.agachado ? JOGADOR.olhoAgachado : JOGADOR.olho;
+  return { x: ent.pos.x, y: ent.pos.y + h, z: ent.pos.z };
+}
+
+// Vetor unitário de visada. yaw 0 olha para -z; yaw positivo vira à esquerda.
+export function direcao(yaw, pitch) {
+  const c = Math.cos(pitch);
+  return { x: -Math.sin(yaw) * c, y: Math.sin(pitch), z: -Math.cos(yaw) * c };
 }
