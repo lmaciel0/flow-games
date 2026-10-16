@@ -3,592 +3,61 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Arcade Hub Local: Jogo da Velha, 2048, Snake Neon, Campo Minado, Tetris e Termo. Jogue 100% offline.">
-  <title>Arcade Hub — Jogos Locais Offline</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <meta name="description" content="Arcade Hub: Jogo da Velha com IA minimax, 2048, Snake, Campo Minado, Tetris e Termo, feitos em HTML, CSS e JavaScript puros.">
+  <meta property="og:title" content="Arcade Hub">
+  <meta property="og:description" content="Seis jogos clássicos em JavaScript puro, sem dependências e sem build.">
+  <meta property="og:type" content="website">
+  <title>Arcade Hub — Seis jogos em JavaScript puro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/games/tictactoe.css">
+  <link rel="stylesheet" href="css/games/game2048.css">
+  <link rel="stylesheet" href="css/games/snake.css">
+  <link rel="stylesheet" href="css/games/minesweeper.css">
+  <link rel="stylesheet" href="css/games/tetris.css">
+  <link rel="stylesheet" href="css/games/termo.css">
 </head>
 <body>
   <canvas id="confetti-canvas"></canvas>
 
-  <!-- Hamburger Menu Button -->
-  <button id="menu-toggle-btn" class="hamburger-btn" aria-label="Abrir menu de jogos" title="Menu de Jogos">
+  <button id="menu-toggle-btn" class="hamburger-btn" aria-label="Abrir menu de jogos" aria-expanded="false" title="Menu de jogos">
     <span class="hamburger-bar"></span>
     <span class="hamburger-bar"></span>
     <span class="hamburger-bar"></span>
   </button>
 
-  <!-- Sidebar Drawer Backdrop -->
   <div id="drawer-backdrop" class="drawer-backdrop"></div>
 
-  <!-- Sidebar Drawer -->
   <aside id="sidebar-drawer" class="sidebar-drawer" aria-label="Menu lateral de navegação">
     <div class="drawer-header">
       <div class="drawer-logo">
         <div class="logo-icon">⚡</div>
         <div class="logo-text">
           <h2>Arcade Hub</h2>
-          <span>Jogos Offline</span>
+          <span>Jogos clássicos</span>
         </div>
       </div>
       <button id="drawer-close-btn" class="drawer-close-btn" aria-label="Fechar menu">&times;</button>
     </div>
 
     <nav class="drawer-nav">
-      <div class="nav-section-title">Coleção de Jogos</div>
-
-      <button class="nav-item active" id="nav-btn-tictactoe" data-target="view-tictactoe">
-        <div class="nav-icon x-o-icon">
-          <span class="mini-x">✕</span><span class="mini-o">○</span>
-        </div>
-        <div class="nav-label">
-          <span class="nav-title">Jogo da Velha</span>
-          <span class="nav-subtitle">IA Força Máxima (Minimax)</span>
-        </div>
-        <span class="nav-badge">IA</span>
-      </button>
-
-      <button class="nav-item" id="nav-btn-2048" data-target="view-2048">
-        <div class="nav-icon num-icon">2048</div>
-        <div class="nav-label">
-          <span class="nav-title">Jogo 2048</span>
-          <span class="nav-subtitle">Junte os blocos numéricos</span>
-        </div>
-        <span class="nav-badge hot">POPULAR</span>
-      </button>
-
-      <button class="nav-item" id="nav-btn-snake" data-target="view-snake">
-        <div class="nav-icon snake-icon">🐍</div>
-        <div class="nav-label">
-          <span class="nav-title">Snake Neon</span>
-          <span class="nav-subtitle">Cobrinha clássica arcade</span>
-        </div>
-        <span class="nav-badge green">ARCADE</span>
-      </button>
-
-      <button class="nav-item" id="nav-btn-minesweeper" data-target="view-minesweeper">
-        <div class="nav-icon mine-icon">💣</div>
-        <div class="nav-label">
-          <span class="nav-title">Campo Minado</span>
-          <span class="nav-subtitle">Desarme o campo sem explodir</span>
-        </div>
-        <span class="nav-badge red">LÓGICA</span>
-      </button>
-
-      <button class="nav-item" id="nav-btn-tetris" data-target="view-tetris">
-        <div class="nav-icon tetris-icon">🧱</div>
-        <div class="nav-label">
-          <span class="nav-title">Tetris Neon</span>
-          <span class="nav-subtitle">Encaixe blocos e limpe linhas</span>
-        </div>
-        <span class="nav-badge cyan">CLÁSSICO</span>
-      </button>
-
-      <button class="nav-item" id="nav-btn-termo" data-target="view-termo">
-        <div class="nav-icon termo-icon">🔤</div>
-        <div class="nav-label">
-          <span class="nav-title">Termo</span>
-          <span class="nav-subtitle">Descubra a palavra em 6 tentativas</span>
-        </div>
-        <span class="nav-badge yellow">PALAVRAS</span>
-      </button>
+      <div class="nav-section-title">Coleção de jogos</div>
     </nav>
 
     <div class="drawer-footer">
       <div class="drawer-quick-settings">
         <button id="drawer-sound-toggle" class="drawer-btn">
           <span class="sound-icon-drawer">🔊</span>
-          <span class="sound-label-drawer">Efeitos Sonoros</span>
+          <span class="sound-label-drawer">Efeitos sonoros</span>
         </button>
       </div>
-      <p class="drawer-credits">6 Jogos Integrados • 100% Offline</p>
+      <p class="drawer-credits">6 jogos • feito em JS puro</p>
     </div>
   </aside>
 
-  <!-- Main Game Container -->
-  <div class="app-container">
+  <main class="app-container" id="app"></main>
 
-    <!-- ==================== VIEW 1: JOGO DA VELHA ==================== -->
-    <section id="view-tictactoe" class="game-view active">
-      <header class="app-header">
-        <div class="header-badge">
-          <span class="badge-dot"></span>
-          <span class="badge-text">IA MINIMAX INVENCÍVEL</span>
-        </div>
-        <h1 class="app-title">Jogo da Velha <span class="gradient-text">Força Máxima</span></h1>
-        <p class="app-subtitle">Desafie o algoritmo matemático perfeito. Você consegue pelo menos empatar?</p>
-      </header>
-
-      <div class="controls-panel glass-card">
-        <div class="control-group">
-          <label for="difficulty-select" class="control-label">Modo / Dificuldade:</label>
-          <div class="select-wrapper">
-            <select id="difficulty-select" class="custom-select">
-              <option value="max" selected>🔥 Força Máxima (Imbatível)</option>
-              <option value="hard">⚡ Difícil (85% Perfeito)</option>
-              <option value="medium">🎯 Médio (Equilibrado)</option>
-              <option value="pvp">👥 2 Jogadores (Local)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="control-group">
-          <span class="control-label">Você joga como:</span>
-          <div class="symbol-toggle" id="symbol-toggle">
-            <button type="button" class="symbol-btn active" id="btn-choose-x" data-symbol="X">
-              <span class="symbol-glow x-glow">X</span>
-              <span class="btn-subtext">Primeiro</span>
-            </button>
-            <button type="button" class="symbol-btn" id="btn-choose-o" data-symbol="O">
-              <span class="symbol-glow o-glow">O</span>
-              <span class="btn-subtext">Segundo</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="sound-toggle-wrapper">
-          <button id="btn-toggle-sound" class="icon-btn" title="Alternar Som" aria-label="Alternar Som">
-            <span class="sound-icon-global">🔊</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="scoreboard glass-card">
-        <div class="score-card player-x-card" id="card-x">
-          <div class="score-avatar x-avatar">X</div>
-          <div class="score-info">
-            <span class="score-label" id="label-x">Jogador (X)</span>
-            <span class="score-value" id="score-x">0</span>
-          </div>
-        </div>
-
-        <div class="score-divider">
-          <span class="ties-count" id="score-ties">0</span>
-          <span class="ties-label">Empates</span>
-        </div>
-
-        <div class="score-card player-o-card" id="card-o">
-          <div class="score-avatar o-avatar">O</div>
-          <div class="score-info">
-            <span class="score-label" id="label-o">IA Máxima (O)</span>
-            <span class="score-value" id="score-o">0</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="turn-banner" id="turn-banner">
-        <div class="turn-indicator">
-          <span class="pulse-indicator" id="pulse-dot"></span>
-          <span id="status-text">Sua vez de jogar (X)</span>
-        </div>
-      </div>
-
-      <main class="board-wrapper">
-        <div class="board" id="board" role="grid" aria-label="Tabuleiro do Jogo da Velha">
-          <button class="cell" data-index="0" id="cell-0" role="gridcell" aria-label="Casa 1"></button>
-          <button class="cell" data-index="1" id="cell-1" role="gridcell" aria-label="Casa 2"></button>
-          <button class="cell" data-index="2" id="cell-2" role="gridcell" aria-label="Casa 3"></button>
-          <button class="cell" data-index="3" id="cell-3" role="gridcell" aria-label="Casa 4"></button>
-          <button class="cell" data-index="4" id="cell-4" role="gridcell" aria-label="Casa 5"></button>
-          <button class="cell" data-index="5" id="cell-5" role="gridcell" aria-label="Casa 6"></button>
-          <button class="cell" data-index="6" id="cell-6" role="gridcell" aria-label="Casa 7"></button>
-          <button class="cell" data-index="7" id="cell-7" role="gridcell" aria-label="Casa 8"></button>
-          <button class="cell" data-index="8" id="cell-8" role="gridcell" aria-label="Casa 9"></button>
-
-          <svg class="strike-line-svg" id="strike-svg" viewBox="0 0 360 360">
-            <line id="strike-line" x1="0" y1="0" x2="0" y2="0" stroke="url(#lineGradient)" stroke-width="8" stroke-linecap="round" />
-            <defs>
-              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#00f2fe" />
-                <stop offset="100%" stop-color="#ff0844" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-      </main>
-
-      <footer class="app-footer">
-        <button id="btn-restart" class="action-btn primary-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-            <path d="M3 3v5h5"/>
-          </svg>
-          <span>Reiniciar Partida</span>
-        </button>
-
-        <button id="btn-reset-scores" class="action-btn secondary-btn" title="Zerar Placar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="1 4 1 10 7 10"/>
-            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-          </svg>
-          <span>Zerar Placar</span>
-        </button>
-      </footer>
-
-      <div class="info-card glass-card">
-        <div class="info-header">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="16" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
-          <strong>Como funciona a Força Máxima?</strong>
-        </div>
-        <p>
-          No modo <strong>Força Máxima</strong>, a IA calcula a árvore completa de jogadas usando o algoritmo <strong>Minimax</strong> com busca em profundidade ótima. Matematicamente, é impossível derrotá-la — o melhor resultado possível contra ela é o empate!
-        </p>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 2: JOGO 2048 ==================== -->
-    <section id="view-2048" class="game-view">
-      <header class="app-header">
-        <div class="header-badge g2048-badge">
-          <span class="badge-dot g2048-dot"></span>
-          <span class="badge-text">CLÁSSICO QUEBRA-CABEÇA</span>
-        </div>
-        <h1 class="app-title">Jogo <span class="gradient-text-2048">2048</span></h1>
-        <p class="app-subtitle">Use as setas do teclado ou deslize os blocos para somar os números e alcançar <strong>2048</strong>!</p>
-      </header>
-
-      <div class="g2048-top-bar glass-card">
-        <div class="g2048-scores">
-          <div class="g2048-score-box">
-            <span class="g2048-score-title">PONTOS</span>
-            <span class="g2048-score-num" id="g2048-current-score">0</span>
-            <span class="g2048-score-add" id="g2048-score-add"></span>
-          </div>
-          <div class="g2048-score-box best">
-            <span class="g2048-score-title">MELHOR</span>
-            <span class="g2048-score-num" id="g2048-best-score">0</span>
-          </div>
-        </div>
-
-        <div class="g2048-actions">
-          <button id="g2048-undo-btn" class="action-btn-small" title="Desfazer último movimento">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 7v6h6"/>
-              <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
-            </svg>
-            <span>Desfazer</span>
-          </button>
-          <button id="g2048-new-game-btn" class="action-btn-small primary-2048">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-              <path d="M3 3v5h5"/>
-            </svg>
-            <span>Novo Jogo</span>
-          </button>
-        </div>
-      </div>
-
-      <main class="g2048-board-wrapper">
-        <div class="g2048-container" id="g2048-grid-container">
-          <div class="g2048-grid">
-            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
-            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
-            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
-            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
-          </div>
-
-          <div class="g2048-tile-container" id="g2048-tile-container"></div>
-
-          <div class="g2048-overlay" id="g2048-overlay">
-            <div class="g2048-message-box">
-              <h2 id="g2048-overlay-title">Fim de Jogo!</h2>
-              <p id="g2048-overlay-text">Não há mais movimentos possíveis.</p>
-              <div class="overlay-buttons">
-                <button id="g2048-keep-playing-btn" class="action-btn secondary-btn" style="display: none;">Continuar Jogando</button>
-                <button id="g2048-restart-overlay-btn" class="action-btn primary-btn">Tentar Novamente</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      <div class="info-card glass-card">
-        <div class="info-header">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-          </svg>
-          <strong>Como Jogar o 2048:</strong>
-        </div>
-        <p>
-          Utilize as <strong>Setas do Teclado (↑ ↓ ← →)</strong> ou <strong>W, A, S, D</strong> para mover os blocos. Quando blocos iguais se colidem, <strong>eles se unem somando seus valores</strong>!
-        </p>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 3: SNAKE NEON ==================== -->
-    <section id="view-snake" class="game-view">
-      <header class="app-header">
-        <div class="header-badge snake-badge">
-          <span class="badge-dot snake-dot"></span>
-          <span class="badge-text">ARCADE RETRÔ NEON</span>
-        </div>
-        <h1 class="app-title">Snake <span class="gradient-text-snake">Neon</span></h1>
-        <p class="app-subtitle">Colete a energia luminosa e desvie da própria cauda para bater o recorde!</p>
-      </header>
-
-      <div class="snake-top-bar glass-card">
-        <div class="snake-scores">
-          <div class="snake-score-box">
-            <span class="snake-score-title">PONTOS</span>
-            <span class="snake-score-num" id="snake-current-score">0</span>
-          </div>
-          <div class="snake-score-box best">
-            <span class="snake-score-title">RECORDE</span>
-            <span class="snake-score-num" id="snake-best-score">0</span>
-          </div>
-        </div>
-
-        <div class="snake-actions">
-          <button id="snake-pause-btn" class="action-btn-small">
-            <span id="snake-pause-icon">⏸️</span>
-            <span id="snake-pause-text">Pausar</span>
-          </button>
-          <button id="snake-restart-btn" class="action-btn-small primary-snake">
-            <span>Novo Jogo</span>
-          </button>
-        </div>
-      </div>
-
-      <main class="snake-wrapper">
-        <div class="snake-canvas-container">
-          <canvas id="snake-canvas" width="400" height="400"></canvas>
-          <div class="snake-overlay" id="snake-overlay">
-            <div class="snake-message-box">
-              <h2 id="snake-overlay-title">Fim de Jogo!</h2>
-              <p id="snake-overlay-score">Pontuação: 0</p>
-              <button id="snake-overlay-restart" class="action-btn primary-btn">Jogar Novamente</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- D-Pad Virtual para Mobile / Telas Menores -->
-        <div class="virtual-dpad" id="snake-dpad">
-          <button class="dpad-btn up" id="dpad-up">▲</button>
-          <div class="dpad-middle">
-            <button class="dpad-btn left" id="dpad-left">◀</button>
-            <div class="dpad-center"></div>
-            <button class="dpad-btn right" id="dpad-right">▶</button>
-          </div>
-          <button class="dpad-btn down" id="dpad-down">▼</button>
-        </div>
-      </main>
-
-      <div class="info-card glass-card">
-        <div class="info-header">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          <strong>Controles da Snake:</strong>
-        </div>
-        <p>Use as <strong>Setas do Teclado (↑ ↓ ← →)</strong> ou <strong>W, A, S, D</strong> (ou os botões direcionais na tela). Frutas douradas especiais concedem pontuação extra por tempo limitado!</p>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 4: CAMPO MINADO ==================== -->
-    <section id="view-minesweeper" class="game-view">
-      <header class="app-header">
-        <div class="header-badge mine-badge">
-          <span class="badge-dot mine-dot"></span>
-          <span class="badge-text">DESAFIO DE LÓGICA</span>
-        </div>
-        <h1 class="app-title">Campo <span class="gradient-text-mine">Minado</span></h1>
-        <p class="app-subtitle">Abra todas as casas seguras sem detonar nenhuma das minas ocultas!</p>
-      </header>
-
-      <div class="mine-top-bar glass-card">
-        <div class="mine-stat-box">
-          <span class="mine-stat-icon">🚩</span>
-          <span class="mine-stat-val" id="mine-flags-left">10</span>
-        </div>
-
-        <div class="mine-difficulty-select">
-          <select id="mine-difficulty" class="custom-select-small">
-            <option value="easy" selected>Fácil (9x9 - 10 minas)</option>
-            <option value="medium">Médio (12x12 - 22 minas)</option>
-            <option value="hard">Difícil (14x14 - 36 minas)</option>
-          </select>
-        </div>
-
-        <button id="mine-face-btn" class="mine-face-btn" title="Reiniciar">
-          <span id="mine-face-icon">🙂</span>
-        </button>
-
-        <div class="mine-stat-box">
-          <span class="mine-stat-icon">⏱️</span>
-          <span class="mine-stat-val" id="mine-timer">000</span>
-        </div>
-      </div>
-
-      <div class="mine-mode-toggle">
-        <button id="mine-mode-dig" class="mine-mode-btn active">
-          <span>⛏️ Abrir Casa</span>
-        </button>
-        <button id="mine-mode-flag" class="mine-mode-btn">
-          <span>🚩 Marcar Bandeira</span>
-        </button>
-      </div>
-
-      <main class="mine-board-wrapper">
-        <div class="mine-grid-container" id="mine-grid"></div>
-      </main>
-
-      <div class="info-card glass-card">
-        <div class="info-header">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <strong>Dica do Campo Minado:</strong>
-        </div>
-        <p><strong>Clique normal:</strong> abre a casa (o 1º clique é 100% livre de minas). <strong>Botão direito</strong> ou toque longo: fixa a bandeira 🚩.</p>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 5: TETRIS NEON ==================== -->
-    <section id="view-tetris" class="game-view">
-      <header class="app-header">
-        <div class="header-badge tetris-badge">
-          <span class="badge-dot tetris-dot"></span>
-          <span class="badge-text">QUEBRA-CABEÇA ARCADE</span>
-        </div>
-        <h1 class="app-title">Tetris <span class="gradient-text-tetris">Neon</span></h1>
-        <p class="app-subtitle">Encaixe os blocos, elimine linhas completas e acelere o ritmo!</p>
-      </header>
-
-      <div class="tetris-main-layout">
-        <!-- Canvas do Tabuleiro -->
-        <div class="tetris-board-box">
-          <canvas id="tetris-canvas" width="240" height="480"></canvas>
-          <div class="tetris-overlay" id="tetris-overlay">
-            <div class="tetris-message-box">
-              <h2 id="tetris-overlay-title">Fim de Jogo!</h2>
-              <p id="tetris-overlay-lines">Linhas: 0</p>
-              <button id="tetris-restart-btn" class="action-btn primary-btn">Jogar Novamente</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Painel Lateral: Próxima Peça & Stats -->
-        <div class="tetris-sidebar">
-          <div class="tetris-stat-card glass-card">
-            <span class="tetris-stat-label">PRÓXIMA</span>
-            <canvas id="tetris-next-canvas" width="90" height="90"></canvas>
-          </div>
-
-          <div class="tetris-stat-card glass-card">
-            <span class="tetris-stat-label">PONTOS</span>
-            <span class="tetris-stat-val" id="tetris-score">0</span>
-          </div>
-
-          <div class="tetris-stat-card glass-card">
-            <span class="tetris-stat-label">LINHAS</span>
-            <span class="tetris-stat-val" id="tetris-lines">0</span>
-          </div>
-
-          <div class="tetris-stat-card glass-card">
-            <span class="tetris-stat-label">NÍVEL</span>
-            <span class="tetris-stat-val" id="tetris-level">1</span>
-          </div>
-
-          <button id="tetris-pause-btn" class="action-btn-small" style="width: 100%;">
-            <span id="tetris-pause-icon">⏸️</span>
-            <span id="tetris-pause-text">Pausar</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Controles Virtuais do Tetris -->
-      <div class="tetris-controls-bar">
-        <button class="tetris-ctrl-btn" id="tetris-btn-left">◀</button>
-        <button class="tetris-ctrl-btn" id="tetris-btn-rotate">↻ Girar</button>
-        <button class="tetris-ctrl-btn" id="tetris-btn-right">▶</button>
-        <button class="tetris-ctrl-btn" id="tetris-btn-down">▼ Descer</button>
-        <button class="tetris-ctrl-btn drop" id="tetris-btn-drop">⏬ Queda</button>
-      </div>
-
-      <div class="info-card glass-card">
-        <div class="info-header">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          </svg>
-          <strong>Controles do Tetris:</strong>
-        </div>
-        <p><strong>← →</strong>: Move lateralmente | <strong>↑ ou W</strong>: Gira a peça | <strong>↓ ou S</strong>: Acelera queda | <strong>Espaço</strong>: Queda instantânea (Hard Drop).</p>
-      </div>
-    </section>
-
-    <!-- ==================== VIEW 6: TERMO ==================== -->
-    <section id="view-termo" class="game-view">
-      <header class="app-header">
-        <div class="header-badge termo-badge">
-          <span class="badge-dot termo-dot"></span>
-          <span class="badge-text">JOGO DE PALAVRAS BRASIL</span>
-        </div>
-        <h1 class="app-title">Jogo <span class="gradient-text-termo">Termo</span></h1>
-        <p class="app-subtitle">Adivinhe a palavra secreta de <strong>5 letras</strong> em até 6 tentativas!</p>
-      </header>
-
-      <div class="termo-status-bar glass-card">
-        <div class="termo-stat-box">
-          <span class="termo-stat-label">VITÓRIAS</span>
-          <span class="termo-stat-val" id="termo-wins">0</span>
-        </div>
-        <div class="termo-stat-box">
-          <span class="termo-stat-label">SEQUÊNCIA</span>
-          <span class="termo-stat-val" id="termo-streak">0</span>
-        </div>
-        <button id="termo-new-word-btn" class="action-btn-small primary-termo">
-          <span>Nova Palavra</span>
-        </button>
-      </div>
-
-      <!-- Toast de Alerta do Termo -->
-      <div id="termo-toast" class="termo-toast">Palavra não encontrada</div>
-
-      <!-- Grade 6x5 do Termo -->
-      <main class="termo-board-wrapper">
-        <div class="termo-grid" id="termo-grid">
-          <!-- 6 linhas com 5 letras -->
-        </div>
-      </main>
-
-      <!-- Teclado Virtual do Termo -->
-      <div class="termo-keyboard" id="termo-keyboard">
-        <!-- Linhas geradas dinamicamente com feedback de cores -->
-      </div>
-
-      <div class="info-card glass-card">
-        <div class="info-header">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f6d365" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-          <strong>Como Jogar o Termo:</strong>
-        </div>
-        <p>
-          <span class="termo-legend green">🟩 Verde</span>: letra certa no lugar certo.<br>
-          <span class="termo-legend yellow">🟨 Amarelo</span>: letra existe na palavra, mas em outra posição.<br>
-          <span class="termo-legend gray">⬛ Cinza</span>: letra não faz parte da palavra.
-        </p>
-      </div>
-    </section>
-
-  </div>
-
-  <script src="app.js"></script>
-  <script src="game2048.js"></script>
-  <script src="snake.js"></script>
-  <script src="minesweeper.js"></script>
-  <script src="tetris.js"></script>
-  <script src="palavras.js"></script>
-  <script src="termo.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

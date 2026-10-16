@@ -473,3 +473,118 @@
 
   .app-title { font-size: 1.75rem; }
 }
+
+/* ==========================================================================
+   Home — cards dos jogos
+   ========================================================================== */
+a.nav-item {
+  text-decoration: none;
+}
+
+.nav-item:focus-visible,
+.game-card:focus-visible,
+.home-footer a:focus-visible {
+  outline: 2px solid var(--color-x);
+  outline-offset: 3px;
+}
+
+body.rota-home .app-container {
+  max-width: 980px;
+}
+
+.home-hero {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 1rem;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  border-radius: var(--radius-lg, 16px);
+  background: var(--surface-glass);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.game-card:hover {
+  transform: translateY(-4px);
+  background: var(--surface-glass-hover);
+  border-color: rgba(0, 242, 254, 0.35);
+}
+
+.game-card-icon {
+  width: 52px;
+  height: 52px;
+  font-size: 1.5rem;
+}
+
+.game-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.game-card-title {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.game-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.game-card-record {
+  margin-top: 0.4rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--color-gold);
+}
+
+.game-card-record[hidden] {
+  display: none;
+}
+
+.home-footer {
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.home-footer a {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 860px) {
+  .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 540px) {
+  .home-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card,
+  .nav-item {
+    transition: none;
+  }
+
+  .game-card:hover {
+    transform: none;
+  }
+}

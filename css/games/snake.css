@@ -65,3 +65,11 @@
   transform: scale(0.92);
 }
 
+
+@media (max-width: 480px) {
+  .snake-top-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+}

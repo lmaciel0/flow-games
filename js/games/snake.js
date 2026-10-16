@@ -1,23 +1,92 @@
 /**
- * Snake Neon — Jogo da Cobrinha Retrô em Canvas
+ * Snake Neon — jogo da cobrinha retrô em canvas.
  */
 
-(function () {
-  'use strict';
+const HTML = `
+      <header class="app-header">
+        <div class="header-badge snake-badge">
+          <span class="badge-dot snake-dot"></span>
+          <span class="badge-text">ARCADE RETRÔ NEON</span>
+        </div>
+        <h1 class="app-title">Snake <span class="gradient-text-snake">Neon</span></h1>
+        <p class="app-subtitle">Colete a energia luminosa e desvie da própria cauda para bater o recorde!</p>
+      </header>
 
-  const canvas = document.getElementById('snake-canvas');
-  if (!canvas) return;
+      <div class="snake-top-bar glass-card">
+        <div class="snake-scores">
+          <div class="snake-score-box">
+            <span class="snake-score-title">PONTOS</span>
+            <span class="snake-score-num" id="snake-current-score">0</span>
+          </div>
+          <div class="snake-score-box best">
+            <span class="snake-score-title">RECORDE</span>
+            <span class="snake-score-num" id="snake-best-score">0</span>
+          </div>
+        </div>
+
+        <div class="snake-actions">
+          <button id="snake-pause-btn" class="action-btn-small">
+            <span id="snake-pause-icon">⏸️</span>
+            <span id="snake-pause-text">Pausar</span>
+          </button>
+          <button id="snake-restart-btn" class="action-btn-small primary-snake">
+            <span>Novo Jogo</span>
+          </button>
+        </div>
+      </div>
+
+      <main class="snake-wrapper">
+        <div class="snake-canvas-container">
+          <canvas id="snake-canvas" width="400" height="400"></canvas>
+          <div class="snake-overlay" id="snake-overlay">
+            <div class="snake-message-box">
+              <h2 id="snake-overlay-title">Fim de Jogo!</h2>
+              <p id="snake-overlay-score">Pontuação: 0</p>
+              <button id="snake-overlay-restart" class="action-btn primary-btn">Jogar Novamente</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- D-Pad Virtual para Mobile / Telas Menores -->
+        <div class="virtual-dpad" id="snake-dpad">
+          <button class="dpad-btn up" id="dpad-up">▲</button>
+          <div class="dpad-middle">
+            <button class="dpad-btn left" id="dpad-left">◀</button>
+            <div class="dpad-center"></div>
+            <button class="dpad-btn right" id="dpad-right">▶</button>
+          </div>
+          <button class="dpad-btn down" id="dpad-down">▼</button>
+        </div>
+      </main>
+
+      <div class="info-card glass-card">
+        <div class="info-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <strong>Controles da Snake:</strong>
+        </div>
+        <p>Use as <strong>Setas do Teclado (↑ ↓ ← →)</strong> ou <strong>W, A, S, D</strong> (ou os botões direcionais na tela). Frutas douradas especiais concedem pontuação extra por tempo limitado!</p>
+      </div>
+`;
+
+function montar(raiz, { audio, storage }) {
+  const byId = (id) => raiz.querySelector('#' + id);
+  let controle;
+
+
+  const canvas = byId('snake-canvas');
   const ctx = canvas.getContext('2d');
 
-  const scoreEl = document.getElementById('snake-current-score');
-  const bestScoreEl = document.getElementById('snake-best-score');
-  const pauseBtn = document.getElementById('snake-pause-btn');
-  const pauseText = document.getElementById('snake-pause-text');
-  const pauseIcon = document.getElementById('snake-pause-icon');
-  const restartBtn = document.getElementById('snake-restart-btn');
-  const overlay = document.getElementById('snake-overlay');
-  const overlayScore = document.getElementById('snake-overlay-score');
-  const overlayRestart = document.getElementById('snake-overlay-restart');
+  const scoreEl = byId('snake-current-score');
+  const bestScoreEl = byId('snake-best-score');
+  const pauseBtn = byId('snake-pause-btn');
+  const pauseText = byId('snake-pause-text');
+  const pauseIcon = byId('snake-pause-icon');
+  const restartBtn = byId('snake-restart-btn');
+  const overlay = byId('snake-overlay');
+  const overlayScore = byId('snake-overlay-score');
+  const overlayRestart = byId('snake-overlay-restart');
 
   const GRID_SIZE = 20; // 20x20
   const CELL_SIZE = canvas.width / GRID_SIZE; // 20px
@@ -36,22 +105,15 @@
   let speed = 130;
 
   function loadBestScore() {
-    try {
-      const saved = localStorage.getItem('snake_best_score');
-      if (saved) {
-        bestScore = parseInt(saved, 10) || 0;
-        bestScoreEl.textContent = bestScore;
-      }
-    } catch (e) {}
+    bestScore = storage.get('recorde', 0);
+    bestScoreEl.textContent = bestScore;
   }
 
   function saveBestScore() {
     if (score > bestScore) {
       bestScore = score;
       bestScoreEl.textContent = bestScore;
-      try {
-        localStorage.setItem('snake_best_score', bestScore.toString());
-      } catch (e) {}
+      storage.set('recorde', bestScore);
     }
   }
 
@@ -124,7 +186,7 @@
       score += 10;
       scoreEl.textContent = score;
       saveBestScore();
-      if (window.ArcadeAudio) window.ArcadeAudio.playTone(600, 'triangle', 0.08, 0.2);
+      audio.playTone(600, 'triangle', 0.08, 0.2);
 
       // Acelera levemente a cada 50 pontos
       if (score % 50 === 0 && speed > 70) {
@@ -138,10 +200,8 @@
       scoreEl.textContent = score;
       saveBestScore();
       bonusFood = null;
-      if (window.ArcadeAudio) {
-        window.ArcadeAudio.playTone(750, 'sine', 0.1, 0.25);
-        setTimeout(() => window.ArcadeAudio.playTone(950, 'sine', 0.15, 0.25), 80);
-      }
+      audio.playTone(750, 'sine', 0.1, 0.25);
+      setTimeout(() => audio.playTone(950, 'sine', 0.15, 0.25), 80);
     } else {
       snake.pop();
     }
@@ -261,7 +321,7 @@
     clearInterval(gameInterval);
     overlayScore.textContent = `Pontuação: ${score}`;
     overlay.classList.add('active');
-    if (window.ArcadeAudio) window.ArcadeAudio.playSound('defeat');
+    audio.playSound('defeat');
   }
 
   function togglePause() {
@@ -284,7 +344,7 @@
 
   // Teclado
   window.addEventListener('keydown', (e) => {
-    const viewSnake = document.getElementById('view-snake');
+    const viewSnake = raiz;
     if (!viewSnake || !viewSnake.classList.contains('active')) return;
 
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
@@ -299,24 +359,58 @@
   });
 
   // D-Pad Virtual
-  document.getElementById('dpad-up').addEventListener('click', () => handleDirection(0, -1));
-  document.getElementById('dpad-down').addEventListener('click', () => handleDirection(0, 1));
-  document.getElementById('dpad-left').addEventListener('click', () => handleDirection(-1, 0));
-  document.getElementById('dpad-right').addEventListener('click', () => handleDirection(1, 0));
+  byId('dpad-up').addEventListener('click', () => handleDirection(0, -1));
+  byId('dpad-down').addEventListener('click', () => handleDirection(0, 1));
+  byId('dpad-left').addEventListener('click', () => handleDirection(-1, 0));
+  byId('dpad-right').addEventListener('click', () => handleDirection(1, 0));
 
   if (pauseBtn) pauseBtn.addEventListener('click', togglePause);
   if (restartBtn) restartBtn.addEventListener('click', resetGame);
   if (overlayRestart) overlayRestart.addEventListener('click', resetGame);
 
-  // Hook global para pausar ao sair da aba
-  window.SnakeGame = {
-    pause: () => { isPaused = true; updatePauseUI(); },
-    resume: () => { isPaused = false; updatePauseUI(); },
-    reset: resetGame
+  // Chamado pelo nav: para o loop ao sair da rota e retoma ao voltar.
+  controle = {
+    pause: () => {
+      isPaused = true;
+      clearInterval(gameInterval);
+      updatePauseUI();
+    },
+    resume: () => {
+      isPaused = false;
+      if (!isGameOver) startLoop();
+      updatePauseUI();
+    }
   };
 
   loadBestScore();
   resetGame();
   isPaused = true; // Começa pausado até o usuário abrir a aba
   updatePauseUI();
-})();
+
+  return controle;
+}
+
+let instancia = null;
+
+export default {
+  id: 'snake',
+  nome: 'Snake Neon',
+  icone: '🐍',
+  iconeClasse: 'snake-icon',
+  descricao: 'Cobrinha clássica arcade',
+  badge: { texto: 'ARCADE', cor: 'green' },
+  mount(raiz, ctx) {
+    raiz.innerHTML = HTML;
+    instancia = montar(raiz, ctx);
+  },
+  pause() {
+    if (instancia) instancia.pause();
+  },
+  resume() {
+    if (instancia) instancia.resume();
+  },
+  recorde(storage) {
+    const n = storage.get('recorde', 0);
+    return n > 0 ? `Recorde ${n}` : null;
+  }
+};

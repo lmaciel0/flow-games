@@ -1,263 +1,142 @@
 /**
- * Arcade Hub — Navegação Global, Sintetizador de Áudio e Jogo da Velha (Minimax)
+ * Jogo da Velha — IA minimax com poda alfa-beta, 4 modos e escolha de símbolo.
  */
 
-(function () {
-  'use strict';
+const HTML = `
+      <header class="app-header">
+        <div class="header-badge">
+          <span class="badge-dot"></span>
+          <span class="badge-text">IA MINIMAX INVENCÍVEL</span>
+        </div>
+        <h1 class="app-title">Jogo da Velha <span class="gradient-text">Força Máxima</span></h1>
+        <p class="app-subtitle">Desafie o algoritmo matemático perfeito. Você consegue pelo menos empatar?</p>
+      </header>
 
-  // --- Sintetizador Web Audio API Global ---
-  let audioCtx = null;
-  let globalSoundEnabled = true;
+      <div class="controls-panel glass-card">
+        <div class="control-group">
+          <label for="difficulty-select" class="control-label">Modo / Dificuldade:</label>
+          <div class="select-wrapper">
+            <select id="difficulty-select" class="custom-select">
+              <option value="max" selected>🔥 Força Máxima (Imbatível)</option>
+              <option value="hard">⚡ Difícil (85% Perfeito)</option>
+              <option value="medium">🎯 Médio (Equilibrado)</option>
+              <option value="pvp">👥 2 Jogadores (Local)</option>
+            </select>
+          </div>
+        </div>
 
-  function initAudio() {
-    if (!audioCtx) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) {
-        audioCtx = new AudioContext();
-      }
-    }
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
-  }
+        <div class="control-group">
+          <span class="control-label">Você joga como:</span>
+          <div class="symbol-toggle" id="symbol-toggle">
+            <button type="button" class="symbol-btn active" id="btn-choose-x" data-symbol="X">
+              <span class="symbol-glow x-glow">X</span>
+              <span class="btn-subtext">Primeiro</span>
+            </button>
+            <button type="button" class="symbol-btn" id="btn-choose-o" data-symbol="O">
+              <span class="symbol-glow o-glow">O</span>
+              <span class="btn-subtext">Segundo</span>
+            </button>
+          </div>
+        </div>
 
-  function playTone(freq, type = 'sine', duration = 0.1, gainValue = 0.15) {
-    if (!globalSoundEnabled) return;
-    try {
-      initAudio();
-      if (!audioCtx) return;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+        <div class="sound-toggle-wrapper">
+          <button id="btn-toggle-sound" class="icon-btn" title="Alternar Som" aria-label="Alternar Som">
+            <span class="sound-icon-global">🔊</span>
+          </button>
+        </div>
+      </div>
 
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      <div class="scoreboard glass-card">
+        <div class="score-card player-x-card" id="card-x">
+          <div class="score-avatar x-avatar">X</div>
+          <div class="score-info">
+            <span class="score-label" id="label-x">Jogador (X)</span>
+            <span class="score-value" id="score-x">0</span>
+          </div>
+        </div>
 
-      gain.gain.setValueAtTime(gainValue, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        <div class="score-divider">
+          <span class="ties-count" id="score-ties">0</span>
+          <span class="ties-label">Empates</span>
+        </div>
 
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
+        <div class="score-card player-o-card" id="card-o">
+          <div class="score-avatar o-avatar">O</div>
+          <div class="score-info">
+            <span class="score-label" id="label-o">IA Máxima (O)</span>
+            <span class="score-value" id="score-o">0</span>
+          </div>
+        </div>
+      </div>
 
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
-    } catch (e) {}
-  }
+      <div class="turn-banner" id="turn-banner">
+        <div class="turn-indicator">
+          <span class="pulse-indicator" id="pulse-dot"></span>
+          <span id="status-text">Sua vez de jogar (X)</span>
+        </div>
+      </div>
 
-  function playSound(name) {
-    if (!globalSoundEnabled) return;
-    initAudio();
+      <main class="board-wrapper">
+        <div class="board" id="board" role="grid" aria-label="Tabuleiro do Jogo da Velha">
+          <button class="cell" data-index="0" id="cell-0" role="gridcell" aria-label="Casa 1"></button>
+          <button class="cell" data-index="1" id="cell-1" role="gridcell" aria-label="Casa 2"></button>
+          <button class="cell" data-index="2" id="cell-2" role="gridcell" aria-label="Casa 3"></button>
+          <button class="cell" data-index="3" id="cell-3" role="gridcell" aria-label="Casa 4"></button>
+          <button class="cell" data-index="4" id="cell-4" role="gridcell" aria-label="Casa 5"></button>
+          <button class="cell" data-index="5" id="cell-5" role="gridcell" aria-label="Casa 6"></button>
+          <button class="cell" data-index="6" id="cell-6" role="gridcell" aria-label="Casa 7"></button>
+          <button class="cell" data-index="7" id="cell-7" role="gridcell" aria-label="Casa 8"></button>
+          <button class="cell" data-index="8" id="cell-8" role="gridcell" aria-label="Casa 9"></button>
 
-    if (name === 'move-x') {
-      playTone(520, 'sine', 0.12, 0.2);
-    } else if (name === 'move-o') {
-      playTone(330, 'triangle', 0.15, 0.25);
-    } else if (name === 'win') {
-      const notes = [440, 554.37, 659.25, 880];
-      notes.forEach((freq, idx) => {
-        setTimeout(() => playTone(freq, 'triangle', 0.25, 0.25), idx * 90);
-      });
-    } else if (name === 'defeat') {
-      const notes = [400, 360, 320, 260];
-      notes.forEach((freq, idx) => {
-        setTimeout(() => playTone(freq, 'sawtooth', 0.2, 0.15), idx * 110);
-      });
-    } else if (name === 'tie') {
-      playTone(300, 'sine', 0.25, 0.2);
-      setTimeout(() => playTone(300, 'sine', 0.25, 0.2), 160);
-    } else if (name === 'click') {
-      playTone(600, 'sine', 0.04, 0.08);
-    }
-  }
+          <svg class="strike-line-svg" id="strike-svg" viewBox="0 0 360 360">
+            <line id="strike-line" x1="0" y1="0" x2="0" y2="0" stroke="url(#lineGradient)" stroke-width="8" stroke-linecap="round" />
+            <defs>
+              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00f2fe" />
+                <stop offset="100%" stop-color="#ff0844" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+      </main>
 
-  window.ArcadeAudio = {
-    playTone,
-    playSound,
-    isSoundEnabled: () => globalSoundEnabled,
-    toggleSound: () => {
-      globalSoundEnabled = !globalSoundEnabled;
-      updateSoundIcons();
-      if (globalSoundEnabled) playSound('click');
-      return globalSoundEnabled;
-    }
-  };
+      <footer class="app-footer">
+        <button id="btn-restart" class="action-btn primary-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+          </svg>
+          <span>Reiniciar Partida</span>
+        </button>
 
-  function updateSoundIcons() {
-    const icon = globalSoundEnabled ? '🔊' : '🔇';
-    document.querySelectorAll('.sound-icon-global').forEach(el => el.textContent = icon);
-    const drawerSoundIcon = document.querySelector('.sound-icon-drawer');
-    if (drawerSoundIcon) drawerSoundIcon.textContent = icon;
-  }
+        <button id="btn-reset-scores" class="action-btn secondary-btn" title="Zerar Placar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+          <span>Zerar Placar</span>
+        </button>
+      </footer>
 
-  // --- Confete em Canvas (Partículas Nativas) ---
-  const confettiCanvas = document.getElementById('confetti-canvas');
-  let confettiCtx = confettiCanvas ? confettiCanvas.getContext('2d') : null;
-  let particles = [];
-  let confettiAnimationId = null;
+      <div class="info-card glass-card">
+        <div class="info-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          <strong>Como funciona a Força Máxima?</strong>
+        </div>
+        <p>
+          No modo <strong>Força Máxima</strong>, a IA calcula a árvore completa de jogadas usando o algoritmo <strong>Minimax</strong> com busca em profundidade ótima. Matematicamente, é impossível derrotá-la — o melhor resultado possível contra ela é o empate!
+        </p>
+      </div>
+`;
 
-  function resizeConfetti() {
-    if (!confettiCanvas) return;
-    confettiCanvas.width = window.innerWidth;
-    confettiCanvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resizeConfetti);
-  resizeConfetti();
-
-  function triggerConfetti() {
-    if (!confettiCtx) return;
-    cancelAnimationFrame(confettiAnimationId);
-    particles = [];
-    const colors = ['#00f2fe', '#4facfe', '#ff0844', '#ffb199', '#f6d365', '#ffffff', '#10b981', '#a855f7'];
-
-    for (let i = 0; i < 90; i++) {
-      particles.push({
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2 - 50,
-        vx: (Math.random() - 0.5) * 16,
-        vy: (Math.random() - 0.8) * 15,
-        size: Math.random() * 8 + 4,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        rotation: Math.random() * 360,
-        rotationSpeed: (Math.random() - 0.5) * 12,
-        opacity: 1
-      });
-    }
-
-    function render() {
-      confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-      let aliveCount = 0;
-
-      particles.forEach((p) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.35;
-        p.rotation += p.rotationSpeed;
-        p.opacity -= 0.009;
-
-        if (p.opacity > 0) {
-          aliveCount++;
-          confettiCtx.save();
-          confettiCtx.translate(p.x, p.y);
-          confettiCtx.rotate((p.rotation * Math.PI) / 180);
-          confettiCtx.fillStyle = p.color;
-          confettiCtx.globalAlpha = Math.max(0, p.opacity);
-          confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-          confettiCtx.restore();
-        }
-      });
-
-      if (aliveCount > 0) {
-        confettiAnimationId = requestAnimationFrame(render);
-      } else {
-        confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-      }
-    }
-
-    render();
-  }
-  window.triggerConfetti = triggerConfetti;
-
-  // --- Menu Hambúrguer & Navegação Entre 6 Jogos ---
-  const menuToggleBtn = document.getElementById('menu-toggle-btn');
-  const sidebarDrawer = document.getElementById('sidebar-drawer');
-  const drawerBackdrop = document.getElementById('drawer-backdrop');
-  const drawerCloseBtn = document.getElementById('drawer-close-btn');
-  const drawerSoundToggle = document.getElementById('drawer-sound-toggle');
-  const btnToggleSound = document.getElementById('btn-toggle-sound');
-
-  const navItems = document.querySelectorAll('.nav-item');
-  const views = document.querySelectorAll('.game-view');
-
-  function openDrawer() {
-    sidebarDrawer.classList.add('open');
-    drawerBackdrop.classList.add('active');
-    menuToggleBtn.classList.add('open');
-    playSound('click');
-  }
-
-  function closeDrawer() {
-    sidebarDrawer.classList.remove('open');
-    drawerBackdrop.classList.remove('active');
-    menuToggleBtn.classList.remove('open');
-  }
-
-  if (menuToggleBtn) {
-    menuToggleBtn.addEventListener('click', () => {
-      if (sidebarDrawer.classList.contains('open')) {
-        closeDrawer();
-      } else {
-        openDrawer();
-      }
-    });
-  }
-
-  if (drawerCloseBtn) drawerCloseBtn.addEventListener('click', closeDrawer);
-  if (drawerBackdrop) drawerBackdrop.addEventListener('click', closeDrawer);
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && sidebarDrawer.classList.contains('open')) {
-      closeDrawer();
-    }
-  });
-
-  function switchView(targetId) {
-    playSound('click');
-
-    // Pausa loops de jogos anteriores se aplicável
-    if (window.SnakeGame && typeof window.SnakeGame.pause === 'function') window.SnakeGame.pause();
-    if (window.TetrisGame && typeof window.TetrisGame.pause === 'function') window.TetrisGame.pause();
-
-    views.forEach(v => {
-      if (v.id === targetId) {
-        v.classList.add('active');
-      } else {
-        v.classList.remove('active');
-      }
-    });
-
-    navItems.forEach(item => {
-      if (item.getAttribute('data-target') === targetId) {
-        item.classList.add('active');
-      } else {
-        item.classList.remove('active');
-      }
-    });
-
-    // Ações de inicialização específica de visão
-    if (targetId === 'view-2048') {
-      setTimeout(() => {
-        if (window.Game2048 && window.Game2048.render) window.Game2048.render();
-      }, 50);
-    } else if (targetId === 'view-snake') {
-      if (window.SnakeGame && typeof window.SnakeGame.resume === 'function') {
-        window.SnakeGame.resume();
-      }
-    } else if (targetId === 'view-tetris') {
-      if (window.TetrisGame && typeof window.TetrisGame.resume === 'function') {
-        window.TetrisGame.resume();
-      }
-    }
-
-    closeDrawer();
-  }
-
-  navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const target = item.getAttribute('data-target');
-      if (target) switchView(target);
-    });
-  });
-
-  if (drawerSoundToggle) {
-    drawerSoundToggle.addEventListener('click', () => {
-      window.ArcadeAudio.toggleSound();
-    });
-  }
-
-  if (btnToggleSound) {
-    btnToggleSound.addEventListener('click', () => {
-      window.ArcadeAudio.toggleSound();
-    });
-  }
+function montar(raiz, { audio, confetti, storage }) {
+  const byId = (id) => raiz.querySelector('#' + id);
+  const playSound = audio.playSound;
+  const triggerConfetti = confetti;
 
   // --- MOTOR DO JOGO DA VELHA (Minimax Força Máxima) ---
   const state = {
@@ -288,23 +167,23 @@
     '2,4,6': { x1: 330, y1: 30, x2: 30, y2: 330 }
   };
 
-  const cells = Array.from(document.querySelectorAll('.cell'));
-  const statusText = document.getElementById('status-text');
-  const pulseDot = document.getElementById('pulse-dot');
-  const difficultySelect = document.getElementById('difficulty-select');
-  const btnChooseX = document.getElementById('btn-choose-x');
-  const btnChooseO = document.getElementById('btn-choose-o');
-  const btnRestart = document.getElementById('btn-restart');
-  const btnResetScores = document.getElementById('btn-reset-scores');
-  const scoreXEl = document.getElementById('score-x');
-  const scoreOEl = document.getElementById('score-o');
-  const scoreTiesEl = document.getElementById('score-ties');
-  const labelXEl = document.getElementById('label-x');
-  const labelOEl = document.getElementById('label-o');
-  const cardX = document.getElementById('card-x');
-  const cardO = document.getElementById('card-o');
-  const strikeSvg = document.getElementById('strike-svg');
-  const strikeLine = document.getElementById('strike-line');
+  const cells = Array.from(raiz.querySelectorAll('.cell'));
+  const statusText = byId('status-text');
+  const pulseDot = byId('pulse-dot');
+  const difficultySelect = byId('difficulty-select');
+  const btnChooseX = byId('btn-choose-x');
+  const btnChooseO = byId('btn-choose-o');
+  const btnRestart = byId('btn-restart');
+  const btnResetScores = byId('btn-reset-scores');
+  const scoreXEl = byId('score-x');
+  const scoreOEl = byId('score-o');
+  const scoreTiesEl = byId('score-ties');
+  const labelXEl = byId('label-x');
+  const labelOEl = byId('label-o');
+  const cardX = byId('card-x');
+  const cardO = byId('card-o');
+  const strikeSvg = byId('strike-svg');
+  const strikeLine = byId('strike-line');
 
   function checkWinner(board) {
     for (const combo of WINNING_COMBINATIONS) {
@@ -603,24 +482,17 @@
   }
 
   function saveScores() {
-    try {
-      localStorage.setItem('jogodavelha_scores', JSON.stringify(state.scores));
-    } catch (e) {}
+    storage.set('placar', state.scores);
   }
 
   function loadScores() {
-    try {
-      const saved = localStorage.getItem('jogodavelha_scores');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        state.scores.x = Number(parsed.x) || 0;
-        state.scores.o = Number(parsed.o) || 0;
-        state.scores.ties = Number(parsed.ties) || 0;
-        scoreXEl.textContent = state.scores.x;
-        scoreOEl.textContent = state.scores.o;
-        scoreTiesEl.textContent = state.scores.ties;
-      }
-    } catch (e) {}
+    const saved = storage.get('placar', {});
+    state.scores.x = Number(saved.x) || 0;
+    state.scores.o = Number(saved.o) || 0;
+    state.scores.ties = Number(saved.ties) || 0;
+    scoreXEl.textContent = state.scores.x;
+    scoreOEl.textContent = state.scores.o;
+    scoreTiesEl.textContent = state.scores.ties;
   }
 
   // Event Listeners das células
@@ -667,7 +539,7 @@
     difficultySelect.addEventListener('change', (e) => {
       playSound('click');
       state.difficulty = e.target.value;
-      const symbolToggle = document.getElementById('symbol-toggle');
+      const symbolToggle = byId('symbol-toggle');
       if (symbolToggle) {
         symbolToggle.style.display = state.difficulty === 'pvp' ? 'none' : 'flex';
       }
@@ -681,4 +553,28 @@
   loadScores();
   updateLabels();
   restartGame();
-})();
+
+  const btnSom = byId('btn-toggle-sound');
+  if (btnSom) btnSom.addEventListener('click', () => audio.toggleSound());
+  audio.atualizarIcones();
+}
+
+export default {
+  id: 'tictactoe',
+  nome: 'Jogo da Velha',
+  icone: '<span class="mini-x">✕</span><span class="mini-o">○</span>',
+  iconeClasse: 'x-o-icon',
+  descricao: 'IA Força Máxima (Minimax)',
+  badge: { texto: 'IA', cor: '' },
+  mount(raiz, ctx) {
+    raiz.innerHTML = HTML;
+    montar(raiz, ctx);
+  },
+  pause() {},
+  resume() {},
+  recorde(storage) {
+    const p = storage.get('placar');
+    if (!p || !(p.x || p.o || p.ties)) return null;
+    return `Placar ${Number(p.x) || 0}×${Number(p.o) || 0}`;
+  }
+};

@@ -1,11 +1,68 @@
 /**
- * Termo — Jogo de Adivinhação de Palavras de 5 Letras
- * Integrado ao Dicionário Oficial Brasileiro (LibreOffice VERO pt-BR)
- * Com proteção contra perda de foco, debounce de envio e suporte ABNT2/acentos
+ * Termo — adivinhe a palavra de 5 letras em 6 tentativas.
+ * Dicionário em js/data/palavras.js; teclado físico com normalização ABNT2/acentos.
  */
+import { secretas, validas } from '../data/palavras.js';
 
-(function () {
-  'use strict';
+const HTML = `
+      <header class="app-header">
+        <div class="header-badge termo-badge">
+          <span class="badge-dot termo-dot"></span>
+          <span class="badge-text">JOGO DE PALAVRAS BRASIL</span>
+        </div>
+        <h1 class="app-title">Jogo <span class="gradient-text-termo">Termo</span></h1>
+        <p class="app-subtitle">Adivinhe a palavra secreta de <strong>5 letras</strong> em até 6 tentativas!</p>
+      </header>
+
+      <div class="termo-status-bar glass-card">
+        <div class="termo-stat-box">
+          <span class="termo-stat-label">VITÓRIAS</span>
+          <span class="termo-stat-val" id="termo-wins">0</span>
+        </div>
+        <div class="termo-stat-box">
+          <span class="termo-stat-label">SEQUÊNCIA</span>
+          <span class="termo-stat-val" id="termo-streak">0</span>
+        </div>
+        <button id="termo-new-word-btn" class="action-btn-small primary-termo">
+          <span>Nova Palavra</span>
+        </button>
+      </div>
+
+      <!-- Toast de Alerta do Termo -->
+      <div id="termo-toast" class="termo-toast">Palavra não encontrada</div>
+
+      <!-- Grade 6x5 do Termo -->
+      <main class="termo-board-wrapper">
+        <div class="termo-grid" id="termo-grid">
+          <!-- 6 linhas com 5 letras -->
+        </div>
+      </main>
+
+      <!-- Teclado Virtual do Termo -->
+      <div class="termo-keyboard" id="termo-keyboard">
+        <!-- Linhas geradas dinamicamente com feedback de cores -->
+      </div>
+
+      <div class="info-card glass-card">
+        <div class="info-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f6d365" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <strong>Como Jogar o Termo:</strong>
+        </div>
+        <p>
+          <span class="termo-legend green">🟩 Verde</span>: letra certa no lugar certo.<br>
+          <span class="termo-legend yellow">🟨 Amarelo</span>: letra existe na palavra, mas em outra posição.<br>
+          <span class="termo-legend gray">⬛ Cinza</span>: letra não faz parte da palavra.
+        </p>
+      </div>
+`;
+
+function montar(raiz, { audio, confetti, storage }) {
+  const byId = (id) => raiz.querySelector('#' + id);
+
 
   // Fallback seguro de palavras conhecidas
   const FALLBACK_WORDS = [
@@ -22,12 +79,12 @@
     'GOLPE', 'TURMA', 'GRAVE', 'CRAVO', 'BEIJO', 'PEIXE', 'FUNDO', 'CLARO'
   ];
 
-  const gridEl = document.getElementById('termo-grid');
-  const keyboardEl = document.getElementById('termo-keyboard');
-  const toastEl = document.getElementById('termo-toast');
-  const winsEl = document.getElementById('termo-wins');
-  const streakEl = document.getElementById('termo-streak');
-  const newWordBtn = document.getElementById('termo-new-word-btn');
+  const gridEl = byId('termo-grid');
+  const keyboardEl = byId('termo-keyboard');
+  const toastEl = byId('termo-toast');
+  const winsEl = byId('termo-wins');
+  const streakEl = byId('termo-streak');
+  const newWordBtn = byId('termo-new-word-btn');
 
   const MAX_ATTEMPTS = 6;
   const WORD_LENGTH = 5;
@@ -42,36 +99,30 @@
   let letterStates = {}; // 'A': 'green' | 'yellow' | 'gray'
 
   function getSecretWordsList() {
-    if (window.TERMO_SECRET_WORDS && window.TERMO_SECRET_WORDS.length > 0) {
-      return window.TERMO_SECRET_WORDS;
+    if (secretas.length > 0) {
+      return secretas;
     }
     return FALLBACK_WORDS;
   }
 
   function getValidWordsSet() {
-    if (window.TERMO_VALID_WORDS && window.TERMO_VALID_WORDS.size > 0) {
-      return window.TERMO_VALID_WORDS;
+    if (validas.size > 0) {
+      return validas;
     }
     return new Set(FALLBACK_WORDS);
   }
 
   function loadStats() {
-    try {
-      const saved = localStorage.getItem('termo_stats');
-      if (saved) {
-        stats = JSON.parse(saved);
-        winsEl.textContent = stats.wins || 0;
-        streakEl.textContent = stats.streak || 0;
-      }
-    } catch (e) {}
+    const saved = storage.get('stats', {});
+    stats = { wins: Number(saved.wins) || 0, streak: Number(saved.streak) || 0 };
+    winsEl.textContent = stats.wins;
+    streakEl.textContent = stats.streak;
   }
 
   function saveStats() {
-    try {
-      localStorage.setItem('termo_stats', JSON.stringify(stats));
-      winsEl.textContent = stats.wins;
-      streakEl.textContent = stats.streak;
-    } catch (e) {}
+    storage.set('stats', stats);
+    winsEl.textContent = stats.wins;
+    streakEl.textContent = stats.streak;
   }
 
   function showToast(msg) {
@@ -84,7 +135,7 @@
   }
 
   function shakeCurrentRow() {
-    const rowEl = document.getElementById(`termo-row-${currentRow}`);
+    const rowEl = byId(`termo-row-${currentRow}`);
     if (rowEl) {
       rowEl.classList.add('shake');
       setTimeout(() => rowEl.classList.remove('shake'), 400);
@@ -158,13 +209,13 @@
   function addLetter(letter) {
     if (currentCol < WORD_LENGTH) {
       guesses[currentRow][currentCol] = letter;
-      const tile = document.getElementById(`termo-tile-${currentRow}-${currentCol}`);
+      const tile = byId(`termo-tile-${currentRow}-${currentCol}`);
       if (tile) {
         tile.textContent = letter;
         tile.classList.add('filled');
       }
       currentCol++;
-      if (window.ArcadeAudio) window.ArcadeAudio.playTone(480, 'sine', 0.04, 0.1);
+      audio.playTone(480, 'sine', 0.04, 0.1);
     }
   }
 
@@ -172,12 +223,12 @@
     if (currentCol > 0) {
       currentCol--;
       guesses[currentRow][currentCol] = '';
-      const tile = document.getElementById(`termo-tile-${currentRow}-${currentCol}`);
+      const tile = byId(`termo-tile-${currentRow}-${currentCol}`);
       if (tile) {
         tile.textContent = '';
         tile.classList.remove('filled');
       }
-      if (window.ArcadeAudio) window.ArcadeAudio.playTone(320, 'sine', 0.04, 0.1);
+      audio.playTone(320, 'sine', 0.04, 0.1);
     }
   }
 
@@ -187,7 +238,7 @@
     if (currentCol < WORD_LENGTH) {
       showToast('Palavra incompleta! Digite 5 letras.');
       shakeCurrentRow();
-      if (window.ArcadeAudio) window.ArcadeAudio.playTone(200, 'sawtooth', 0.1, 0.15);
+      audio.playTone(200, 'sawtooth', 0.1, 0.15);
       return;
     }
 
@@ -199,7 +250,7 @@
     if (validWords && !validWords.has(guess)) {
       showToast('Palavra não consta no dicionário brasileiro!');
       shakeCurrentRow();
-      if (window.ArcadeAudio) window.ArcadeAudio.playTone(180, 'sawtooth', 0.15, 0.2);
+      audio.playTone(180, 'sawtooth', 0.15, 0.2);
       return;
     }
 
@@ -211,16 +262,14 @@
 
     // Animação e coloração letra a letra da linha avaliada
     result.forEach((res, c) => {
-      const tile = document.getElementById(`termo-tile-${rowToEvaluate}-${c}`);
+      const tile = byId(`termo-tile-${rowToEvaluate}-${c}`);
       setTimeout(() => {
         if (tile) {
           tile.classList.add('flip', `t-${res.status}`);
         }
         updateKeyStatus(res.letter, res.status);
-        if (window.ArcadeAudio) {
-          const toneFreq = res.status === 'green' ? 660 : res.status === 'yellow' ? 520 : 350;
-          window.ArcadeAudio.playTone(toneFreq, 'sine', 0.08, 0.15);
-        }
+        const toneFreq = res.status === 'green' ? 660 : res.status === 'yellow' ? 520 : 350;
+        audio.playTone(toneFreq, 'sine', 0.08, 0.15);
       }, c * 130);
     });
 
@@ -234,14 +283,14 @@
         stats.streak++;
         saveStats();
         showToast('🎉 Parabéns, você acertou a palavra!');
-        if (window.ArcadeAudio) window.ArcadeAudio.playSound('win');
-        if (typeof window.triggerConfetti === 'function') window.triggerConfetti();
+        audio.playSound('win');
+        confetti();
       } else if (rowToEvaluate === MAX_ATTEMPTS - 1) {
         isGameOver = true;
         stats.streak = 0;
         saveStats();
         showToast(`A palavra correta era: ${secretWord}`);
-        if (window.ArcadeAudio) window.ArcadeAudio.playSound('defeat');
+        audio.playSound('defeat');
       } else {
         currentRow = rowToEvaluate + 1;
         currentCol = 0;
@@ -279,7 +328,7 @@
   }
 
   function updateKeyStatus(letter, status) {
-    const keyBtn = document.getElementById(`key-${letter}`);
+    const keyBtn = byId(`key-${letter}`);
     if (!keyBtn) return;
 
     const priority = { green: 3, yellow: 2, gray: 1 };
@@ -306,8 +355,11 @@
 
   // Teclado físico com normalização ABNT2 (converte Ç -> C e remove acentos)
   window.addEventListener('keydown', (e) => {
-    const viewTermo = document.getElementById('view-termo');
+    const viewTermo = raiz;
     if (!viewTermo || !viewTermo.classList.contains('active')) return;
+    // Não engole Enter/teclas de quem navega por outros controles (ex.: links do drawer) nem atalhos do navegador.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target !== document.body && !raiz.contains(e.target)) return;
 
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -344,4 +396,23 @@
 
   loadStats();
   newGame();
-})();
+}
+
+export default {
+  id: 'termo',
+  nome: 'Termo',
+  icone: '🔤',
+  iconeClasse: 'termo-icon',
+  descricao: 'Descubra a palavra em 6 tentativas',
+  badge: { texto: 'PALAVRAS', cor: 'yellow' },
+  mount(raiz, ctx) {
+    raiz.innerHTML = HTML;
+    montar(raiz, ctx);
+  },
+  pause() {},
+  resume() {},
+  recorde(storage) {
+    const n = Number(storage.get('stats', {}).wins) || 0;
+    return n > 0 ? `${n} ${n === 1 ? 'vitória' : 'vitórias'}` : null;
+  }
+};

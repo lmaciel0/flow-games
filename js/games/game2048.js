@@ -1,9 +1,88 @@
 /**
- * Jogo 2048 — Motor Lógico, Animações e Controles Touch/Teclado
+ * Jogo 2048 — motor lógico, animações e controles touch/teclado.
  */
 
-(function () {
-  'use strict';
+const HTML = `
+      <header class="app-header">
+        <div class="header-badge g2048-badge">
+          <span class="badge-dot g2048-dot"></span>
+          <span class="badge-text">CLÁSSICO QUEBRA-CABEÇA</span>
+        </div>
+        <h1 class="app-title">Jogo <span class="gradient-text-2048">2048</span></h1>
+        <p class="app-subtitle">Use as setas do teclado ou deslize os blocos para somar os números e alcançar <strong>2048</strong>!</p>
+      </header>
+
+      <div class="g2048-top-bar glass-card">
+        <div class="g2048-scores">
+          <div class="g2048-score-box">
+            <span class="g2048-score-title">PONTOS</span>
+            <span class="g2048-score-num" id="g2048-current-score">0</span>
+            <span class="g2048-score-add" id="g2048-score-add"></span>
+          </div>
+          <div class="g2048-score-box best">
+            <span class="g2048-score-title">MELHOR</span>
+            <span class="g2048-score-num" id="g2048-best-score">0</span>
+          </div>
+        </div>
+
+        <div class="g2048-actions">
+          <button id="g2048-undo-btn" class="action-btn-small" title="Desfazer último movimento">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7v6h6"/>
+              <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+            </svg>
+            <span>Desfazer</span>
+          </button>
+          <button id="g2048-new-game-btn" class="action-btn-small primary-2048">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            <span>Novo Jogo</span>
+          </button>
+        </div>
+      </div>
+
+      <main class="g2048-board-wrapper">
+        <div class="g2048-container" id="g2048-grid-container">
+          <div class="g2048-grid">
+            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
+            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
+            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
+            <div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div><div class="g2048-cell"></div>
+          </div>
+
+          <div class="g2048-tile-container" id="g2048-tile-container"></div>
+
+          <div class="g2048-overlay" id="g2048-overlay">
+            <div class="g2048-message-box">
+              <h2 id="g2048-overlay-title">Fim de Jogo!</h2>
+              <p id="g2048-overlay-text">Não há mais movimentos possíveis.</p>
+              <div class="overlay-buttons">
+                <button id="g2048-keep-playing-btn" class="action-btn secondary-btn" style="display: none;">Continuar Jogando</button>
+                <button id="g2048-restart-overlay-btn" class="action-btn primary-btn">Tentar Novamente</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <div class="info-card glass-card">
+        <div class="info-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+          <strong>Como Jogar o 2048:</strong>
+        </div>
+        <p>
+          Utilize as <strong>Setas do Teclado (↑ ↓ ← →)</strong> ou <strong>W, A, S, D</strong> para mover os blocos. Quando blocos iguais se colidem, <strong>eles se unem somando seus valores</strong>!
+        </p>
+      </div>
+`;
+
+function montar(raiz, { audio, confetti, storage }) {
+  const byId = (id) => raiz.querySelector('#' + id);
+
 
   // --- Estado do 2048 ---
   const state = {
@@ -19,29 +98,29 @@
   };
 
   // --- Elementos do DOM ---
-  const view2048 = document.getElementById('view-2048');
-  const container = document.getElementById('g2048-grid-container');
-  const tileContainer = document.getElementById('g2048-tile-container');
-  const currentScoreEl = document.getElementById('g2048-current-score');
-  const bestScoreEl = document.getElementById('g2048-best-score');
-  const scoreAddEl = document.getElementById('g2048-score-add');
-  const undoBtn = document.getElementById('g2048-undo-btn');
-  const newGameBtn = document.getElementById('g2048-new-game-btn');
-  const overlay = document.getElementById('g2048-overlay');
-  const overlayTitle = document.getElementById('g2048-overlay-title');
-  const overlayText = document.getElementById('g2048-overlay-text');
-  const keepPlayingBtn = document.getElementById('g2048-keep-playing-btn');
-  const restartOverlayBtn = document.getElementById('g2048-restart-overlay-btn');
+  const view2048 = raiz;
+  const container = byId('g2048-grid-container');
+  const tileContainer = byId('g2048-tile-container');
+  const currentScoreEl = byId('g2048-current-score');
+  const bestScoreEl = byId('g2048-best-score');
+  const scoreAddEl = byId('g2048-score-add');
+  const undoBtn = byId('g2048-undo-btn');
+  const newGameBtn = byId('g2048-new-game-btn');
+  const overlay = byId('g2048-overlay');
+  const overlayTitle = byId('g2048-overlay-title');
+  const overlayText = byId('g2048-overlay-text');
+  const keepPlayingBtn = byId('g2048-keep-playing-btn');
+  const restartOverlayBtn = byId('g2048-restart-overlay-btn');
 
   // --- Gerenciamento de Sons ---
   function playSound(type) {
-    if (window.ArcadeAudio && window.ArcadeAudio.isSoundEnabled()) {
-      if (type === 'slide') window.ArcadeAudio.playTone(380, 'sine', 0.06, 0.12);
-      if (type === 'merge') window.ArcadeAudio.playTone(580, 'triangle', 0.12, 0.2);
-      if (type === 'gameover') window.ArcadeAudio.playSound('defeat');
+    if (audio.isSoundEnabled()) {
+      if (type === 'slide') audio.playTone(380, 'sine', 0.06, 0.12);
+      if (type === 'merge') audio.playTone(580, 'triangle', 0.12, 0.2);
+      if (type === 'gameover') audio.playSound('defeat');
       if (type === 'win') {
-        window.ArcadeAudio.playSound('win');
-        if (typeof window.triggerConfetti === 'function') window.triggerConfetti();
+        audio.playSound('win');
+        confetti();
       }
     }
   }
@@ -99,7 +178,7 @@
     if (undoBtn) undoBtn.disabled = true;
     updateScoreUI(0);
     renderTiles();
-    if (window.ArcadeAudio) window.ArcadeAudio.playTone(450, 'sine', 0.08, 0.15);
+    audio.playTone(450, 'sine', 0.08, 0.15);
   }
 
   // --- Posicionamento dos Blocos ---
@@ -307,20 +386,13 @@
     if (state.score > state.bestScore) {
       state.bestScore = state.score;
       bestScoreEl.textContent = state.bestScore;
-      try {
-        localStorage.setItem('2048_best_score', state.bestScore.toString());
-      } catch (e) {}
+      storage.set('recorde', state.bestScore);
     }
   }
 
   function loadBestScore() {
-    try {
-      const saved = localStorage.getItem('2048_best_score');
-      if (saved) {
-        state.bestScore = parseInt(saved, 10) || 0;
-        bestScoreEl.textContent = state.bestScore;
-      }
-    } catch (e) {}
+    state.bestScore = storage.get('recorde', 0);
+    bestScoreEl.textContent = state.bestScore;
   }
 
   function newGame() {
@@ -429,15 +501,32 @@
     }
   });
 
-  // Exportar reset / init se necessário
-  window.Game2048 = {
-    init: function () {
-      loadBestScore();
-      newGame();
-    },
-    render: renderTiles
-  };
-
   loadBestScore();
   newGame();
-})();
+
+  return { render: renderTiles };
+}
+
+let instancia = null;
+
+export default {
+  id: 'game2048',
+  nome: 'Jogo 2048',
+  icone: '2048',
+  iconeClasse: 'num-icon',
+  descricao: 'Junte os blocos numéricos',
+  badge: { texto: 'POPULAR', cor: 'hot' },
+  mount(raiz, ctx) {
+    raiz.innerHTML = HTML;
+    instancia = montar(raiz, ctx);
+  },
+  pause() {},
+  resume() {
+    // As peças são posicionadas por medida: reposiciona depois que a seção fica visível.
+    setTimeout(() => instancia && instancia.render(), 50);
+  },
+  recorde(storage) {
+    const n = storage.get('recorde', 0);
+    return n > 0 ? `Recorde ${n}` : null;
+  }
+};
