@@ -154,18 +154,16 @@ function montar(raiz, ctx) {
     const { mundo, partida: regras } = p;
     const jogador = mundo.entidades[mundo.jogadorId];
     const cmd = p.entrada.comando(jogador.yaw, jogador.pitch);
-    if (regras.fase !== 'fim-partida') {
-      // Só se atira com o round em jogo; fora disso o mundo roda sem tiros.
-      const atira = regras.fase === 'jogo';
-      const comandos = new Map([[jogador.id, atira ? cmd : { ...cmd, atirar: false }]]);
-      for (const e of mundo.entidades) {
-        if (!e.bot || !e.vivo) continue;
-        const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
-        comandos.set(e.id, atira ? c : { ...c, atirar: false });
-      }
-      reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze' }));
-      aplicarEventosPartida(p, tickPartida(regras, dt, vivosPorTime(mundo)));
+    // Só se atira com o round em jogo; fora disso (inclusive em fim-partida) o mundo segue sem tiros.
+    const atira = regras.fase === 'jogo';
+    const comandos = new Map([[jogador.id, atira ? cmd : { ...cmd, atirar: false }]]);
+    for (const e of mundo.entidades) {
+      if (!e.bot || !e.vivo) continue;
+      const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
+      comandos.set(e.id, atira ? c : { ...c, atirar: false });
     }
+    reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze' }));
+    if (regras.fase !== 'fim-partida') aplicarEventosPartida(p, tickPartida(regras, dt, vivosPorTime(mundo)));
     // Morto, o jogador assiste os aliados; um clique passa para o próximo.
     if (jogador.vivo) p.idVista = jogador.id;
     else if ((cmd.atirar && !p.cliqueAntes) || !mundo.entidades[p.idVista].vivo) {
