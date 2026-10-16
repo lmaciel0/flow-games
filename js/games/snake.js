@@ -364,6 +364,21 @@ function montar(raiz, { audio, storage }) {
   byId('dpad-left').addEventListener('click', () => handleDirection(-1, 0));
   byId('dpad-right').addEventListener('click', () => handleDirection(1, 0));
 
+  // Deslizar o dedo no tabuleiro também muda a direção (celular).
+  let toqueX = 0;
+  let toqueY = 0;
+  canvas.addEventListener('touchstart', (e) => {
+    toqueX = e.touches[0].clientX;
+    toqueY = e.touches[0].clientY;
+  }, { passive: true });
+  canvas.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - toqueX;
+    const dy = e.changedTouches[0].clientY - toqueY;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+    if (Math.abs(dx) > Math.abs(dy)) handleDirection(dx > 0 ? 1 : -1, 0);
+    else handleDirection(0, dy > 0 ? 1 : -1);
+  }, { passive: true });
+
   if (pauseBtn) pauseBtn.addEventListener('click', togglePause);
   if (restartBtn) restartBtn.addEventListener('click', resetGame);
   if (overlayRestart) overlayRestart.addEventListener('click', resetGame);

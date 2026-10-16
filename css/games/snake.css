@@ -73,3 +73,7 @@
     gap: 0.75rem;
   }
 }
+
+#snake-canvas {
+  touch-action: none; /* o gesto de deslizar não rola a página */
+}
