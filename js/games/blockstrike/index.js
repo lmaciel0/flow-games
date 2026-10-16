@@ -1,7 +1,7 @@
 /**
  * Block Strike — FPS 5x5 contra bots (Three.js).
- * Menu, avisos de compatibilidade e o loop da partida: rounds MR12 (rounds.js),
- * bots (bots.js) e modo espectador quando o jogador morre.
+ * Loop da partida: rounds MR12 (rounds.js), bots (bots.js), modo espectador, e a ligação
+ * com a interface (hud.js): menu, loadout, HUD, placar, pausa e fim de partida.
  * `data-fase` na raiz reflete a fase: menu, freeze, jogo, fim-round ou fim-partida.
  */
 
@@ -10,8 +10,10 @@ import { criarMundo, posicionarParaRound, passo, vivosPorTime } from './mundo.js
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
-import { ARMAS } from './config.js';
-import { olho } from './fisica.js';
+import { ARMAS, DIFICULDADE, JOGADOR } from './config.js';
+import { olho, direcao } from './fisica.js';
+import { criarArma, calcularSpread } from './armas.js';
+import { criarHud } from './hud.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
 import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
@@ -46,11 +48,6 @@ const HTML = `
 
       <div class="bs-stage glass-card">
         <canvas id="bs-canvas"></canvas>
-        <div class="bs-menu" id="bs-menu">
-          <h2 class="bs-menu-titulo">Block Strike</h2>
-          <p class="bs-menu-texto" id="bs-menu-texto">FPS 5x5 contra bots</p>
-          <button id="bs-jogar" class="action-btn primary-btn">Jogar</button>
-        </div>
         <div class="bs-aviso" id="bs-aviso" role="alert" hidden></div>
       </div>`;
 
@@ -71,35 +68,74 @@ function temWebGL() {
   }
 }
 
+const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+// Preferências salvas, validadas: valor estranho no storage cai no padrão.
+function lerConfig(storage) {
+  const primaria = storage.get('primaria', 'rifle');
+  const dificuldade = storage.get('dificuldade', 'medio');
+  return {
+    primaria: ARMAS[primaria]?.slot === 'primaria' ? primaria : 'rifle',
+    dificuldade: DIFICULDADE[dificuldade] ? dificuldade : 'medio',
+    sensibilidade: clamp(Number(storage.get('sensibilidade', 1)) || 1, 0.2, 3),
+  };
+}
+
+// Ângulo (graus, horário, 0 = à frente) de `origem` em relação à vista de `eu`.
+function anguloDe(eu, origem) {
+  const f = direcao(eu.yaw, 0);
+  const vx = origem.pos.x - eu.pos.x;
+  const vz = origem.pos.z - eu.pos.z;
+  return (Math.atan2(vx * -f.z + vz * f.x, vx * f.x + vz * f.z) * 180) / Math.PI;
+}
+
 function montar(raiz, ctx) {
   raiz.dataset.fase = 'menu';
   raiz.dataset.pausado = 'false';
-  const menu = raiz.querySelector('#bs-menu');
   const aviso = raiz.querySelector('#bs-aviso');
-
+  const motivo = soToque() ? 'Disponível apenas no computador'
+    : !temWebGL() ? 'Seu navegador não suporta WebGL' : null;
   const bloquear = (texto) => {
-    menu.hidden = true;
     aviso.textContent = texto;
     aviso.hidden = false;
   };
-
-  if (soToque()) bloquear('Disponível apenas no computador');
-  else if (!temWebGL()) bloquear('Seu navegador não suporta WebGL');
-
-  if (menu.hidden) return { pause() {}, resume() {}, destruir() {} };
+  if (motivo) {
+    bloquear(motivo);
+    return { pause() {}, resume() {}, destruir() {} };
+  }
 
   const canvas = raiz.querySelector('#bs-canvas');
-  const botao = raiz.querySelector('#bs-jogar');
-  const texto = raiz.querySelector('#bs-menu-texto');
   const sons = criarSons(ctx.audio);
-  let partida = null; // { mundo, render, entrada, grafo, rngBots, partida (regras), idVista, raf, antes }
+  const cfg = lerConfig(ctx.storage);
+  let partida = null; // { mundo, render, entrada, grafo, rngBots, partida (regras), idVista, lock, raf, antes }
   let iniciando = false;
 
-  const mostrarMenu = (titulo, rotulo) => {
-    texto.textContent = titulo;
-    botao.textContent = rotulo;
-    menu.hidden = false;
-  };
+  const hud = criarHud(raiz, {
+    jogar: () => iniciar(),
+    escolherPrimaria(tipo) {
+      cfg.primaria = tipo;
+      ctx.storage.set('primaria', tipo);
+      if (!partida) return;
+      const eu = partida.mundo.entidades[partida.mundo.jogadorId];
+      eu.primariaEscolhida = tipo;
+      // Só no freeze troca a arma em mãos; nos outros momentos vale a partir do próximo round.
+      if (partida.partida.fase === 'freeze') eu.armas.primaria = criarArma(tipo);
+    },
+    mudarDificuldade(d) {
+      cfg.dificuldade = d;
+      ctx.storage.set('dificuldade', d);
+      if (partida) partida.mundo.dificuldade = d;
+    },
+    mudarSensibilidade(n) {
+      cfg.sensibilidade = n;
+      ctx.storage.set('sensibilidade', n);
+      if (partida) partida.entrada.definirSensibilidade(n);
+    },
+    continuar: () => retomar(),
+    sairParaMenu: () => voltarAoMenu(),
+    jogarDeNovo: () => iniciar(),
+  });
+  hud.definirConfig(cfg);
 
   // Liga os eventos do passo a som e efeitos visuais, do ponto de vista do jogador.
   function reagir(p, eventos) {
@@ -117,9 +153,17 @@ function montar(raiz, ctx) {
       } else if (ev.tipo === 'impacto') {
         render.impacto(ev.ponto, ev.normal);
       } else if (ev.tipo === 'acerto') {
-        if (ev.atirador === eu.id) sons.acerto(ev.parte === 'cabeca');
+        if (ev.atirador === eu.id) {
+          sons.acerto(ev.parte === 'cabeca');
+          hud.acerto(ev.parte === 'cabeca');
+        }
+        if (ev.alvo === eu.id) hud.dano(anguloDe(eu, mundo.entidades[ev.atirador]));
       } else if (ev.tipo === 'morte') {
         if (ev.assassino === eu.id || ev.vitima === eu.id) sons.morte();
+        hud.morte({
+          assassino: mundo.entidades[ev.assassino], vitima: mundo.entidades[ev.vitima],
+          arma: ev.arma, cabeca: ev.cabeca,
+        });
       } else if (ev.tipo === 'recarga') {
         if (ev.atirador === eu.id) sons.recarga();
       } else if (ev.tipo === 'passo') {
@@ -133,7 +177,26 @@ function montar(raiz, ctx) {
     posicionarParaRound(p.mundo, ladoAzul(p.partida.round));
     recriarCerebros(p.mundo, p.grafo, p.rngBots);
     p.render.limparImpactos();
+    hud.limparEfeitos();
     p.idVista = p.mundo.jogadorId;
+  }
+
+  // Fim de partida: solta o mouse, mostra o resultado e grava as estatísticas (uma vez).
+  function finalizarPartida(p) {
+    const { partida: regras, mundo } = p;
+    p.entrada.ativar(false);
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+    hud.mostrarTabela(false);
+    hud.mostrarFim(regras.resultado, regras.placar);
+    const eu = mundo.entidades[mundo.jogadorId];
+    const st = ctx.storage;
+    st.set('partidas', (Number(st.get('partidas', 0)) || 0) + 1);
+    if (regras.resultado === 'azul') {
+      st.set('vitorias', (Number(st.get('vitorias', 0)) || 0) + 1);
+      ctx.confetti?.();
+    }
+    const kd = eu.kills / Math.max(1, eu.mortes);
+    if (kd > (Number(st.get('melhorKD', 0)) || 0)) st.set('melhorKD', kd);
   }
 
   function aplicarEventosPartida(p, eventos) {
@@ -142,9 +205,29 @@ function montar(raiz, ctx) {
       if (ev === 'novo-round') novoRound(p);
       else if (ev === 'fim-round' && partida.vencedorRound) {
         sons.fimRound(partida.vencedorRound === mundo.entidades[mundo.jogadorId].time);
-      }
+      } else if (ev === 'fim-partida') finalizarPartida(p);
     }
     if (raiz.dataset.fase !== partida.fase) raiz.dataset.fase = partida.fase;
+  }
+
+  // Dados do HUD para este frame: vida e arma são de quem está sendo visto (o jogador ou o aliado assistido).
+  function estadoVisivel(p, cmd) {
+    const { mundo, partida: regras } = p;
+    const eu = mundo.entidades[mundo.jogadorId];
+    const alvo = mundo.entidades[p.idVista];
+    const arma = alvo.armas?.[alvo.slot] ?? null;
+    let spread = 0;
+    if (arma && eu.vivo) {
+      spread = calcularSpread(ARMAS[arma.tipo], {
+        velHoriz: alvo.velHoriz, velMax: JOGADOR.velCorrer, noChao: alvo.noChao, agachado: alvo.agachado, zoom: cmd.zoom,
+      }) + arma.recuoAcum;
+    }
+    return {
+      fase: regras.fase, round: regras.round, tempo: regras.tempo, placar: regras.placar,
+      hp: alvo.hp, vivo: eu.vivo, arma: arma && { ...arma, pente: ARMAS[arma.tipo].pente }, spread,
+      vencedorRound: regras.vencedorRound, motivo: regras.motivo,
+      espectando: eu.vivo ? null : alvo.nome, entidades: mundo.entidades,
+    };
   }
 
   function quadro(agora) {
@@ -155,8 +238,10 @@ function montar(raiz, ctx) {
     const jogador = mundo.entidades[mundo.jogadorId];
     const cmd = p.entrada.comando(jogador.yaw, jogador.pitch);
     // Só se atira com o round em jogo; fora disso (inclusive em fim-partida) o mundo segue sem tiros.
+    // No freeze as teclas 1–4 escolhem a primária (hud.teclaLoadout): o slot do comando é ignorado.
     const atira = regras.fase === 'jogo';
-    const comandos = new Map([[jogador.id, atira ? cmd : { ...cmd, atirar: false }]]);
+    const cmdJogador = atira ? cmd : { ...cmd, atirar: false, slot: regras.fase === 'freeze' ? null : cmd.slot };
+    const comandos = new Map([[jogador.id, cmdJogador]]);
     for (const e of mundo.entidades) {
       if (!e.bot || !e.vivo) continue;
       const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
@@ -172,6 +257,7 @@ function montar(raiz, ctx) {
     p.cliqueAntes = cmd.atirar;
     const zoomFov = cmd.zoom && jogador.vivo ? ARMAS[jogador.armas[jogador.slot].tipo].zoomFov : undefined;
     p.render.desenhar(mundo, p.idVista, { zoomFov });
+    hud.atualizar(estadoVisivel(p, cmd));
     p.raf = requestAnimationFrame(quadro);
   }
 
@@ -181,51 +267,92 @@ function montar(raiz, ctx) {
     partida.raf = requestAnimationFrame(quadro);
   }
 
-  function pausarPartida() {
+  // `forcado`: o hub pediu pausa (troca de rota). Perda de trava só pausa depois de uma trava bem-sucedida.
+  function pausarPartida(forcado = true) {
     if (!partida || partida.raf === null) return;
+    const fimDeJogo = partida.partida.fase === 'fim-partida';
+    if (!forcado && (!partida.lock.travou || fimDeJogo)) return;
     cancelAnimationFrame(partida.raf);
     partida.raf = null;
     partida.entrada.ativar(false);
     if (document.pointerLockElement === canvas) document.exitPointerLock();
+    hud.mostrarTabela(false);
     raiz.dataset.pausado = 'true';
-    mostrarMenu('Pausado', 'Continuar');
+    if (!fimDeJogo) hud.mostrarPausa(true);
+  }
+
+  function retomar() {
+    if (!partida || partida.raf !== null) return;
+    hud.mostrarPausa(false);
+    raiz.dataset.pausado = 'false';
+    partida.entrada.travar();
+    agendar();
   }
 
   function destruirPartida() {
     if (!partida) return;
     if (partida.raf !== null) cancelAnimationFrame(partida.raf);
+    partida.desligarTrava();
     partida.entrada.destruir();
     partida.render.destruir();
     partida = null;
+  }
+
+  function voltarAoMenu() {
+    destruirPartida();
+    hud.mostrarPausa(false);
+    hud.esconderFim();
+    hud.mostrarHud(false);
+    hud.mostrarTabela(false);
+    hud.limparEfeitos();
+    hud.mostrarMenu();
+    raiz.dataset.fase = 'menu';
+    raiz.dataset.pausado = 'false';
   }
 
   async function iniciar() {
     if (iniciando) return;
     iniciando = true;
     destruirPartida();
-    const entrada = criarEntrada(canvas, { sensibilidade: 1 });
+    const entrada = criarEntrada(canvas, { sensibilidade: cfg.sensibilidade });
+    // Os ouvintes de trava entram antes do travar(): uma trava que cai depois de ter funcionado abre a pausa.
+    const lock = { travou: false };
+    const aoTravar = () => { if (document.pointerLockElement === canvas) lock.travou = true; };
+    document.addEventListener('pointerlockchange', aoTravar);
+    entrada.aoPerderTrava(() => pausarPartida(false));
+    entrada.aoTab((v) => hud.mostrarTabela(v));
+    entrada.aoTecla((code) => {
+      if (partida && partida.partida.fase === 'freeze') hud.teclaLoadout(code);
+    });
     entrada.travar(); // precisa estar dentro do gesto de clique
     try {
       const { criarRender } = await import('./render.js');
       const mundo = criarMundo({
-        mapa: MAPA, primariaJogador: 'rifle', dificuldade: 'medio', rng: criarRng(Date.now()),
+        mapa: MAPA, primariaJogador: cfg.primaria, dificuldade: cfg.dificuldade, rng: criarRng(Date.now()),
       });
       posicionarParaRound(mundo, 'A');
       const grafo = criarGrafo(MAPA.waypoints, MAPA.arestas);
       const rngBots = criarRng(Date.now() ^ 0x5bd1e995);
       recriarCerebros(mundo, grafo, rngBots);
       const render = criarRender(canvas, MAPA);
-      entrada.aoPerderTrava(pausarPartida);
       partida = {
         mundo, render, entrada, grafo, rngBots, partida: criarPartida(),
-        idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0,
+        idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock,
+        desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),
       };
-      menu.hidden = true;
+      hud.esconderMenu();
+      hud.esconderFim();
+      hud.mostrarPausa(false);
+      hud.limparEfeitos();
+      hud.mostrarHud(true);
       raiz.dataset.fase = partida.partida.fase;
       raiz.dataset.pausado = 'false';
       agendar();
     } catch (erro) {
+      document.removeEventListener('pointerlockchange', aoTravar);
       entrada.destruir();
+      hud.esconderMenu();
+      hud.mostrarHud(false);
       bloquear('Não foi possível iniciar o jogo');
       console.error(erro);
     } finally {
@@ -233,18 +360,14 @@ function montar(raiz, ctx) {
     }
   }
 
-  botao.addEventListener('click', () => {
-    if (partida && partida.raf === null) {
-      partida.entrada.travar();
-      menu.hidden = true;
-      raiz.dataset.pausado = 'false';
-      agendar();
-    } else if (!partida) {
-      iniciar();
-    }
-  });
-
-  return { pause: pausarPartida, resume() {}, destruir: destruirPartida };
+  return {
+    pause: () => pausarPartida(true),
+    resume() {},
+    destruir() {
+      destruirPartida();
+      hud.destruir();
+    },
+  };
 }
 
 let instancia = null;
@@ -270,7 +393,7 @@ export default {
   recorde(storage) {
     if (storage.get('partidas', 0) === 0) return null;
     const vitorias = storage.get('vitorias', 0);
-    const melhorKD = storage.get('melhorKD', 0);
+    const melhorKD = Number(storage.get('melhorKD', 0)) || 0;
     return `${vitorias} vitórias · K/D ${melhorKD.toFixed(2)}`;
   }
 };

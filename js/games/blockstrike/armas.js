@@ -30,7 +30,7 @@ export function podeAtirar(arma, agora, gatilho) {
 }
 
 // Cone de erro (rad) para o estado de movimento atual.
-function calcularSpread(def, { velHoriz, velMax, noChao, agachado, zoom }) {
+export function calcularSpread(def, { velHoriz, velMax, noChao, agachado, zoom }) {
   const base = def.spreadSemZoom !== undefined && !zoom ? def.spreadSemZoom : def.spreadBase;
   let s = base + (velHoriz / velMax) * def.spreadMov;
   if (agachado) s *= FATOR_AGACHADO;
