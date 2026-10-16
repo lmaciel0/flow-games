@@ -149,6 +149,8 @@
 
 
 @media (max-width: 480px) {
+  .custom-select-small { font-size: 16px; }
+
   .mine-top-bar {
     flex-wrap: wrap;
     justify-content: center;
@@ -170,4 +172,8 @@
 .mine-best-line strong {
   font-family: 'JetBrains Mono', monospace;
   color: var(--color-gold);
+}
+
+.mine-cell {
+  -webkit-touch-callout: none;
 }
