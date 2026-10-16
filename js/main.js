@@ -9,11 +9,13 @@ import { registrar } from './core/registry.js';
 import { iniciarNav } from './core/nav.js';
 
 import tictactoe from './games/tictactoe.js';
+import game2048 from './games/game2048.js';
 
 migrar();
 initConfetti();
 
 registrar(tictactoe);
+registrar(game2048);
 
 iniciarNav({
   app: document.getElementById('app'),
