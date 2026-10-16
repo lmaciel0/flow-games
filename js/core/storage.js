@@ -13,12 +13,21 @@ function armazenamento() {
   }
 }
 
+// JSON válido de tipo errado (ex.: "abc" onde se espera número) conta como corrompido.
+function tipoValido(valor, padrao) {
+  if (valor === null) return false;
+  if (typeof valor === 'number' && !Number.isFinite(valor)) return false;
+  return padrao === null || typeof valor === typeof padrao;
+}
+
 export function get(chave, padrao = null) {
   const ls = armazenamento();
   if (!ls) return padrao;
   try {
     const bruto = ls.getItem(PREFIXO + chave);
-    return bruto === null ? padrao : JSON.parse(bruto);
+    if (bruto === null) return padrao;
+    const valor = JSON.parse(bruto);
+    return tipoValido(valor, padrao) ? valor : padrao;
   } catch {
     return padrao;
   }
@@ -59,7 +68,14 @@ const MIGRACOES = [
   },
   { antiga: '2048_best_score', nova: 'game2048:recorde', converter: inteiro },
   { antiga: 'snake_best_score', nova: 'snake:recorde', converter: inteiro },
-  { antiga: 'termo_stats', nova: 'termo:stats', converter: (bruto) => JSON.parse(bruto) }
+  {
+    antiga: 'termo_stats',
+    nova: 'termo:stats',
+    converter: (bruto) => {
+      const o = JSON.parse(bruto);
+      return { wins: Number(o.wins) || 0, streak: Number(o.streak) || 0 };
+    }
+  }
 ];
 
 /** Copia as chaves antigas para as novas, uma vez. Não apaga as antigas. */
