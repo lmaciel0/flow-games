@@ -109,6 +109,8 @@ function montar(raiz, ctx) {
   const cfg = lerConfig(ctx.storage);
   let partida = null; // { mundo, render, entrada, grafo, rngBots, partida (regras), idVista, lock, raf, antes }
   let iniciando = false;
+  let geracao = 0; // cada iniciar() guarda a sua; sair/destruir invalida a que ainda espera o import
+  let pausaPendente = false; // o hub pediu pausa enquanto a partida ainda carregava
 
   const hud = criarHud(raiz, {
     jogar: () => iniciar(),
@@ -258,7 +260,16 @@ function montar(raiz, ctx) {
     const zoomFov = cmd.zoom && jogador.vivo ? ARMAS[jogador.armas[jogador.slot].tipo].zoomFov : undefined;
     p.render.desenhar(mundo, p.idVista, { zoomFov });
     hud.atualizar(estadoVisivel(p, cmd));
+    // Dica só enquanto o mouse nunca prendeu: depois de uma trava, perder a trava abre a pausa.
+    hud.mostrarDica(!p.lock.travou && (regras.fase === 'freeze' || regras.fase === 'jogo'));
     p.raf = requestAnimationFrame(quadro);
+  }
+
+  // Pausado: só redesenha a cena (a janela pode ter sido redimensionada); a simulação não anda.
+  function quadroPausado() {
+    const p = partida;
+    p.render.desenhar(p.mundo, p.idVista, {});
+    p.raf = requestAnimationFrame(quadroPausado);
   }
 
   function agendar() {
@@ -268,21 +279,42 @@ function montar(raiz, ctx) {
   }
 
   // `forcado`: o hub pediu pausa (troca de rota). Perda de trava só pausa depois de uma trava bem-sucedida.
+  // Sem rAF ativo (raf nulo) a partida já está pausada. Pausa por perda de trava continua desenhando a cena.
   function pausarPartida(forcado = true) {
-    if (!partida || partida.raf === null) return;
+    if (!partida) {
+      if (forcado && iniciando) pausaPendente = true;
+      return;
+    }
+    if (partida.pausado) {
+      if (forcado && partida.raf !== null) { // já pausada (Esc) e o hub saiu da rota: nem redesenha
+        cancelAnimationFrame(partida.raf);
+        partida.raf = null;
+      }
+      return;
+    }
     const fimDeJogo = partida.partida.fase === 'fim-partida';
     if (!forcado && (!partida.lock.travou || fimDeJogo)) return;
-    cancelAnimationFrame(partida.raf);
+    if (partida.raf !== null) cancelAnimationFrame(partida.raf);
     partida.raf = null;
+    partida.pausado = true;
     partida.entrada.ativar(false);
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     hud.mostrarTabela(false);
+    hud.mostrarDica(false);
     raiz.dataset.pausado = 'true';
     if (!fimDeJogo) hud.mostrarPausa(true);
+    if (!forcado) partida.raf = requestAnimationFrame(quadroPausado);
+  }
+
+  // Volta à rota: só redesenha a cena pausada. Quem retoma a simulação é o botão Continuar.
+  function reexibir() {
+    if (partida && partida.pausado && partida.raf === null) partida.raf = requestAnimationFrame(quadroPausado);
   }
 
   function retomar() {
-    if (!partida || partida.raf !== null) return;
+    if (!partida || !partida.pausado) return;
+    if (partida.raf !== null) cancelAnimationFrame(partida.raf);
+    partida.pausado = false;
     hud.mostrarPausa(false);
     raiz.dataset.pausado = 'false';
     partida.entrada.travar();
@@ -298,7 +330,15 @@ function montar(raiz, ctx) {
     partida = null;
   }
 
+  // Invalida um iniciar() que ainda espera o import do render.
+  function cancelarInicio() {
+    geracao++;
+    iniciando = false;
+    pausaPendente = false;
+  }
+
   function voltarAoMenu() {
+    cancelarInicio();
     destruirPartida();
     hud.mostrarPausa(false);
     hud.esconderFim();
@@ -313,7 +353,9 @@ function montar(raiz, ctx) {
   async function iniciar() {
     if (iniciando) return;
     iniciando = true;
+    pausaPendente = false;
     destruirPartida();
+    const minha = ++geracao;
     const entrada = criarEntrada(canvas, { sensibilidade: cfg.sensibilidade });
     // Os ouvintes de trava entram antes do travar(): uma trava que cai depois de ter funcionado abre a pausa.
     const lock = { travou: false };
@@ -327,6 +369,12 @@ function montar(raiz, ctx) {
     entrada.travar(); // precisa estar dentro do gesto de clique
     try {
       const { criarRender } = await import('./render.js');
+      if (minha !== geracao) { // saiu para o menu ou destruiu enquanto carregava
+        document.removeEventListener('pointerlockchange', aoTravar);
+        entrada.destruir();
+        if (document.pointerLockElement === canvas) document.exitPointerLock();
+        return;
+      }
       const mundo = criarMundo({
         mapa: MAPA, primariaJogador: cfg.primaria, dificuldade: cfg.dificuldade, rng: criarRng(Date.now()),
       });
@@ -337,7 +385,7 @@ function montar(raiz, ctx) {
       const render = criarRender(canvas, MAPA);
       partida = {
         mundo, render, entrada, grafo, rngBots, partida: criarPartida(),
-        idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock,
+        idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock, pausado: false,
         desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),
       };
       hud.esconderMenu();
@@ -347,7 +395,16 @@ function montar(raiz, ctx) {
       hud.mostrarHud(true);
       raiz.dataset.fase = partida.partida.fase;
       raiz.dataset.pausado = 'false';
-      agendar();
+      if (pausaPendente) { // o hub saiu da rota durante o carregamento: nasce pausada
+        pausaPendente = false;
+        partida.entrada.ativar(false);
+        partida.pausado = true;
+        if (document.pointerLockElement === canvas) document.exitPointerLock();
+        raiz.dataset.pausado = 'true';
+        hud.mostrarPausa(true);
+      } else {
+        agendar();
+      }
     } catch (erro) {
       document.removeEventListener('pointerlockchange', aoTravar);
       entrada.destruir();
@@ -356,14 +413,15 @@ function montar(raiz, ctx) {
       bloquear('Não foi possível iniciar o jogo');
       console.error(erro);
     } finally {
-      iniciando = false;
+      if (minha === geracao) iniciando = false;
     }
   }
 
   return {
     pause: () => pausarPartida(true),
-    resume() {},
+    resume: reexibir,
     destruir() {
+      cancelarInicio();
       destruirPartida();
       hud.destruir();
     },

@@ -134,16 +134,20 @@ export function criarHud(raiz, handlers) {
   const roundEl = el('div', { class: 'bs-round', id: 'bs-round', texto: 'Round 1' });
   const killfeed = el('div', { class: 'bs-killfeed', id: 'bs-killfeed' });
   const espectando = el('div', { class: 'bs-espectando', id: 'bs-espectando', hidden: true });
+  // Não bloqueia nada: só avisa que o mouse ainda não está preso ao jogo.
+  const dicaTrava = el('div', { class: 'bs-dica-trava', id: 'bs-dica-trava', hidden: true,
+    texto: 'Clique na tela para mirar' });
   const fimRound = el('div', { class: 'bs-fim-round', id: 'bs-fim-round', hidden: true },
     el('strong'), el('small'));
   const hudEl = el('div', { class: 'bs-hud', id: 'bs-hud', hidden: true },
     el('div', { class: 'bs-topo' },
       el('div', { class: 'bs-placar' }, placarAzul, timerEl, placarLaranja), roundEl),
-    killfeed, mira, hitmarker, danoArco, espectando, fimRound,
+    killfeed, mira, hitmarker, danoArco, espectando, fimRound, dicaTrava,
     el('div', { class: 'bs-base' }, el('div', { class: 'bs-vida' }, el('small', { texto: 'VIDA' }), hpEl),
       el('div', { class: 'bs-arma' }, armaEl, municaoEl)));
   palco.append(hudEl);
   hud.mostrarHud = (visivel) => mostrar(hudEl, visivel);
+  hud.mostrarDica = (visivel) => mostrar(dicaTrava, visivel);
 
   // Efeitos pontuais: hitmarker, indicador de dano e kill feed.
   let timerHit = null;
