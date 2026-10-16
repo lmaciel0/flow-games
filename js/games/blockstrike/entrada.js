@@ -110,7 +110,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
         lado: eixo('KeyD', 'KeyA'),
         pular: teclas.has('Space'),
         agachar: teclas.has('KeyC'),
-        devagar: teclas.has('ShiftLeft'),
+        devagar: teclas.has('ShiftLeft') || teclas.has('ShiftRight'),
         atirar: botoes.has(0),
         zoom: botoes.has(2),
         recarregar: recarregarPendente,

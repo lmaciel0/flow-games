@@ -186,7 +186,7 @@ export function criarHud(raiz, handlers) {
   const gradeLoadout = criarGradeArmas('bs-loadout-armas', escolher, true);
   const loadout = el('div', { class: 'bs-loadout', id: 'bs-loadout', hidden: true },
     el('strong', { texto: 'Escolha sua arma' }), gradeLoadout,
-    el('small', { texto: 'Teclas 1 a 4 ou clique. Vale para este round e os seguintes.' }));
+    el('small', { texto: 'Teclas 1 a 4. Vale para este round e os seguintes.' }));
   palco.append(loadout);
   marcarSelecionada(gradeLoadout, estado.primaria);
   // Digit1–Digit4 no freeze: o index chama isto a partir de entrada.aoTecla.
@@ -203,14 +203,15 @@ export function criarHud(raiz, handlers) {
   let chaveTabela = '';
   const tabelaTime = (time, titulo, ents) => {
     const t = el('table', { class: `bs-tab-${time}` });
-    t.append(el('thead', {}, el('tr', {}, ...['', 'K', 'D', 'HS%'].map((x, i) =>
+    t.append(el('thead', {}, el('tr', {}, ...['', 'K', 'D', 'K/D', 'HS%'].map((x, i) =>
       el('th', { texto: i === 0 ? titulo : x })))));
     const corpo = el('tbody');
     for (const e of ents) {
       const hs = e.kills > 0 ? Math.round((e.killsCabeca / e.kills) * 100) : 0;
       const tr = el('tr', { class: e.id === 0 ? 'voce' : '' });
       tr.append(el('td', { texto: e.nome }), el('td', { texto: String(e.kills) }),
-        el('td', { texto: String(e.mortes) }), el('td', { texto: `${hs}%` }));
+        el('td', { texto: String(e.mortes) }), el('td', { texto: (e.kills / Math.max(1, e.mortes)).toFixed(2) }),
+        el('td', { texto: `${hs}%` }));
       corpo.append(tr);
     }
     t.append(corpo);

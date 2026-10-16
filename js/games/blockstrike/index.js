@@ -43,7 +43,7 @@ const HTML = `
           <span class="badge-text">FPS 5X5 · SÓ NO COMPUTADOR</span>
         </div>
         <h1 class="app-title">Block <span class="gradient-text-bs">Strike</span></h1>
-        <p class="app-subtitle">Seu time de 5 contra 5 bots. Plante, defenda e vença o round.</p>
+        <p class="app-subtitle">Mata-mata 5x5 contra bots. Primeiro a 13 vence.</p>
       </header>
 
       <div class="bs-stage glass-card">
@@ -282,7 +282,8 @@ function montar(raiz, ctx) {
 
   // `forcado`: o hub pediu pausa (troca de rota). Perda de trava só pausa depois de uma trava bem-sucedida.
   // Sem rAF ativo (raf nulo) a partida já está pausada. Pausa por perda de trava continua desenhando a cena.
-  function pausarPartida(forcado = true) {
+  // `manual`: o jogador apertou Esc sem nunca ter travado o mouse (não há perda de trava para avisar).
+  function pausarPartida(forcado = true, manual = false) {
     if (!partida) {
       if (forcado && iniciando) pausaPendente = true;
       return;
@@ -295,7 +296,7 @@ function montar(raiz, ctx) {
       return;
     }
     const fimDeJogo = partida.partida.fase === 'fim-partida';
-    if (!forcado && (!partida.lock.travou || fimDeJogo)) return;
+    if (!forcado && (fimDeJogo || (!manual && !partida.lock.travou))) return;
     if (partida.raf !== null) cancelAnimationFrame(partida.raf);
     partida.raf = null;
     partida.pausado = true;
@@ -366,7 +367,10 @@ function montar(raiz, ctx) {
     entrada.aoPerderTrava(() => pausarPartida(false));
     entrada.aoTab((v) => hud.mostrarTabela(v));
     entrada.aoTecla((code) => {
-      if (partida && partida.partida.fase === 'freeze') hud.teclaLoadout(code);
+      if (!partida) return;
+      if (partida.partida.fase === 'freeze') hud.teclaLoadout(code);
+      // Sem trava nunca houve pointerlockchange para abrir a pausa: o Esc abre direto.
+      if (code === 'Escape' && !partida.lock.travou) pausarPartida(false, true);
     });
     entrada.travar(); // precisa estar dentro do gesto de clique
     try {
