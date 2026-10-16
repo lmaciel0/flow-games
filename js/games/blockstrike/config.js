@@ -29,6 +29,9 @@ export const ROUND = {
 // Multiplicador de dano por parte do corpo atingida.
 export const MULT_PARTE = { cabeca: 4, tronco: 1, pernas: 0.75 };
 
+// Teto do recuo acumulado (rad): a mira sobe até aqui e para.
+export const RECUO_MAX = 0.08;
+
 // rpm = tiros por minuto; recarga em segundos; spreadBase/spreadMov em radianos.
 export const ARMAS = {
   rifle: {

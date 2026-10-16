@@ -259,7 +259,8 @@ export function criarRender(canvas, mapa) {
     }
     const o = olho(vista);
     camera.position.set(o.x, o.y, o.z);
-    camera.rotation.set(vista.pitch + recuo, vista.yaw, 0);
+    const subida = vista.vivo && vista.armas ? vista.armas[vista.slot].recuoAcum : 0; // a mira acompanha o spray
+    camera.rotation.set(vista.pitch + subida + recuo, vista.yaw, 0);
     recuo = Math.max(0, recuo - dt * 0.3);
 
     // Arma na mão: some com o zoom da sniper (mira de luneta) e sai do campo de visão ao morrer.

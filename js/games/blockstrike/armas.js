@@ -3,7 +3,7 @@
  * Módulo puro: sem Three.js e sem DOM. Tempo em segundos; ângulos em radianos.
  */
 
-import { ARMAS, MULT_PARTE } from './config.js';
+import { ARMAS, MULT_PARTE, RECUO_MAX } from './config.js';
 
 const RECUO_VOLTA = 0.1; // rad/s, enquanto o gatilho está solto
 const FATOR_AGACHADO = 0.6;
@@ -42,7 +42,7 @@ export function disparar(arma, agora, estado, rng) {
   const def = ARMAS[arma.tipo];
   arma.municao -= 1;
   arma.prontaEm = agora + 60 / def.rpm;
-  arma.recuoAcum += def.recuo;
+  arma.recuoAcum = Math.min(RECUO_MAX, arma.recuoAcum + def.recuo);
   arma.gatilhoSolto = false;
   const spread = calcularSpread(def, estado);
   const desvios = [];
