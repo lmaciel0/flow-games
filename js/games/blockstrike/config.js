@@ -65,9 +65,9 @@ export const ARMAS = {
 
 // reacao em segundos; erroMira em radianos; chanceCabeca em [0,1].
 export const DIFICULDADE = {
-  facil: { reacao: 0.6, erroMira: 0.07, chanceCabeca: 0.1 },
-  medio: { reacao: 0.38, erroMira: 0.04, chanceCabeca: 0.2 },
-  dificil: { reacao: 0.2, erroMira: 0.02, chanceCabeca: 0.35 },
+  facil: { reacao: 0.6, erroMira: 0.07, chanceCabeca: 0.03 },
+  medio: { reacao: 0.38, erroMira: 0.04, chanceCabeca: 0.3 },
+  dificil: { reacao: 0.2, erroMira: 0.02, chanceCabeca: 0.45 },
 };
 
 // Exibidos como `Bot <nome>`.

@@ -18,6 +18,7 @@ const MIRA_OK = 0.12; // rad: só atira com a mira perto do ponto desejado
 const STRAFE_TROCA = 0.6;
 const HP_RECUO = 30;
 const TROCA_ERRO = 0.15; // s entre sorteios do erro de mira
+const ERRO_PITCH = 0.2; // erro vertical = esta fração do horizontal (senão a mira no tronco vira cabeçada)
 const PRESO_TEMPO = 1;
 const ESPERA_COBERTURA = [1.5, 3];
 const ESPERA_RECUO = 5;
@@ -86,7 +87,7 @@ export function criarCerebro(ent, grafo, rng, caixas = []) {
     rajada: 0, pausaAte: 0, ultimoDanoDe: null,
     passoRota: 0, ultimaPos: null, perdidoHa: 0, esperaAte: 0, chegou: false,
     erro: { yaw: 0, pitch: 0 }, erroAte: 0, cabeca: false, municaoVista: null,
-    gatilho: false, emRajada: false, preso: 0,
+    gatilho: false, emRajada: false, preso: 0, queriaAndar: false,
   };
 }
 
@@ -133,7 +134,7 @@ function atacar(ent, c, alvo, mundo, dif, dt, rng, cmd, { strafe }) {
   const arma = ent.armas[ent.slot];
   const def = ARMAS[arma.tipo];
   if (agora >= c.erroAte) {
-    c.erro = { yaw: gauss(rng) * dif.erroMira, pitch: gauss(rng) * dif.erroMira };
+    c.erro = { yaw: gauss(rng) * dif.erroMira, pitch: gauss(rng) * dif.erroMira * ERRO_PITCH };
     c.erroAte = agora + TROCA_ERRO;
   }
   const o = olho(ent);
@@ -189,8 +190,9 @@ function seguirRota(ent, c, grafo, dt, cmd) {
     c.preso = 0;
     return null;
   }
-  // Desencalha: quase parado por ~1 s andando a rota → pula e passa para o waypoint seguinte.
-  c.preso = ent.velHoriz < 1 ? c.preso + dt : 0;
+  // Desencalha: quase parado por ~1 s tentando andar a rota → pula e passa para o waypoint seguinte.
+  // Quadro em que o bot não tentava andar (parado de propósito) não conta.
+  c.preso = c.queriaAndar && ent.velHoriz < 1 ? c.preso + dt : 0;
   if (c.preso > PRESO_TEMPO) {
     c.preso = 0;
     cmd.pular = true;
@@ -327,6 +329,7 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     cmd.frente = mov.frente;
     cmd.lado = mov.lado;
   }
+  c.queriaAndar = cmd.frente !== 0 || cmd.lado !== 0;
   recarregarSePreciso(ent, cmd, Boolean(alvo));
   return cmd;
 }

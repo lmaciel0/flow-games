@@ -244,8 +244,10 @@ function montar(raiz, ctx) {
     const atira = regras.fase === 'jogo';
     const cmdJogador = atira ? cmd : { ...cmd, atirar: false, slot: regras.fase === 'freeze' ? null : cmd.slot };
     const comandos = new Map([[jogador.id, cmdJogador]]);
+    // No freeze os bots não pensam (mundo.passo usa o comando parado): senão o desencalhe
+    // pularia waypoints da rota enquanto eles esperam o fim do freeze.
     for (const e of mundo.entidades) {
-      if (!e.bot || !e.vivo) continue;
+      if (!e.bot || !e.vivo || regras.fase === 'freeze') continue;
       const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
       comandos.set(e.id, atira ? c : { ...c, atirar: false });
     }
