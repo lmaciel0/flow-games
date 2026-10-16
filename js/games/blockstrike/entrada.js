@@ -54,8 +54,18 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     dPitch -= e.movementY * sens * RAD_POR_PIXEL;
   }
 
+  function travar() {
+    try {
+      const p = canvas.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch {
+      // sem pointer lock (headless): o jogo segue sem mira por mouse
+    }
+  }
+
   function onMouseDown(e) {
     if (doc.pointerLockElement === canvas) botoes.add(e.button);
+    else if (ativa && e.target === canvas) travar(); // retrava com um clique no jogo
   }
 
   function onMouseUp(e) {
@@ -64,6 +74,12 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
 
   function onLockChange() {
     if (doc.pointerLockElement === canvas) return;
+    limpar();
+    aoPerder();
+  }
+
+  // Chrome recusa a trava logo após um Esc: volta ao menu de pausa em vez de ficar sem mira.
+  function onLockError() {
     limpar();
     aoPerder();
   }
@@ -77,6 +93,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   doc.addEventListener('mousedown', onMouseDown);
   doc.addEventListener('mouseup', onMouseUp);
   doc.addEventListener('pointerlockchange', onLockChange);
+  doc.addEventListener('pointerlockerror', onLockError);
   canvas.addEventListener('contextmenu', onContext);
   canvas.ownerDocument.defaultView?.addEventListener('blur', onBlur);
 
@@ -105,14 +122,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
       slotPendente = null;
       return cmd;
     },
-    travar() {
-      try {
-        const p = canvas.requestPointerLock();
-        if (p && typeof p.catch === 'function') p.catch(() => {});
-      } catch {
-        // sem pointer lock (headless): o jogo segue sem mira por mouse
-      }
-    },
+    travar,
     travado: () => doc.pointerLockElement === canvas,
     aoPerderTrava(fn) { aoPerder = fn; },
     aoTab(fn) { aoTabFn = fn; },
@@ -130,6 +140,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
       doc.removeEventListener('mousedown', onMouseDown);
       doc.removeEventListener('mouseup', onMouseUp);
       doc.removeEventListener('pointerlockchange', onLockChange);
+      doc.removeEventListener('pointerlockerror', onLockError);
       canvas.removeEventListener('contextmenu', onContext);
       canvas.ownerDocument.defaultView?.removeEventListener('blur', onBlur);
       limpar();

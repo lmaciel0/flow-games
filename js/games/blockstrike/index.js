@@ -50,6 +50,7 @@ function temWebGL() {
 
 function montar(raiz) {
   raiz.dataset.fase = 'menu';
+  raiz.dataset.pausado = 'false';
   const menu = raiz.querySelector('#bs-menu');
   const aviso = raiz.querySelector('#bs-aviso');
 
@@ -99,7 +100,7 @@ function montar(raiz) {
     partida.raf = null;
     partida.entrada.ativar(false);
     if (document.pointerLockElement === canvas) document.exitPointerLock();
-    raiz.dataset.fase = 'pausa';
+    raiz.dataset.pausado = 'true';
     mostrarMenu('Pausado', 'Continuar');
   }
 
@@ -128,6 +129,7 @@ function montar(raiz) {
       partida = { mundo, render, entrada, raf: null, antes: 0 };
       menu.hidden = true;
       raiz.dataset.fase = 'jogo';
+      raiz.dataset.pausado = 'false';
       agendar();
     } catch (erro) {
       entrada.destruir();
@@ -142,7 +144,7 @@ function montar(raiz) {
     if (partida && partida.raf === null) {
       partida.entrada.travar();
       menu.hidden = true;
-      raiz.dataset.fase = 'jogo';
+      raiz.dataset.pausado = 'false';
       agendar();
     } else if (!partida) {
       iniciar();
