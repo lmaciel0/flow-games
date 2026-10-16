@@ -184,6 +184,13 @@ export function criarRender(canvas, mapa) {
     m.position.set(ponto.x + normal.x * 0.02, ponto.y + normal.y * 0.02, ponto.z + normal.z * 0.02);
   }
 
+  // Novo round: tira todas as marcas da cena e reinicia o anel (geometria e material são compartilhados).
+  function limparImpactos() {
+    for (const m of impactos) scene.remove(m);
+    impactos.length = 0;
+    proxImpacto = 0;
+  }
+
   // Arma em primeira pessoa: caixas presas à câmera, uma por slot, trocada conforme a arma ativa.
   scene.add(camera);
   const matArma = new THREE.MeshLambertMaterial({ color: 0x3a3d44 });
@@ -297,5 +304,5 @@ export function criarRender(canvas, mapa) {
     renderer.dispose();
   }
 
-  return { desenhar, redimensionar, impacto, flash, recuoVisual, destruir };
+  return { desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, destruir };
 }

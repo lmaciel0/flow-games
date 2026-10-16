@@ -1,11 +1,12 @@
 /**
  * Block Strike — FPS 5x5 contra bots (Three.js).
- * Menu, avisos de compatibilidade e, por enquanto, um loop provisório:
- * o jogador anda e atira pelo mapa e os bots jogam sozinhos (bots.js).
+ * Menu, avisos de compatibilidade e o loop da partida: rounds MR12 (rounds.js),
+ * bots (bots.js) e modo espectador quando o jogador morre.
+ * `data-fase` na raiz reflete a fase: menu, freeze, jogo, fim-round ou fim-partida.
  */
 
 import { MAPA } from './mapa.js';
-import { criarMundo, posicionarParaRound, passo } from './mundo.js';
+import { criarMundo, posicionarParaRound, passo, vivosPorTime } from './mundo.js';
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
@@ -13,10 +14,25 @@ import { ARMAS } from './config.js';
 import { olho } from './fisica.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
+import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
 
 const DT_MAX = 0.05;
 
 const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+// Cérebros novos a cada round: rotas e alvos antigos não valem depois do reposicionamento.
+function recriarCerebros(mundo, grafo, rng) {
+  for (const e of mundo.entidades) if (e.bot) e.cerebro = criarCerebro(e, grafo, rng, MAPA.caixas);
+}
+
+// Espectador: o próximo aliado vivo depois de `idAtual`; sem nenhum vivo, mantém a vista.
+function proximaVista(mundo, idAtual) {
+  const eu = mundo.entidades[mundo.jogadorId];
+  const aliados = mundo.entidades.filter((e) => e.time === eu.time && e.id !== eu.id);
+  const vivos = aliados.filter((e) => e.vivo);
+  if (vivos.length === 0) return idAtual;
+  return (vivos.find((e) => e.id > idAtual) ?? vivos[0]).id;
+}
 
 const HTML = `
       <header class="app-header">
@@ -76,7 +92,7 @@ function montar(raiz, ctx) {
   const botao = raiz.querySelector('#bs-jogar');
   const texto = raiz.querySelector('#bs-menu-texto');
   const sons = criarSons(ctx.audio);
-  let partida = null; // { mundo, render, entrada, raf, antes }
+  let partida = null; // { mundo, render, entrada, grafo, rngBots, partida (regras), idVista, raf, antes }
   let iniciando = false;
 
   const mostrarMenu = (titulo, rotulo) => {
@@ -112,20 +128,52 @@ function montar(raiz, ctx) {
     }
   }
 
+  // Troca de round: reposiciona todos, recria os cérebros, limpa as marcas e volta a vista ao jogador.
+  function novoRound(p) {
+    posicionarParaRound(p.mundo, ladoAzul(p.partida.round));
+    recriarCerebros(p.mundo, p.grafo, p.rngBots);
+    p.render.limparImpactos();
+    p.idVista = p.mundo.jogadorId;
+  }
+
+  function aplicarEventosPartida(p, eventos) {
+    const { partida, mundo } = p;
+    for (const ev of eventos) {
+      if (ev === 'novo-round') novoRound(p);
+      else if (ev === 'fim-round' && partida.vencedorRound) {
+        sons.fimRound(partida.vencedorRound === mundo.entidades[mundo.jogadorId].time);
+      }
+    }
+    if (raiz.dataset.fase !== partida.fase) raiz.dataset.fase = partida.fase;
+  }
+
   function quadro(agora) {
     const p = partida;
     const dt = Math.min((agora - p.antes) / 1000, DT_MAX);
     p.antes = agora;
-    const jogador = p.mundo.entidades[p.mundo.jogadorId];
+    const { mundo, partida: regras } = p;
+    const jogador = mundo.entidades[mundo.jogadorId];
     const cmd = p.entrada.comando(jogador.yaw, jogador.pitch);
-    const comandos = new Map([[jogador.id, cmd]]);
-    for (const e of p.mundo.entidades) {
-      if (e.bot && e.vivo) comandos.set(e.id, pensar(e, p.mundo, p.grafo, p.mundo.dificuldade, dt, p.rngBots));
+    if (regras.fase !== 'fim-partida') {
+      // Só se atira com o round em jogo; fora disso o mundo roda sem tiros.
+      const atira = regras.fase === 'jogo';
+      const comandos = new Map([[jogador.id, atira ? cmd : { ...cmd, atirar: false }]]);
+      for (const e of mundo.entidades) {
+        if (!e.bot || !e.vivo) continue;
+        const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
+        comandos.set(e.id, atira ? c : { ...c, atirar: false });
+      }
+      reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze' }));
+      aplicarEventosPartida(p, tickPartida(regras, dt, vivosPorTime(mundo)));
     }
-    const eventos = passo(p.mundo, dt, comandos, { congelado: false });
-    reagir(p, eventos);
+    // Morto, o jogador assiste os aliados; um clique passa para o próximo.
+    if (jogador.vivo) p.idVista = jogador.id;
+    else if ((cmd.atirar && !p.cliqueAntes) || !mundo.entidades[p.idVista].vivo) {
+      p.idVista = proximaVista(mundo, p.idVista);
+    }
+    p.cliqueAntes = cmd.atirar;
     const zoomFov = cmd.zoom && jogador.vivo ? ARMAS[jogador.armas[jogador.slot].tipo].zoomFov : undefined;
-    p.render.desenhar(p.mundo, p.mundo.jogadorId, { zoomFov });
+    p.render.desenhar(mundo, p.idVista, { zoomFov });
     p.raf = requestAnimationFrame(quadro);
   }
 
@@ -167,12 +215,15 @@ function montar(raiz, ctx) {
       posicionarParaRound(mundo, 'A');
       const grafo = criarGrafo(MAPA.waypoints, MAPA.arestas);
       const rngBots = criarRng(Date.now() ^ 0x5bd1e995);
-      for (const e of mundo.entidades) if (e.bot) e.cerebro = criarCerebro(e, grafo, rngBots, MAPA.caixas);
+      recriarCerebros(mundo, grafo, rngBots);
       const render = criarRender(canvas, MAPA);
       entrada.aoPerderTrava(pausarPartida);
-      partida = { mundo, render, entrada, grafo, rngBots, raf: null, antes: 0 };
+      partida = {
+        mundo, render, entrada, grafo, rngBots, partida: criarPartida(),
+        idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0,
+      };
       menu.hidden = true;
-      raiz.dataset.fase = 'jogo';
+      raiz.dataset.fase = partida.partida.fase;
       raiz.dataset.pausado = 'false';
       agendar();
     } catch (erro) {
