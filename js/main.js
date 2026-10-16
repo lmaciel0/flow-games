@@ -14,6 +14,7 @@ import snake from './games/snake.js';
 import minesweeper from './games/minesweeper.js';
 import tetris from './games/tetris.js';
 import termo from './games/termo.js';
+import blockstrike from './games/blockstrike/index.js';
 
 migrar();
 initConfetti();
@@ -24,6 +25,7 @@ registrar(snake);
 registrar(minesweeper);
 registrar(tetris);
 registrar(termo);
+registrar(blockstrike);
 
 iniciarNav({
   app: document.getElementById('app'),

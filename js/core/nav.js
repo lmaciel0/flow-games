@@ -98,7 +98,7 @@ export function iniciarNav({ app, audio, confetti, escopo }) {
   home.innerHTML = `
     <header class="home-hero">
       <h1 class="app-title">Arcade <span class="gradient-text">Hub</span></h1>
-      <p class="app-subtitle">Seis jogos clássicos em JavaScript puro. Escolha um e jogue.</p>
+      <p class="app-subtitle">Sete jogos em JavaScript puro. Escolha um e jogue.</p>
     </header>
     <div class="home-grid"></div>
     <footer class="home-footer">

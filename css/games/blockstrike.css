@@ -1,0 +1,65 @@
+/* ==========================================================================
+   GAME 7: BLOCK STRIKE STYLES
+   ========================================================================== */
+.nav-badge.orange {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.bs-icon {
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+}
+
+.header-badge.bs-badge { border-color: rgba(249, 115, 22, 0.3); background: rgba(249, 115, 22, 0.1); }
+.bs-dot { background-color: #fb923c; box-shadow: 0 0 8px #fb923c; }
+.gradient-text-bs {
+  background: linear-gradient(135deg, #fb923c, #ef4444);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Palco 16:9 que nunca passa da altura da janela nem da largura da tela. */
+.bs-stage {
+  position: relative;
+  width: min(100%, calc((100vh - 120px) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  max-height: calc(100vh - 120px);
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  background: rgba(8, 12, 22, 0.85);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+}
+
+#bs-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.bs-menu,
+.bs-aviso {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  text-align: center;
+  background: rgba(5, 6, 10, 0.78);
+}
+
+.bs-menu[hidden],
+.bs-aviso[hidden] { display: none; }
+
+.bs-menu-titulo { margin: 0; font-size: clamp(1.4rem, 5vw, 2.4rem); }
+.bs-menu-texto { margin: 0; color: var(--text-muted); }
+.bs-aviso { font-weight: 700; font-size: clamp(0.95rem, 3vw, 1.3rem); }
+#bs-jogar { flex: 0 0 auto; padding: 0.7rem 2.5rem; }
+#bs-jogar:disabled { opacity: 0.5; cursor: not-allowed; }
