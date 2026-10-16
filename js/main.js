@@ -11,6 +11,7 @@ import { iniciarNav } from './core/nav.js';
 import tictactoe from './games/tictactoe.js';
 import game2048 from './games/game2048.js';
 import snake from './games/snake.js';
+import tetris from './games/tetris.js';
 
 migrar();
 initConfetti();
@@ -18,6 +19,7 @@ initConfetti();
 registrar(tictactoe);
 registrar(game2048);
 registrar(snake);
+registrar(tetris);
 
 iniciarNav({
   app: document.getElementById('app'),

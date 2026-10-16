@@ -1,26 +1,107 @@
 /**
- * Tetris Neon — Clássico Quebra-Cabeça Arcade em Canvas
+ * Tetris Neon — clássico quebra-cabeça arcade em canvas, com recorde salvo.
  */
 
-(function () {
-  'use strict';
+const HTML = `
+      <header class="app-header">
+        <div class="header-badge tetris-badge">
+          <span class="badge-dot tetris-dot"></span>
+          <span class="badge-text">QUEBRA-CABEÇA ARCADE</span>
+        </div>
+        <h1 class="app-title">Tetris <span class="gradient-text-tetris">Neon</span></h1>
+        <p class="app-subtitle">Encaixe os blocos, elimine linhas completas e acelere o ritmo!</p>
+      </header>
 
-  const canvas = document.getElementById('tetris-canvas');
-  if (!canvas) return;
+      <div class="tetris-main-layout">
+        <!-- Canvas do Tabuleiro -->
+        <div class="tetris-board-box">
+          <canvas id="tetris-canvas" width="240" height="480"></canvas>
+          <div class="tetris-overlay" id="tetris-overlay">
+            <div class="tetris-message-box">
+              <h2 id="tetris-overlay-title">Fim de Jogo!</h2>
+              <p id="tetris-overlay-lines">Linhas: 0</p>
+              <p id="tetris-overlay-record" class="tetris-record-msg"></p>
+              <button id="tetris-restart-btn" class="action-btn primary-btn">Jogar Novamente</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Painel Lateral: Próxima Peça & Stats -->
+        <div class="tetris-sidebar">
+          <div class="tetris-stat-card glass-card">
+            <span class="tetris-stat-label">PRÓXIMA</span>
+            <canvas id="tetris-next-canvas" width="90" height="90"></canvas>
+          </div>
+
+          <div class="tetris-stat-card glass-card">
+            <span class="tetris-stat-label">PONTOS</span>
+            <span class="tetris-stat-val" id="tetris-score">0</span>
+          </div>
+
+          <div class="tetris-stat-card glass-card">
+            <span class="tetris-stat-label">LINHAS</span>
+            <span class="tetris-stat-val" id="tetris-lines">0</span>
+          </div>
+
+          <div class="tetris-stat-card glass-card">
+            <span class="tetris-stat-label">NÍVEL</span>
+            <span class="tetris-stat-val" id="tetris-level">1</span>
+          </div>
+
+          <div class="tetris-stat-card glass-card">
+            <span class="tetris-stat-label">RECORDE</span>
+            <span class="tetris-stat-val" id="tetris-best">0</span>
+          </div>
+
+          <button id="tetris-pause-btn" class="action-btn-small" style="width: 100%;">
+            <span id="tetris-pause-icon">⏸️</span>
+            <span id="tetris-pause-text">Pausar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Controles Virtuais do Tetris -->
+      <div class="tetris-controls-bar">
+        <button class="tetris-ctrl-btn" id="tetris-btn-left">◀</button>
+        <button class="tetris-ctrl-btn" id="tetris-btn-rotate">↻ Girar</button>
+        <button class="tetris-ctrl-btn" id="tetris-btn-right">▶</button>
+        <button class="tetris-ctrl-btn" id="tetris-btn-down">▼ Descer</button>
+        <button class="tetris-ctrl-btn drop" id="tetris-btn-drop">⏬ Queda</button>
+      </div>
+
+      <div class="info-card glass-card">
+        <div class="info-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          </svg>
+          <strong>Controles do Tetris:</strong>
+        </div>
+        <p><strong>← →</strong>: Move lateralmente | <strong>↑ ou W</strong>: Gira a peça | <strong>↓ ou S</strong>: Acelera queda | <strong>Espaço</strong>: Queda instantânea (Hard Drop).</p>
+      </div>
+`;
+
+function montar(raiz, { audio, confetti, storage }) {
+  const byId = (id) => raiz.querySelector('#' + id);
+  let controle;
+
+
+  const canvas = byId('tetris-canvas');
   const ctx = canvas.getContext('2d');
 
-  const nextCanvas = document.getElementById('tetris-next-canvas');
+  const nextCanvas = byId('tetris-next-canvas');
   const nextCtx = nextCanvas ? nextCanvas.getContext('2d') : null;
 
-  const scoreEl = document.getElementById('tetris-score');
-  const linesEl = document.getElementById('tetris-lines');
-  const levelEl = document.getElementById('tetris-level');
-  const pauseBtn = document.getElementById('tetris-pause-btn');
-  const pauseIcon = document.getElementById('tetris-pause-icon');
-  const pauseText = document.getElementById('tetris-pause-text');
-  const restartBtn = document.getElementById('tetris-restart-btn');
-  const overlay = document.getElementById('tetris-overlay');
-  const overlayLines = document.getElementById('tetris-overlay-lines');
+  const scoreEl = byId('tetris-score');
+  const linesEl = byId('tetris-lines');
+  const levelEl = byId('tetris-level');
+  const pauseBtn = byId('tetris-pause-btn');
+  const pauseIcon = byId('tetris-pause-icon');
+  const pauseText = byId('tetris-pause-text');
+  const restartBtn = byId('tetris-restart-btn');
+  const overlay = byId('tetris-overlay');
+  const overlayLines = byId('tetris-overlay-lines');
+  const overlayRecord = byId('tetris-overlay-record');
+  const bestEl = byId('tetris-best');
 
   const COLS = 10;
   const ROWS = 20;
@@ -151,13 +232,11 @@
         dropInterval = Math.max(120, 800 - (level - 1) * 70);
       }
 
-      if (window.ArcadeAudio) {
-        if (clearedCount === 4) {
-          window.ArcadeAudio.playSound('win');
-          if (typeof window.triggerConfetti === 'function') window.triggerConfetti();
-        } else {
-          window.ArcadeAudio.playTone(650, 'triangle', 0.12, 0.25);
-        }
+      if (clearedCount === 4) {
+        audio.playSound('win');
+        confetti();
+      } else {
+        audio.playTone(650, 'triangle', 0.12, 0.25);
       }
     }
   }
@@ -169,7 +248,7 @@
       score += 2;
     }
     scoreEl.textContent = score;
-    if (window.ArcadeAudio) window.ArcadeAudio.playTone(300, 'sawtooth', 0.08, 0.2);
+    audio.playTone(300, 'sawtooth', 0.08, 0.2);
     lockPiece();
     draw();
   }
@@ -327,7 +406,7 @@
       if (isValidMove(rotated, currentPiece.x + kick, currentPiece.y)) {
         currentPiece.x += kick;
         currentPiece.shape = rotated;
-        if (window.ArcadeAudio) window.ArcadeAudio.playTone(500, 'sine', 0.05, 0.15);
+        audio.playTone(500, 'sine', 0.05, 0.15);
         draw();
         return;
       }
@@ -382,12 +461,20 @@
     isGameOver = true;
     overlayLines.textContent = `Linhas eliminadas: ${lines} | Pontos: ${score}`;
     overlay.classList.add('active');
-    if (window.ArcadeAudio) window.ArcadeAudio.playSound('defeat');
+    const anterior = storage.get('recorde', 0);
+    if (score > anterior) {
+      storage.set('recorde', score);
+      bestEl.textContent = score;
+      overlayRecord.textContent = 'Novo recorde!';
+    } else {
+      overlayRecord.textContent = '';
+    }
+    audio.playSound('defeat');
   }
 
   // Teclado
   window.addEventListener('keydown', (e) => {
-    const viewTetris = document.getElementById('view-tetris');
+    const viewTetris = raiz;
     if (!viewTetris || !viewTetris.classList.contains('active')) return;
 
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
@@ -402,24 +489,61 @@
   });
 
   // Botões Virtuais
-  document.getElementById('tetris-btn-left').addEventListener('click', moveLeft);
-  document.getElementById('tetris-btn-right').addEventListener('click', moveRight);
-  document.getElementById('tetris-btn-rotate').addEventListener('click', rotate);
-  document.getElementById('tetris-btn-down').addEventListener('click', moveDown);
-  document.getElementById('tetris-btn-drop').addEventListener('click', hardDrop);
+  byId('tetris-btn-left').addEventListener('click', moveLeft);
+  byId('tetris-btn-right').addEventListener('click', moveRight);
+  byId('tetris-btn-rotate').addEventListener('click', rotate);
+  byId('tetris-btn-down').addEventListener('click', moveDown);
+  byId('tetris-btn-drop').addEventListener('click', hardDrop);
 
   if (pauseBtn) pauseBtn.addEventListener('click', togglePause);
   if (restartBtn) restartBtn.addEventListener('click', resetGame);
 
-  // Hook global
-  window.TetrisGame = {
-    pause: () => { isPaused = true; updatePauseUI(); },
-    resume: () => { isPaused = false; updatePauseUI(); },
-    reset: resetGame
+  // Chamado pelo nav: o loop de animação só roda enquanto a rota está aberta.
+  controle = {
+    pause: () => {
+      isPaused = true;
+      cancelAnimationFrame(animId);
+      animId = null;
+      updatePauseUI();
+    },
+    resume: () => {
+      isPaused = false;
+      lastDropTime = performance.now();
+      if (!animId) animId = requestAnimationFrame(update);
+      updatePauseUI();
+    }
   };
 
+  bestEl.textContent = storage.get('recorde', 0);
   resetGame();
   isPaused = true;
   updatePauseUI();
   animId = requestAnimationFrame(update);
-})();
+
+  return controle;
+}
+
+let instancia = null;
+
+export default {
+  id: 'tetris',
+  nome: 'Tetris Neon',
+  icone: '🧱',
+  iconeClasse: 'tetris-icon',
+  descricao: 'Encaixe blocos e limpe linhas',
+  badge: { texto: 'CLÁSSICO', cor: 'cyan' },
+  mount(raiz, ctx) {
+    raiz.innerHTML = HTML;
+    instancia = montar(raiz, ctx);
+  },
+  pause() {
+    if (instancia) instancia.pause();
+  },
+  resume() {
+    if (instancia) instancia.resume();
+  },
+  recorde(storage) {
+    const n = storage.get('recorde', 0);
+    return n > 0 ? `Recorde ${n}` : null;
+  }
+};

@@ -104,3 +104,9 @@
     width: 90px;
   }
 }
+
+.tetris-record-msg {
+  color: var(--color-gold);
+  font-weight: 800;
+  min-height: 1.2em;
+}
