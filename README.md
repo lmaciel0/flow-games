@@ -2,7 +2,7 @@
 
 Seis jogos clássicos em **HTML, CSS e JavaScript puros**: sem dependências, sem build, sem framework.
 
-**Demo:** _em breve_ (GitHub Pages)
+**Demo:** <https://flow-games-tau.vercel.app>
 
 <!-- Capturas: salvar em docs/screenshots/ e referenciar aqui.
 ![Home do Arcade Hub](docs/screenshots/home.png)
