@@ -1,18 +1,93 @@
 /**
- * Campo Minado — Lógica Completa com Primeiro Clique Seguro
+ * Campo Minado — primeiro clique seguro, três dificuldades e melhor tempo por nível.
  */
 
-(function () {
-  'use strict';
+// Dificuldade da lógica -> chave do recorde salvo.
+const NIVEIS = { easy: 'facil', medium: 'medio', hard: 'dificil' };
+const NOMES_NIVEL = { facil: 'fácil', medio: 'médio', dificil: 'difícil' };
 
-  const gridContainer = document.getElementById('mine-grid');
-  const flagsLeftEl = document.getElementById('mine-flags-left');
-  const timerEl = document.getElementById('mine-timer');
-  const difficultySelect = document.getElementById('mine-difficulty');
-  const faceBtn = document.getElementById('mine-face-btn');
-  const faceIcon = document.getElementById('mine-face-icon');
-  const modeDigBtn = document.getElementById('mine-mode-dig');
-  const modeFlagBtn = document.getElementById('mine-mode-flag');
+function formatar(segundos) {
+  const m = String(Math.floor(segundos / 60)).padStart(2, '0');
+  const s = String(segundos % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+const HTML = `
+      <header class="app-header">
+        <div class="header-badge mine-badge">
+          <span class="badge-dot mine-dot"></span>
+          <span class="badge-text">DESAFIO DE LÓGICA</span>
+        </div>
+        <h1 class="app-title">Campo <span class="gradient-text-mine">Minado</span></h1>
+        <p class="app-subtitle">Abra todas as casas seguras sem detonar nenhuma das minas ocultas!</p>
+      </header>
+
+      <div class="mine-top-bar glass-card">
+        <div class="mine-stat-box">
+          <span class="mine-stat-icon">🚩</span>
+          <span class="mine-stat-val" id="mine-flags-left">10</span>
+        </div>
+
+        <div class="mine-difficulty-select">
+          <select id="mine-difficulty" class="custom-select-small">
+            <option value="easy" selected>Fácil (9x9 - 10 minas)</option>
+            <option value="medium">Médio (12x12 - 22 minas)</option>
+            <option value="hard">Difícil (14x14 - 36 minas)</option>
+          </select>
+        </div>
+
+        <button id="mine-face-btn" class="mine-face-btn" title="Reiniciar">
+          <span id="mine-face-icon">🙂</span>
+        </button>
+
+        <div class="mine-stat-box">
+          <span class="mine-stat-icon">⏱️</span>
+          <span class="mine-stat-val" id="mine-timer">000</span>
+        </div>
+      </div>
+
+      <p class="mine-best-line">Melhor tempo: <strong id="mine-best">--:--</strong></p>
+
+      <div class="mine-mode-toggle">
+        <button id="mine-mode-dig" class="mine-mode-btn active">
+          <span>⛏️ Abrir Casa</span>
+        </button>
+        <button id="mine-mode-flag" class="mine-mode-btn">
+          <span>🚩 Marcar Bandeira</span>
+        </button>
+      </div>
+
+      <main class="mine-board-wrapper">
+        <div class="mine-grid-container" id="mine-grid"></div>
+      </main>
+
+      <div class="info-card glass-card">
+        <div class="info-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <strong>Dica do Campo Minado:</strong>
+        </div>
+        <p><strong>Clique normal:</strong> abre a casa (o 1º clique é 100% livre de minas). <strong>Botão direito</strong> ou toque longo: fixa a bandeira 🚩.</p>
+      </div>
+`;
+
+function montar(raiz, { audio, confetti, storage }) {
+  const byId = (id) => raiz.querySelector('#' + id);
+  let controle;
+
+
+  const gridContainer = byId('mine-grid');
+  const flagsLeftEl = byId('mine-flags-left');
+  const timerEl = byId('mine-timer');
+  const difficultySelect = byId('mine-difficulty');
+  const faceBtn = byId('mine-face-btn');
+  const faceIcon = byId('mine-face-icon');
+  const modeDigBtn = byId('mine-mode-dig');
+  const modeFlagBtn = byId('mine-mode-flag');
+  const bestEl = byId('mine-best');
 
   const CONFIGS = {
     easy: { rows: 9, cols: 9, mines: 10 },
@@ -40,15 +115,22 @@
     initGame();
   }
 
+  function tick() {
+    timeElapsed++;
+    if (timeElapsed > 999) timeElapsed = 999;
+    timerEl.textContent = timeElapsed.toString().padStart(3, '0');
+  }
+
   function startTimer() {
     clearInterval(timerInterval);
     timeElapsed = 0;
     timerEl.textContent = '000';
-    timerInterval = setInterval(() => {
-      timeElapsed++;
-      if (timeElapsed > 999) timeElapsed = 999;
-      timerEl.textContent = timeElapsed.toString().padStart(3, '0');
-    }, 1000);
+    timerInterval = setInterval(tick, 1000);
+  }
+
+  function mostrarMelhor() {
+    const t = storage.get('recordes', {})[NIVEIS[currentDiff]];
+    bestEl.textContent = Number.isFinite(t) && t > 0 ? formatar(t) : '--:--';
   }
 
   function stopTimer() {
@@ -57,6 +139,7 @@
 
   function initGame() {
     stopTimer();
+    mostrarMelhor();
     timeElapsed = 0;
     timerEl.textContent = '000';
     firstClick = true;
@@ -168,7 +251,7 @@
     cell.isRevealed = true;
     cell.element.classList.add('revealed');
 
-    if (window.ArcadeAudio) window.ArcadeAudio.playTone(400, 'sine', 0.04, 0.1);
+    audio.playTone(400, 'sine', 0.04, 0.1);
 
     if (cell.count > 0) {
       cell.element.textContent = cell.count;
@@ -196,11 +279,11 @@
     if (cell.isFlagged) {
       cell.element.textContent = '🚩';
       flagsPlaced++;
-      if (window.ArcadeAudio) window.ArcadeAudio.playTone(600, 'sine', 0.05, 0.15);
+      audio.playTone(600, 'sine', 0.05, 0.15);
     } else {
       cell.element.textContent = '';
       flagsPlaced--;
-      if (window.ArcadeAudio) window.ArcadeAudio.playTone(350, 'sine', 0.05, 0.15);
+      audio.playTone(350, 'sine', 0.05, 0.15);
     }
 
     const remaining = totalMines - flagsPlaced;
@@ -238,8 +321,16 @@
           }
         }
       }
-      if (window.ArcadeAudio) window.ArcadeAudio.playSound('win');
-      if (typeof window.triggerConfetti === 'function') window.triggerConfetti();
+      const recordes = storage.get('recordes', {});
+      const nivel = NIVEIS[currentDiff];
+      const tempo = Math.max(1, timeElapsed);
+      if (!(recordes[nivel] > 0) || tempo < recordes[nivel]) {
+        recordes[nivel] = tempo;
+        storage.set('recordes', recordes);
+        mostrarMelhor();
+      }
+      audio.playSound('win');
+      confetti();
     } else {
       faceIcon.textContent = '😵';
       // Revela todas as minas
@@ -254,7 +345,7 @@
           }
         }
       }
-      if (window.ArcadeAudio) window.ArcadeAudio.playSound('defeat');
+      audio.playSound('defeat');
     }
   }
 
@@ -283,5 +374,47 @@
 
   if (faceBtn) faceBtn.addEventListener('click', initGame);
 
+  // Chamado pelo nav: o cronômetro só corre enquanto a rota está aberta.
+  controle = {
+    pause: stopTimer,
+    resume: () => {
+      if (!firstClick && !isGameOver) {
+        clearInterval(timerInterval);
+        timerInterval = setInterval(tick, 1000);
+      }
+    }
+  };
+
   setDifficulty('easy');
-})();
+
+  return controle;
+}
+
+let instancia = null;
+
+export default {
+  id: 'minesweeper',
+  nome: 'Campo Minado',
+  icone: '💣',
+  iconeClasse: 'mine-icon',
+  descricao: 'Desarme o campo sem explodir',
+  badge: { texto: 'LÓGICA', cor: 'red' },
+  mount(raiz, ctx) {
+    raiz.innerHTML = HTML;
+    instancia = montar(raiz, ctx);
+  },
+  pause() {
+    if (instancia) instancia.pause();
+  },
+  resume() {
+    if (instancia) instancia.resume();
+  },
+  recorde(storage) {
+    const r = storage.get('recordes', {});
+    for (const nivel of ['facil', 'medio', 'dificil']) {
+      const t = r[nivel];
+      if (Number.isFinite(t) && t > 0) return `Melhor ${formatar(t)} (${NOMES_NIVEL[nivel]})`;
+    }
+    return null;
+  }
+};

@@ -11,6 +11,7 @@ import { iniciarNav } from './core/nav.js';
 import tictactoe from './games/tictactoe.js';
 import game2048 from './games/game2048.js';
 import snake from './games/snake.js';
+import minesweeper from './games/minesweeper.js';
 import tetris from './games/tetris.js';
 
 migrar();
@@ -19,6 +20,7 @@ initConfetti();
 registrar(tictactoe);
 registrar(game2048);
 registrar(snake);
+registrar(minesweeper);
 registrar(tetris);
 
 iniciarNav({
