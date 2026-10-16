@@ -357,6 +357,9 @@ function montar(raiz, { audio, confetti, storage }) {
   window.addEventListener('keydown', (e) => {
     const viewTermo = raiz;
     if (!viewTermo || !viewTermo.classList.contains('active')) return;
+    // Não engole Enter/teclas de quem navega por outros controles (ex.: links do drawer) nem atalhos do navegador.
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target !== document.body && !raiz.contains(e.target)) return;
 
     if (e.key === 'Enter') {
       e.preventDefault();
