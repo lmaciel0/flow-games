@@ -1,0 +1,255 @@
+/* ==========================================================================
+   Controls Panel (Jogo da Velha)
+   ========================================================================== */
+.controls-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 140px;
+}
+
+.control-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.select-wrapper { position: relative; }
+
+.custom-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(10, 14, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.55rem 1.85rem 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.select-wrapper::after {
+  content: '▼';
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.symbol-toggle {
+  display: flex;
+  background: rgba(10, 14, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.symbol-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.6rem;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--text-muted);
+}
+
+.symbol-btn .symbol-glow { font-size: 1rem; font-weight: 800; line-height: 1; }
+.symbol-btn .btn-subtext { font-size: 0.62rem; font-weight: 500; opacity: 0.7; }
+
+.symbol-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.symbol-btn[data-symbol="X"].active .symbol-glow { color: var(--color-x); text-shadow: 0 0 10px var(--color-x-glow); }
+.symbol-btn[data-symbol="O"].active .symbol-glow { color: var(--color-o); text-shadow: 0 0 10px var(--color-o-glow); }
+.symbol-btn.active .btn-subtext { color: var(--text-primary); opacity: 1; }
+
+.sound-toggle-wrapper { display: flex; align-items: flex-end; }
+
+.icon-btn {
+  background: rgba(10, 14, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all var(--transition-fast);
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   Scoreboard (Jogo da Velha)
+   ========================================================================== */
+.scoreboard {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+}
+
+.score-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-normal);
+}
+
+.score-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  font-weight: 900;
+  box-shadow: var(--shadow-sm);
+}
+
+.x-avatar { background: rgba(0, 242, 254, 0.12); color: var(--color-x); border: 1px solid rgba(0, 242, 254, 0.3); }
+.o-avatar { background: rgba(255, 42, 109, 0.12); color: var(--color-o); border: 1px solid rgba(255, 42, 109, 0.3); }
+
+.score-info { display: flex; flex-direction: column; }
+.score-label { font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); }
+.score-value { font-size: 1.5rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1.1; }
+
+.score-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0.5rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ties-count { font-size: 1.2rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--color-gold); }
+.ties-label { font-size: 0.68rem; text-transform: uppercase; font-weight: 600; color: var(--text-muted); }
+
+.player-x-card.active-turn { border: 1px solid rgba(0, 242, 254, 0.35); box-shadow: 0 0 15px rgba(0, 242, 254, 0.2); }
+.player-o-card.active-turn { border: 1px solid rgba(255, 42, 109, 0.35); box-shadow: 0 0 15px rgba(255, 42, 109, 0.2); }
+
+.turn-banner { text-align: center; padding: 0.4rem 0; }
+.turn-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.45rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.pulse-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--color-x);
+  box-shadow: 0 0 10px var(--color-x);
+}
+.pulse-indicator.turn-o { background-color: var(--color-o); box-shadow: 0 0 10px var(--color-o); }
+
+/* ==========================================================================
+   Board & Grid (Jogo da Velha)
+   ========================================================================== */
+.board-wrapper { display: flex; justify-content: center; align-items: center; position: relative; width: 100%; }
+
+.board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 1 / 1;
+  background: rgba(12, 15, 28, 0.6);
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-lg), inset 0 0 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+}
+
+.cell {
+  background: var(--cell-bg);
+  border: 1px solid var(--cell-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+  font-weight: 900;
+  color: transparent;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.cell:hover:not(:disabled) {
+  background: var(--cell-hover-bg);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.cell.marked.cell-x { color: var(--color-x); text-shadow: 0 0 20px var(--color-x-glow); animation: pop-in 0.35s forwards; }
+.cell.marked.cell-o { color: var(--color-o); text-shadow: 0 0 20px var(--color-o-glow); animation: pop-in 0.35s forwards; }
+.cell.winning-cell { background: rgba(255, 255, 255, 0.12) !important; animation: win-pulse 1.2s infinite alternate ease-in-out; }
+.cell.winning-cell.cell-x { border-color: var(--color-x); box-shadow: 0 0 30px var(--color-x-glow); }
+.cell.winning-cell.cell-o { border-color: var(--color-o); box-shadow: 0 0 30px var(--color-o-glow); }
+
+.strike-line-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
+.strike-line-svg.visible { display: block; }
+#strike-line { stroke-dasharray: 400; stroke-dashoffset: 400; animation: draw-line 0.45s forwards; }
+
+
+@media (max-width: 480px) {
+  .board {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .cell { font-size: 2.85rem; border-radius: var(--radius-sm); }
+}

@@ -1,0 +1,106 @@
+/* ==========================================================================
+   GAME 5: TETRIS NEON
+   ========================================================================== */
+.tetris-main-layout {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.tetris-board-box {
+  position: relative;
+  background: rgba(8, 12, 22, 0.9);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 25px rgba(139, 92, 246, 0.15);
+  overflow: hidden;
+}
+
+#tetris-canvas {
+  display: block;
+}
+
+.tetris-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 110px;
+}
+
+.tetris-stat-card {
+  padding: 0.6rem 0.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.tetris-stat-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.tetris-stat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #c084fc;
+}
+
+#tetris-next-canvas {
+  width: 70px;
+  height: 70px;
+  display: block;
+  margin: auto;
+}
+
+.tetris-controls-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.tetris-ctrl-btn {
+  padding: 0.65rem 0.3rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tetris-ctrl-btn:active {
+  background: rgba(139, 92, 246, 0.3);
+  border-color: #8b5cf6;
+  transform: scale(0.94);
+}
+
+.tetris-ctrl-btn.drop {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+
+@media (max-width: 480px) {
+  .tetris-main-layout {
+    gap: 0.5rem;
+  }
+
+  #tetris-canvas {
+    width: 180px;
+    height: 360px;
+  }
+
+  .tetris-sidebar {
+    width: 90px;
+  }
+}
