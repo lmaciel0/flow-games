@@ -1,0 +1,157 @@
+/* ==========================================================================
+   GAME 4: CAMPO MINADO (MINESWEEPER)
+   ========================================================================== */
+.mine-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.mine-stat-box {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(10, 14, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.mine-stat-icon { font-size: 1.1rem; }
+.mine-stat-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-mine);
+}
+
+.custom-select-small {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(10, 14, 28, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  outline: none;
+}
+
+.mine-face-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  font-size: 1.35rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.mine-face-btn:hover { transform: scale(1.08); background: rgba(255, 255, 255, 0.12); }
+
+.mine-mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.mine-mode-btn {
+  flex: 1;
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mine-mode-btn.active {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: var(--text-primary);
+}
+
+.mine-board-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+}
+
+.mine-grid-container {
+  display: grid;
+  gap: 4px;
+  background: rgba(12, 16, 30, 0.85);
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-lg);
+}
+
+.mine-cell {
+  width: 38px;
+  height: 38px;
+  background: rgba(25, 32, 60, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.mine-cell:hover:not(.revealed) {
+  background: rgba(35, 45, 85, 0.95);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.mine-cell.revealed {
+  background: rgba(14, 18, 34, 0.6);
+  border-color: rgba(255, 255, 255, 0.04);
+  cursor: default;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.mine-cell.detonated {
+  background: rgba(239, 68, 68, 0.4) !important;
+  border-color: #ef4444;
+  animation: win-pulse 0.8s infinite alternate;
+}
+
+/* Cores dos números do Campo Minado */
+.mine-n-1 { color: #38bdf8; }
+.mine-n-2 { color: #4ade80; }
+.mine-n-3 { color: #f87171; }
+.mine-n-4 { color: #c084fc; }
+.mine-n-5 { color: #fb923c; }
+.mine-n-6 { color: #2dd4bf; }
+.mine-n-7 { color: #f43f5e; }
+.mine-n-8 { color: #e2e8f0; }
+
+
+@media (max-width: 480px) {
+  .mine-cell {
+    width: 32px;
+    height: 32px;
+    font-size: 0.95rem;
+  }
+}
