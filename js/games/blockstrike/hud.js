@@ -16,7 +16,7 @@ const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ci
 const CONTROLES = [
   ['WASD', 'andar'], ['Mouse', 'mirar'], ['Clique', 'atirar'], ['Botão direito', 'luneta / estocada'],
   ['R', 'recarregar'], ['Espaço', 'pular'], ['C', 'agachar'], ['Shift', 'andar em silêncio'],
-  ['1 2 3 / roda', 'armas'], ['Q', 'última arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
+  ['1 2 3 / roda', 'armas'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
 const RADAR_ESCALA = 2.6; // px por metro
 const RADAR_LADO = 132; // px

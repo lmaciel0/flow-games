@@ -201,6 +201,17 @@ export function criarSons(audio) {
       chiado(v, v.t0, { tipo: 'lowpass', freq: 600, freqFim: 100, dur: 0.5, ganho: 0.3 });
     },
 
+    // "Oof" de boneco de blocos: voz grave que cai de tom, com um sopro de ar no começo.
+    oof(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.7 });
+      if (!v) return;
+      const t = v.t0;
+      tom(v, t, { onda: 'sawtooth', freq: varia(320, 0.08), freqFim: 140, dur: 0.3, ganho: 0.22, ataque: 0.01 });
+      tom(v, t, { onda: 'triangle', freq: varia(160, 0.08), freqFim: 85, dur: 0.34, ganho: 0.3, ataque: 0.01 });
+      chiado(v, t, { tipo: 'bandpass', freq: 650, freqFim: 380, q: 3, dur: 0.26, ganho: 0.2, ataque: 0.01 });
+      chiado(v, t, { tipo: 'lowpass', freq: 1200, dur: 0.07, ganho: 0.3 });
+    },
+
     inicioRound() {
       const v = voz({ ganho: 0.4 });
       if (!v) return;

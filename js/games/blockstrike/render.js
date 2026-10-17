@@ -27,10 +27,12 @@ const MODELOS_ARMA = {
   rifle: {
     caixas: [[0.07, 0.09, 0.5, 0, 0, -0.1], [0.03, 0.03, 0.25, 0, 0.01, -0.5], [0.06, 0.16, 0.06, 0, -0.12, 0.02, 1], [0.07, 0.1, 0.2, 0, -0.02, 0.28, 1]],
     boca: -0.68,
+    pente: 2,
   },
   smg: {
     caixas: [[0.07, 0.09, 0.32, 0, 0, -0.05], [0.03, 0.03, 0.14, 0, 0.01, -0.32], [0.05, 0.2, 0.05, 0, -0.14, 0.04]],
     boca: -0.45,
+    pente: 2,
   },
   sniper: {
     caixas: [[0.06, 0.08, 0.7, 0, 0, -0.2], [0.03, 0.03, 0.4, 0, 0.01, -0.75], [0.05, 0.06, 0.2, 0, 0.08, -0.15], [0.07, 0.1, 0.25, 0, -0.02, 0.3, 1]],
@@ -43,6 +45,7 @@ const MODELOS_ARMA = {
   pistola: {
     caixas: [[0.05, 0.07, 0.2, 0, 0, -0.05], [0.05, 0.12, 0.06, 0, -0.09, 0.04, 1]],
     boca: -0.2,
+    pente: 1,
   },
   faca: {
     caixas: [[0.02, 0.05, 0.28, 0, 0.02, -0.2], [0.04, 0.04, 0.1, 0, -0.01, 0.02, 1]],
@@ -122,11 +125,13 @@ export function criarRender(canvas, mapa) {
     braco: topo(0.18, 0.6, 0.18),
     perna: topo(0.22, 0.8, 0.22),
     armaAvatar: new THREE.BoxGeometry(0.08, 0.1, 0.55),
+    sombra: new THREE.CircleGeometry(0.42, 16).rotateX(-Math.PI / 2),
   };
   const mat = {
     cabeca: new THREE.MeshLambertMaterial({ color: COR_CABECA }),
     armaAvatar: new THREE.MeshLambertMaterial({ color: 0x2a2c31 }),
     olho: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+    sombra: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }),
   };
   for (const [time, hex] of Object.entries(COR_TIME)) {
     mat[time] = new THREE.MeshLambertMaterial({ color: hex });
@@ -153,6 +158,7 @@ export function criarRender(canvas, mapa) {
     const pernaD = parte(geo.perna, escuro, 0.12, 0.8);
     const arma = parte(geo.armaAvatar, mat.armaAvatar, 0.22, 1.18);
     arma.position.z = -0.32;
+    parte(geo.sombra, mat.sombra, 0, 0.03); // sombra de blob: ancora o boneco no chão sem sombra dinâmica
     scene.add(g);
     return { g, bracoE, bracoD, pernaE, pernaD, dist: ent.distAndada, amp: 0 };
   }
@@ -204,6 +210,7 @@ export function criarRender(canvas, mapa) {
     proxImpacto = 0;
     for (const r of rastros) { r.vida = 0; r.linha.visible = false; }
     for (const gt of gotas) { gt.vida = 0; gt.m.visible = false; }
+    for (const p of pecas) { p.vida = 0; p.m.visible = false; }
   }
 
   // Rastros de bala: segmentos de linha reaproveitados, visíveis por um instante.
@@ -259,7 +266,64 @@ export function criarRender(canvas, mapa) {
     }
   }
 
+  // Desmanche ao morrer: os 6 blocos do boneco saem voando, quicam e ficam no chão por um tempo.
+  // [geometria, material, x, y (centro do bloco), alturaDoBloco]; braços e pernas têm pivô no topo.
+  const PECAS = [
+    ['tronco', 'time', 0, 0.8, 0.3], ['cabeca', 'cabeca', 0, 1.4, 0.2],
+    ['braco', 'escuro', -0.34, 1.4, 0.09], ['braco', 'escuro', 0.34, 1.4, 0.09],
+    ['perna', 'escuro', -0.12, 0.8, 0.11], ['perna', 'escuro', 0.12, 0.8, 0.11],
+  ];
+  const MAX_PECAS = 72;
+  const VIDA_PECA = 6;
+  const pecas = [];
+  let proxPeca = 0;
+
+  function desmanchar(ent, vel = 2.5) {
+    const cos = Math.cos(ent.yaw);
+    const sen = Math.sin(ent.yaw);
+    for (const [chave, material, ox, oy, piso] of PECAS) {
+      if (pecas.length < MAX_PECAS) {
+        const m = new THREE.Mesh(geo.tronco, mat.cabeca);
+        m.visible = false;
+        scene.add(m);
+        pecas.push({ m, v: new THREE.Vector3(), giro: new THREE.Vector3(), vida: 0, piso: 0 });
+      }
+      const p = pecas[proxPeca % MAX_PECAS];
+      proxPeca += 1;
+      p.m.geometry = geo[chave];
+      p.m.material = material === 'time' ? mat[ent.time] : material === 'escuro' ? mat[`${ent.time}Escuro`] : mat.cabeca;
+      p.m.position.set(ent.pos.x + ox * cos, ent.pos.y + oy, ent.pos.z - ox * sen);
+      p.m.rotation.set(0, ent.yaw, 0);
+      p.v.set((Math.random() - 0.5) * vel, 2 + Math.random() * 2.5, (Math.random() - 0.5) * vel);
+      p.giro.set((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12);
+      p.piso = ent.pos.y + piso;
+      p.m.visible = true;
+      p.vida = VIDA_PECA;
+    }
+  }
+
+  function animarPecas(dt) {
+    for (const p of pecas) {
+      if (p.vida <= 0) continue;
+      p.vida -= dt;
+      if (p.vida <= 0) { p.m.visible = false; continue; }
+      p.v.y -= 16 * dt;
+      p.m.position.addScaledVector(p.v, dt);
+      p.m.rotation.x += p.giro.x * dt;
+      p.m.rotation.y += p.giro.y * dt;
+      p.m.rotation.z += p.giro.z * dt;
+      if (p.m.position.y < p.piso) {
+        p.m.position.y = p.piso;
+        p.v.y = Math.abs(p.v.y) > 1.2 ? -p.v.y * 0.35 : 0;
+        p.v.x *= 0.6;
+        p.v.z *= 0.6;
+        p.giro.multiplyScalar(0.5);
+      }
+    }
+  }
+
   function animarEfeitos(dt) {
+    animarPecas(dt);
     for (const r of rastros) {
       if (r.vida <= 0) continue;
       r.vida -= dt;
@@ -291,13 +355,15 @@ export function criarRender(canvas, mapa) {
   function criarViewmodel(tipo) {
     const modelo = MODELOS_ARMA[tipo] ?? MODELOS_ARMA.rifle;
     const g = new THREE.Group();
-    for (const [w, h, d, x, y, z, claro] of modelo.caixas) {
+    let pente = null;
+    for (const [i, [w, h, d, x, y, z, claro]] of modelo.caixas.entries()) {
       const chave = `${w},${h},${d}`;
       if (!geoArma.has(chave)) geoArma.set(chave, new THREE.BoxGeometry(w, h, d));
       const mat = tipo === 'faca' ? (claro ? matArmaClara : matFaca) : claro ? matArmaClara : matArma;
       const m = new THREE.Mesh(geoArma.get(chave), mat);
       m.position.set(x, y, z);
       g.add(m);
+      if (i === modelo.pente) pente = { m, y };
     }
     const boca = new THREE.Mesh(geoClarao, matClarao);
     boca.position.set(0, modelo.caixas[0][4], modelo.boca);
@@ -306,7 +372,7 @@ export function criarRender(canvas, mapa) {
     g.position.set(POS_VIEW.x, POS_VIEW.y, POS_VIEW.z);
     g.visible = false;
     camera.add(g);
-    return { g, boca };
+    return { g, boca, pente };
   }
 
   function viewmodelDe(tipo) {
@@ -314,7 +380,10 @@ export function criarRender(canvas, mapa) {
     return viewmodels.get(tipo);
   }
 
-  const flash = () => { clarao = DURACAO_CLARAO; };
+  const flash = () => {
+    clarao = DURACAO_CLARAO;
+    inspecao = 0; // atirar interrompe a inspeção
+  };
   // Animações da arma na mão (tempos em s): saque ao trocar, golpe da faca.
   let saque = 0;
   let saqueDur = 0.3;
@@ -323,12 +392,18 @@ export function criarRender(canvas, mapa) {
   let golpeLado = 1;
   const golpe = (forte) => {
     golpeForte = forte;
+    inspecao = 0;
     golpeT = forte ? 0.45 : 0.3;
     golpeLado = -golpeLado; // golpes leves alternam o lado, como no CS
   };
   let balanco = 0; // amplitude do balanço ao andar (0..1)
   let yawAntes = null;
   let ginga = 0; // a arma atrasa um pouco quando a mira gira
+  let pitchAntes = null;
+  let gingaV = 0; // e sobe/desce um pouco quando a mira sobe ou desce
+  const DUR_INSPECAO = 1.7;
+  let inspecao = 0; // F: gira a arma na frente da câmera para admirá-la
+  const inspecionar = () => { if (saque <= 0 && golpeT <= 0) inspecao = DUR_INSPECAO; };
   let olhoY = null;
   let vistaAntes = null;
   const recuoVisual = () => {
@@ -369,17 +444,47 @@ export function criarRender(canvas, mapa) {
       ginga += (Math.max(-0.08, Math.min(0.08, giro * 2)) - ginga) * Math.min(1, dt * 12);
     }
     yawAntes = vista.yaw;
+    if (pitchAntes !== null) {
+      gingaV += (Math.max(-0.06, Math.min(0.06, (vista.pitch - pitchAntes) * -2)) - gingaV) * Math.min(1, dt * 12);
+    }
+    pitchAntes = vista.pitch;
     ry += ginga;
     x -= ginga * 0.3;
+    y += gingaV * 0.4;
+    rx += gingaV;
     if (!vista.noChao) y += 0.02; // no ar a arma sobe um pouco
     // Recarga: abaixa e gira a arma; volta no fim (curva em seno do progresso).
     if (arma.recarregandoAte > 0) {
+      inspecao = 0;
       const def = ARMAS[arma.tipo];
       const p = 1 - Math.max(0, arma.recarregandoAte - mundo.tempo) / def.recarga;
       const k = Math.sin(Math.min(1, Math.max(0, p)) * Math.PI);
       y -= 0.12 * k;
       rx -= 0.5 * k;
       rz += 0.6 * k;
+    }
+    const pente = viewAtual.pente;
+    if (pente) {
+      let dy = 0;
+      let visivel = true;
+      if (arma.recarregandoAte > 0) {
+        const p = 1 - Math.max(0, arma.recarregandoAte - mundo.tempo) / ARMAS[arma.tipo].recarga;
+        if (p < 0.3) dy = -(p / 0.3) * 0.28; // pente solta e desce
+        else if (p < 0.55) visivel = false; // fora da arma
+        else if (p < 0.8) dy = -(1 - (p - 0.55) / 0.25) * 0.28; // pente novo sobe
+      }
+      pente.m.visible = visivel;
+      pente.m.position.y = pente.y + dy;
+    }
+    if (inspecao > 0) {
+      const k = Math.sin(Math.min(1, (DUR_INSPECAO - inspecao) / DUR_INSPECAO) * Math.PI);
+      const u = (DUR_INSPECAO - inspecao) / DUR_INSPECAO;
+      x -= 0.2 * k;
+      y += 0.17 * k;
+      z -= 0.05 * k;
+      ry += (Math.sin(u * Math.PI * 2) * 0.9 + u * 0.8) * k;
+      rx += Math.sin(u * Math.PI * 3) * 0.35 * k;
+      rz += 0.5 * k;
     }
     if (saque > 0) {
       const k = saque / saqueDur;
@@ -439,6 +544,7 @@ export function criarRender(canvas, mapa) {
         saqueDur = SAQUE[ARMAS[tipoAtivo].slot] ?? 0.3;
         saque = saqueDur;
         golpeT = 0;
+        inspecao = 0;
       }
       viewAtual = alvoView;
       if (viewAtual) viewAtual.g.visible = true;
@@ -447,6 +553,7 @@ export function criarRender(canvas, mapa) {
     clarao = Math.max(0, clarao - dt);
     recuoArma = Math.max(0, recuoArma - dt * 0.6);
     saque = Math.max(0, saque - dt);
+    inspecao = Math.max(0, inspecao - dt);
     golpeT = Math.max(0, golpeT - dt);
     animarEfeitos(dt);
     if (viewAtual) posarArma(vista, mundo, dt);
@@ -475,6 +582,7 @@ export function criarRender(canvas, mapa) {
   }
 
   return {
-    desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, destruir,
+    desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, desmanchar,
+    inspecionar, destruir,
   };
 }

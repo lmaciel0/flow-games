@@ -252,6 +252,8 @@ function montar(raiz, ctx) {
       } else if (ev.tipo === 'morte') {
         if (ev.assassino === eu.id) sons.abate(ev.cabeca);
         if (ev.vitima === eu.id) sons.morte();
+        else sons.oof(distDe(ev.vitima), panDe(ev.vitima));
+        render.desmanchar(mundo.entidades[ev.vitima]);
         hud.morte({
           assassino: mundo.entidades[ev.assassino], vitima: mundo.entidades[ev.vitima],
           arma: ev.arma, cabeca: ev.cabeca,
@@ -507,6 +509,8 @@ function montar(raiz, ctx) {
     entrada.aoTab((v) => hud.mostrarTabela(v));
     entrada.aoTecla((code) => {
       if (!partida) return;
+      const eu = partida.mundo.entidades[partida.mundo.jogadorId];
+      if (code === 'KeyF' && eu.vivo && partida.partida.fase !== 'fim-partida') partida.render.inspecionar();
       let usada = false;
       if (partida.partida.fase === 'freeze') usada = hud.teclaLoadout(code);
       else if (partida.treino) {
