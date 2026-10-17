@@ -6,7 +6,7 @@
 const SENS_MIN = 0.2;
 const SENS_MAX = 3;
 const RAD_POR_PIXEL = 0.002;
-const SLOTS = { Digit1: 'primaria', Digit2: 'pistola', Digit3: 'faca' };
+const SLOTS = { Digit1: 'primaria', Digit2: 'pistola', Digit3: 'faca', KeyQ: 'anterior' }; // Q: última arma
 const BLOQUEADAS = new Set(['Tab', 'Space']);
 
 export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
@@ -38,7 +38,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     if (SLOTS[e.code]) slotPendente = SLOTS[e.code];
     if (e.code === 'KeyR') recarregarPendente = true;
     if (e.code === 'Tab') aoTabFn(true);
-    aoTeclaFn(e.code);
+    if (aoTeclaFn(e.code) === true) slotPendente = null; // tecla usada pelo jogo (painel de armas)
   }
 
   function onKeyUp(e) {
@@ -72,6 +72,13 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     botoes.delete(e.button);
   }
 
+  // Roda do mouse troca de arma (ordem primária → pistola → faca).
+  function onWheel(e) {
+    if (doc.pointerLockElement !== canvas || !ativa) return;
+    e.preventDefault();
+    if (e.deltaY !== 0) slotPendente = e.deltaY > 0 ? 'roda+' : 'roda-';
+  }
+
   function onLockChange() {
     if (doc.pointerLockElement === canvas) return;
     limpar();
@@ -95,6 +102,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   doc.addEventListener('pointerlockchange', onLockChange);
   doc.addEventListener('pointerlockerror', onLockError);
   canvas.addEventListener('contextmenu', onContext);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.ownerDocument.defaultView?.addEventListener('blur', onBlur);
 
   const eixo = (mais, menos) => (teclas.has(mais) ? 1 : 0) - (teclas.has(menos) ? 1 : 0);
@@ -142,6 +150,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
       doc.removeEventListener('pointerlockchange', onLockChange);
       doc.removeEventListener('pointerlockerror', onLockError);
       canvas.removeEventListener('contextmenu', onContext);
+      canvas.removeEventListener('wheel', onWheel);
       canvas.ownerDocument.defaultView?.removeEventListener('blur', onBlur);
       limpar();
     },

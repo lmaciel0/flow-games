@@ -37,6 +37,20 @@ export function playTone(freq, type = 'sine', duration = 0.1, gainValue = 0.15) 
   }
 }
 
+/**
+ * Contexto Web Audio para jogos que sintetizam os próprios efeitos (ruído, filtros, pan).
+ * Devolve null com o som desligado ou sem suporte.
+ */
+export function contexto() {
+  if (!somAtivo) return null;
+  try {
+    iniciar();
+  } catch {
+    return null;
+  }
+  return audioCtx;
+}
+
 export function playSound(nome) {
   if (!somAtivo) return;
   iniciar();

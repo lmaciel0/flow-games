@@ -3,7 +3,7 @@
  * Módulo puro: sem Three.js e sem DOM. Tempo em segundos; ângulos em radianos.
  */
 
-import { ARMAS, MULT_PARTE, RECUO_MAX } from './config.js';
+import { ARMAS, JOGADOR, MULT_PARTE, RECUO_MAX } from './config.js';
 
 const RECUO_VOLTA = 0.1; // rad/s, enquanto o gatilho está solto
 const FATOR_AGACHADO = 0.6;
@@ -15,6 +15,19 @@ export function criarArma(tipo) {
     prontaEm: 0, recarregandoAte: 0, recuoAcum: 0, gatilhoSolto: true,
   };
 }
+
+// Velocidade (m/s) com a arma na mão: a faca é a mais rápida; luneta aberta, Shift e agachar freiam.
+export function velocidadeDe(tipo, { agachado = false, devagar = false, zoom = false } = {}) {
+  const def = ARMAS[tipo];
+  let v = def?.vel ?? JOGADOR.velCorrer;
+  if (zoom && def?.zoomFov) v *= JOGADOR.fatorZoom;
+  if (agachado) return v * JOGADOR.fatorAgachado;
+  if (devagar) return v * JOGADOR.fatorDevagar;
+  return v;
+}
+
+// Tempo (s) para sacar a arma depois da troca: só então ela atira.
+export const SAQUE = { primaria: 0.5, pistola: 0.3, faca: 0.15 };
 
 export function danoDe(tipo, parte) {
   return Math.round(ARMAS[tipo].dano * MULT_PARTE[parte]);

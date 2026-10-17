@@ -92,10 +92,11 @@ export function criarCerebro(ent, grafo, rng, caixas = []) {
 }
 
 // Centro da cabeça e do tronco (escalados se agachado), como nas hitboxes.
-function pontosDoCorpo(alvo) {
+// `alturaTronco`: o bot fácil mira mais baixo, e o spray sobe menos até a cabeça.
+function pontosDoCorpo(alvo, alturaTronco = 1.1) {
   const k = alvo.agachado ? 1.2 / 1.8 : 1;
   const { x, y, z } = alvo.pos;
-  return { cabeca: { x, y: y + 1.6 * k, z }, tronco: { x, y: y + 1.1 * k, z } };
+  return { cabeca: { x, y: y + 1.6 * k, z }, tronco: { x, y: y + alturaTronco * k, z } };
 }
 
 // Inimigos visíveis do olho do bot, do mais perto ao mais longe.
@@ -138,7 +139,7 @@ function atacar(ent, c, alvo, mundo, dif, dt, rng, cmd, { strafe }) {
     c.erroAte = agora + TROCA_ERRO;
   }
   const o = olho(ent);
-  const p = pontosDoCorpo(alvo);
+  const p = pontosDoCorpo(alvo, dif.alturaTronco);
   // Parte escolhida escondida (atrás de caixa baixa, por exemplo) → mira na outra.
   let ponto = c.cabeca ? p.cabeca : p.tronco;
   if (!temVisada(o, ponto, mundo.mapa.caixas)) ponto = c.cabeca ? p.tronco : p.cabeca;
