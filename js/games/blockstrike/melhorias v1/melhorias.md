@@ -147,3 +147,22 @@ A base com navegação em grafo A* pode ser expandida com comportamentos muito m
 | 🟡 **Médio Prazo** | Weapon Viewmodel Sway & Inspeção ('F') | Alto (sensação e peso das armas) | Média |
 | 🔴 **Longo Prazo** | Segundo Mapa ("Mirage Block") | Alto (variedade de cenários) | Média-Alta |
 | 🔴 **Longo Prazo** | Multiplayer WebRTC P2P | Revolucionário (jogar com amigos) | Alta |
+
+---
+
+## 7. ✅ Status da implementação (branch `feat/block-strike-tatico`)
+
+**Feito**
+- 1.1 Modo Desarme: bombsites A e B, plantar (3,2 s) e desarmar (10 s, 5 s com kit) segurando `E`, C4 de 40 s com bipes que aceleram e explosão que mata num raio de 14 m. Terroristas e CTs trocam no intervalo (round 13). Bots plantam, escoltam, defendem, rotacionam, desarmam e recuperam a C4 solta.
+- 1.2 Granadas: flash (cegueira por distância e ângulo), HE (até 75 de dano em área, parede protege) e smoke de blocos (tiro e HE abrem buracos por 2 s). Teclas `Z` `X` `V`. Bots jogam HE e flash, usam smoke para fugir e se protegem quando cegos.
+- 1.3 Economia e menu de compra: $800 no início, recompensa por abate, bônus de vitória e de derrota (sobe até $3400), colete, colete + capacete, kit e granadas. Quem sobrevive mantém o equipamento; o intervalo zera tudo.
+- 2.1 Desmanche em blocos ao morrer e o "Oof" sintetizado.
+- 2.3 Viewmodel: balanço vertical da arma, pente que sai e entra na recarga e inspeção com `F` (o balanço ao andar e a ginga horizontal já existiam).
+- 2.4 Sombra de blob nos pés.
+- 3.1 Bots ouvem passos de inimigos correndo a até 15 m (`Shift` e agachado são silenciosos).
+- 3.2 Bots reagem a flash (cegos) e smoke (não enxergam através dela). Não implementado: atirar através da fumaça depois de levar dano de dentro dela.
+- 3.3 Comportamento de objetivo da C4.
+
+**Fica para depois**
+- 1.2 Molotov, 1.4 Drop e coleta de armas, 2.2 Rostos expressivos, 3.4 Rádio e pings.
+- 4.1 Mirage Block, 4.2 Aim Botz, 4.3 Customizador avançado de mira, 5. Multiplayer P2P.
