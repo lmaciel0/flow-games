@@ -35,6 +35,32 @@ export const BOMBA = {
   raioExplosao: 14, // todo mundo a menos disto morre
 };
 
+// Economia (só na partida): preços, recompensas e colete. Valores em dólares.
+export const ECONOMIA = {
+  inicial: 800, maximo: 16000, vitoria: 3250,
+  derrota: [1400, 1900, 2400, 2900, 3400], // bônus de quem perde: sobe a cada derrota seguida
+  recompensaKill: { rifle: 300, pistola: 300, sniper: 100, escopeta: 900, faca: 900, smg: 600 },
+  freezeCompra: 12, // s de freeze com o menu de compra
+};
+
+// id → { nome, preco, grupo }. `kit` só vale para CT; as granadas têm limite por tipo.
+export const ITENS = {
+  rifle: { nome: 'Rifle', preco: 2700, grupo: 'arma' },
+  smg: { nome: 'SMG', preco: 1250, grupo: 'arma' },
+  sniper: { nome: 'Sniper', preco: 4750, grupo: 'arma' },
+  escopeta: { nome: 'Escopeta', preco: 1200, grupo: 'arma' },
+  colete: { nome: 'Colete', preco: 650, grupo: 'equip' },
+  coleteCapacete: { nome: 'Colete + capacete', preco: 1000, grupo: 'equip' },
+  kit: { nome: 'Kit de desarme', preco: 400, grupo: 'equip' },
+  smoke: { nome: 'Smoke', preco: 300, grupo: 'granada' },
+  flash: { nome: 'Flash', preco: 200, grupo: 'granada' },
+  he: { nome: 'Granada HE', preco: 300, grupo: 'granada' },
+};
+export const MAX_GRANADAS = { smoke: 1, flash: 2, he: 1 };
+
+// Colete: o corpo leva `corpo` do dano; o capacete protege a cabeça (`cabeca`). O resto do dano gasta o colete.
+export const COLETE = { pontos: 100, corpo: 0.55, cabeca: 0.6 };
+
 // Multiplicador de dano por parte do corpo atingida.
 export const MULT_PARTE = { cabeca: 4, tronco: 1, pernas: 0.75 };
 

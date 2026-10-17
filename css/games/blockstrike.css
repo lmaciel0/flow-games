@@ -187,6 +187,7 @@
 }
 .bs-dano.anim i { animation: bs-dano-some 0.6s ease-out forwards; }
 @keyframes bs-dano-some { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bs-ganho-sobe { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-1.2rem); } }
 @keyframes bs-pisca { 50% { opacity: 0.45; } }
 @keyframes bs-anuncio-entra { from { opacity: 0; transform: translate(-50%, -0.4rem); } }
 @keyframes bs-clarao { 0% { opacity: var(--forca, 1); } 30% { opacity: calc(var(--forca, 1) * 0.8); } 100% { opacity: 0; } }
@@ -266,6 +267,9 @@
   .bs-linha .action-btn { padding: 0.5rem 1rem; font-size: 0.85rem; }
   .bs-loadout { bottom: 3rem; padding: 0.4rem 0.6rem; }
   .bs-loadout small { display: none; }
+  .bs-compra { top: 2.8rem; transform: translateX(-50%); }
+  .bs-compra-col { min-width: 8rem; }
+  .bs-compra .bs-compra-col small { display: block; }
   .bs-menu .bs-menu-titulo, .bs-menu .bs-menu-texto { display: none; }
   .bs-menu .bs-linha { flex-wrap: nowrap; gap: 0.5rem; align-items: flex-end; }
   #bs-sensibilidade { width: 5.5rem; }
@@ -340,6 +344,36 @@
   font-size: 0.72rem; color: var(--text-secondary); padding: 0.15rem 0.6rem; background: rgba(5, 6, 10, 0.5);
   border-radius: var(--radius-sm);
 }
+
+/* Dinheiro e menu de compra */
+.bs-dinheiro {
+  position: absolute; left: 0.75rem; bottom: 4.4rem; font-weight: 800; font-size: 0.95rem; color: #86efac;
+  padding: 0.1rem 0.6rem; background: rgba(5, 6, 10, 0.55); border-radius: var(--radius-sm);
+  font-family: 'JetBrains Mono', monospace;
+}
+.bs-ganho {
+  position: absolute; left: 0.75rem; bottom: 6.3rem; font-weight: 800; font-size: 0.85rem; color: #4ade80;
+  text-shadow: 0 1px 3px #000; animation: bs-ganho-sobe 1.8s ease-out forwards;
+}
+.bs-compra { top: 50%; bottom: auto; transform: translate(-50%, -50%); gap: 0.6rem; }
+.bs-compra-colunas { display: flex; gap: 0.8rem; flex-wrap: wrap; justify-content: center; }
+.bs-compra-col { display: flex; flex-direction: column; gap: 0.3rem; min-width: 10.5rem; }
+.bs-compra-col small { letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.65rem; }
+.bs-compra-item {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.6rem; cursor: pointer;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-sm); color: var(--text-primary); font: inherit; font-size: 0.82rem;
+}
+.bs-compra-item:hover { border-color: rgba(249, 115, 22, 0.7); background: rgba(249, 115, 22, 0.14); }
+.bs-compra-item kbd { padding: 0 0.35rem; border-radius: 4px; background: rgba(255, 255, 255, 0.12); font-size: 0.7rem; }
+.bs-compra-item span { flex: 1; text-align: left; }
+.bs-compra-item em { font-style: normal; font-family: 'JetBrains Mono', monospace; color: #86efac; }
+.bs-compra-item.sem-dinheiro { opacity: 0.45; }
+.bs-compra-item.sem-dinheiro em { color: #fca5a5; }
+.bs-compra-item.tem { border-color: rgba(74, 222, 128, 0.6); }
+.bs-compra-item.tem em { color: #4ade80; }
+.bs-compra-item.indisponivel { opacity: 0.3; cursor: not-allowed; }
+.bs-treino .bs-dinheiro, .bs-treino .bs-ganho { display: none; }
 
 /* C4: relógio vermelho, aviso do bombsite, barra de plantar/desarmar, dica de tecla e anúncio central */
 .bs-timer.bomba { color: #f87171; animation: bs-pisca 1s steps(2, jump-none) infinite; }

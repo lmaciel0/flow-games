@@ -201,6 +201,15 @@ export function criarSons(audio) {
       chiado(v, v.t0, { tipo: 'lowpass', freq: 600, freqFim: 100, dur: 0.5, ganho: 0.3 });
     },
 
+    // Compra aceita: caixa registradora curtinha.
+    compra() {
+      const v = voz({ ganho: 0.5 });
+      if (!v) return;
+      clique(v, v.t0, 2800, 0.25);
+      tom(v, v.t0 + 0.05, { onda: 'triangle', freq: 1760, dur: 0.12, ganho: 0.2 });
+      tom(v, v.t0 + 0.1, { onda: 'triangle', freq: 2349, dur: 0.18, ganho: 0.18 });
+    },
+
     // Bipe da C4 plantada; nos últimos 5 s fica mais agudo.
     bipC4(distancia = 0, pan = 0, restante = 40) {
       const v = voz({ distancia, pan, ganho: 0.6 });

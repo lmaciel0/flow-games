@@ -13,13 +13,16 @@ export function terroristasDe(round) {
   return round <= ROUND.trocaLados ? 'laranja' : 'azul';
 }
 
-export function criarPartida() {
+// `freeze`: duração (s) da contagem antes de cada round; a partida com economia usa uma maior para dar tempo de comprar.
+export function criarPartida({ freeze = ROUND.freeze } = {}) {
   return {
+    freeze,
+    derrotasSeguidas: { azul: 0, laranja: 0 },
     placar: { azul: 0, laranja: 0 },
     terroristas: terroristasDe(1),
     round: 1,
     fase: 'freeze',
-    tempo: ROUND.freeze,
+    tempo: freeze,
     vencedorRound: undefined,
     motivo: null,
     resultado: null,
@@ -102,7 +105,7 @@ export function tickPartida(p, dt, vivos, bomba) {
     p.round += 1;
     p.terroristas = terroristasDe(p.round);
     p.fase = 'freeze';
-    p.tempo = ROUND.freeze;
+    p.tempo = p.freeze ?? ROUND.freeze;
     return p.round === ROUND.trocaLados + 1 ? ['novo-round', 'troca-lados'] : ['novo-round'];
   }
   return [];

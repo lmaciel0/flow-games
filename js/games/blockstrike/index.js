@@ -10,7 +10,7 @@ import { criarMundo, posicionarParaRound, passo, vivosPorTime } from './mundo.js
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
-import { ARMAS, DIFICULDADE } from './config.js';
+import { ARMAS, DIFICULDADE, ECONOMIA } from './config.js';
 import { olho, direcao, temVisada } from './fisica.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
@@ -18,6 +18,9 @@ import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
 import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
 import { criarBomba, acaoPossivel } from './bomba.js';
+import {
+  iniciarEconomia, resetarEconomia, premiarRound, botComprar, comprar, estadoCompra,
+} from './economia.js';
 
 const DT_MAX = 0.05;
 const AVISTAR_A_CADA = 0.25; // s entre recálculos dos inimigos avistados (radar)
@@ -27,6 +30,13 @@ const TAMANHOS = ['normal', 'grande'];
 const COR_MIRA = /^#[0-9a-f]{6}$/i;
 
 const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+// Compras dos bots no começo do freeze (arma preferida, colete, kit, granadas conforme o dinheiro).
+function comprasDosBots(mundo, regras) {
+  for (const e of mundo.entidades) {
+    if (e.bot) botComprar(e, e.time === regras.terroristas ? 'T' : 'CT');
+  }
+}
 
 // Cérebros novos a cada round: rotas e alvos antigos não valem depois do reposicionamento.
 function recriarCerebros(mundo, grafo, rng) {
@@ -49,7 +59,7 @@ const HTML = `
           <span class="badge-text">FPS 5X5 · SÓ NO COMPUTADOR</span>
         </div>
         <h1 class="app-title">Block <span class="gradient-text-bs">Strike</span></h1>
-        <p class="app-subtitle">Mata-mata 5x5 contra bots ou treino livre. Primeiro a 13 vence.</p>
+        <p class="app-subtitle">Desarme 5x5 contra bots com economia e C4, ou treino livre. Primeiro a 13 vence.</p>
       </header>
 
       <div class="bs-stage glass-card">
@@ -171,6 +181,7 @@ function montar(raiz, ctx) {
       eu.primariaEscolhida = tipo;
       // Só no freeze troca a arma em mãos; nos outros momentos vale a partir do próximo round.
       // No treino troca na hora (e já vem na mão) e fecha o painel.
+      if (partida.mundo.economia) return; // com economia a arma vem da compra
       if (partida.partida.fase === 'freeze') eu.armas.primaria = criarArma(tipo);
       else if (partida.treino && eu.vivo) {
         eu.armas.primaria = criarArma(tipo);
@@ -179,6 +190,19 @@ function montar(raiz, ctx) {
         partida.loadoutAberto = false;
         sons.saque(tipo);
       }
+    },
+    comprar(item) {
+      if (!partida || !partida.mundo.economia || partida.partida.fase !== 'freeze') return false;
+      const eu = partida.mundo.entidades[partida.mundo.jogadorId];
+      if (!eu.vivo) return false;
+      const r = comprar(eu, item, eu.time === partida.partida.terroristas ? 'T' : 'CT');
+      if (!r.ok) {
+        sons.vazio();
+        return false;
+      }
+      sons.compra();
+      if (ARMAS[item]) sons.saque(item);
+      return true;
     },
     mudarModo(m) {
       cfg.modo = m;
@@ -251,7 +275,10 @@ function montar(raiz, ctx) {
           hud.dano(anguloDe(eu, mundo.entidades[ev.atirador]));
         }
       } else if (ev.tipo === 'morte') {
-        if (ev.assassino === eu.id) sons.abate(ev.cabeca);
+        if (ev.assassino === eu.id) {
+          sons.abate(ev.cabeca);
+          if (!p.treino) hud.ganhou(ECONOMIA.recompensaKill[ev.arma] ?? 300, 'Abate');
+        }
         if (ev.vitima === eu.id) sons.morte();
         else sons.oof(distDe(ev.vitima), panDe(ev.vitima));
         render.desmanchar(mundo.entidades[ev.vitima]);
@@ -332,6 +359,7 @@ function montar(raiz, ctx) {
 
   // Troca de round: reposiciona todos, recria os cérebros, limpa as marcas e volta a vista ao jogador.
   function novoRound(p) {
+    if (!p.treino) comprasDosBots(p.mundo, p.partida);
     posicionarParaRound(p.mundo, ladoAzul(p.partida.round));
     p.mundo.bomba = p.treino ? null : criarBomba(p.mundo, p.partida.terroristas);
     p.proxBip = 0;
@@ -361,11 +389,17 @@ function montar(raiz, ctx) {
 
   function aplicarEventosPartida(p, eventos) {
     const { partida, mundo } = p;
+    const eu = mundo.entidades[mundo.jogadorId];
+    // Intervalo: dinheiro e equipamento voltam ao começo antes de os bots comprarem no novo round.
+    if (eventos.includes('troca-lados')) resetarEconomia(mundo, partida);
     for (const ev of eventos) {
       if (ev === 'novo-round') novoRound(p);
       else if (ev === 'inicio-round') sons.inicioRound();
-      else if (ev === 'fim-round' && partida.vencedorRound) {
-        sons.fimRound(partida.vencedorRound === mundo.entidades[mundo.jogadorId].time);
+      else if (ev === 'fim-round') {
+        const antes = eu.dinheiro;
+        premiarRound(mundo, partida, partida.vencedorRound ?? null);
+        hud.ganhou(eu.dinheiro - antes, 'Fim de round');
+        if (partida.vencedorRound) sons.fimRound(partida.vencedorRound === eu.time);
       } else if (ev === 'fim-partida') finalizarPartida(p);
     }
     if (raiz.dataset.fase !== partida.fase) raiz.dataset.fase = partida.fase;
@@ -402,6 +436,10 @@ function montar(raiz, ctx) {
       ? 1 - (arma.recarregandoAte - mundo.tempo) / def.recarga : 0;
     return {
       bomba: estadoBomba(p, eu), papel: eu.time === regras.terroristas ? 'T' : 'CT',
+      compra: eu.vivo && p.mundo.economia && regras.fase === 'freeze'
+        ? estadoCompra(eu, eu.time === regras.terroristas ? 'T' : 'CT') : null,
+      dinheiro: p.mundo.economia ? eu.dinheiro : null,
+      equip: p.mundo.economia ? { colete: eu.equip.colete, capacete: eu.equip.capacete, kit: eu.equip.kit } : null,
       fase: regras.fase, round: regras.round, tempo: regras.tempo, placar: regras.placar,
       hp: alvo.hp, vivo: eu.vivo, arma: arma && { ...arma, pente: def.pente }, spread, progressoRecarga,
       luneta: eu.vivo && Boolean(cmd.zoom && def?.zoomFov),
@@ -572,7 +610,7 @@ function montar(raiz, ctx) {
       const eu = partida.mundo.entidades[partida.mundo.jogadorId];
       if (code === 'KeyF' && eu.vivo && partida.partida.fase !== 'fim-partida') partida.render.inspecionar();
       let usada = false;
-      if (partida.partida.fase === 'freeze') usada = hud.teclaLoadout(code);
+      if (partida.partida.fase === 'freeze') usada = partida.mundo.economia ? hud.teclaCompra(code) : hud.teclaLoadout(code);
       else if (partida.treino) {
         if (code === 'KeyB') partida.loadoutAberto = !partida.loadoutAberto;
         else if (partida.loadoutAberto) usada = hud.teclaLoadout(code);
@@ -595,6 +633,11 @@ function montar(raiz, ctx) {
         mapa: MAPA, primariaJogador: cfg.primaria, dificuldade: cfg.dificuldade, rng: criarRng(Date.now()),
         modo: cfg.modo,
       });
+      const regrasIniciais = treino ? criarTreino() : criarPartida({ freeze: ECONOMIA.freezeCompra });
+      if (!treino) {
+        iniciarEconomia(mundo);
+        comprasDosBots(mundo, regrasIniciais);
+      }
       posicionarParaRound(mundo, 'A');
       if (!treino) mundo.bomba = criarBomba(mundo, 'laranja');
       const grafo = criarGrafo(MAPA.waypoints, MAPA.arestas);
@@ -602,7 +645,7 @@ function montar(raiz, ctx) {
       recriarCerebros(mundo, grafo, rngBots);
       const render = criarRender(canvas, MAPA);
       partida = {
-        mundo, render, entrada, grafo, rngBots, partida: treino ? criarTreino() : criarPartida(), treino,
+        mundo, render, entrada, grafo, rngBots, partida: regrasIniciais, treino,
         loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
         idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock, pausado: false,
         desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),

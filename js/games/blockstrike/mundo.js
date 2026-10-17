@@ -10,6 +10,7 @@ import {
 } from './armas.js';
 import { escolherPrimaria } from './bots.js';
 import { acaoPossivel, tickBomba } from './bomba.js';
+import { armasDoEquip, danoComColete, perderEquip, premiarKill } from './economia.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 1.8;
@@ -68,15 +69,23 @@ export function posicionarParaRound(mundo, ladoAzul) {
     e.noChao = false;
     e.hp = JOGADOR.hp;
     e.vivo = true;
-    e.slot = 'primaria';
-    e.slotAnterior = 'pistola';
     e.passoAcc = 0;
     e.velHoriz = 0;
-    e.armas = {
-      primaria: criarArma(e.primariaEscolhida),
-      pistola: criarArma('pistola'),
-      faca: criarArma('faca'),
-    };
+    if (mundo.economia) {
+      // Com economia vale o que foi comprado (e sobreviveu): sem primária, começa com a pistola na mão.
+      e.armas = armasDoEquip(e);
+      e.slot = e.armas.primaria ? 'primaria' : 'pistola';
+      e.slotAnterior = e.armas.primaria ? 'pistola' : 'faca';
+      e.kit = e.equip.kit;
+    } else {
+      e.slot = 'primaria';
+      e.slotAnterior = 'pistola';
+      e.armas = {
+        primaria: criarArma(e.primariaEscolhida),
+        pistola: criarArma('pistola'),
+        faca: criarArma('faca'),
+      };
+    }
   });
 }
 
@@ -158,11 +167,16 @@ function alvoColado(o, entidades, ignorarId) {
 }
 
 // `danoFixo`: a faca tira o mesmo em qualquer parte do corpo (só as costas mudam o valor).
-function aplicarDano(atirador, tipo, golpe, eventos, danoFixo) {
+function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   const alvo = golpe.ent;
   if (alvo.time === atirador.time) return; // fogo amigo desligado (mas o corpo bloqueia o tiro)
   if (alvo.hp <= 0) return; // morte já registrada neste passo, só falta o `vivo` cair
-  const dano = danoFixo ?? danoDe(tipo, golpe.parte);
+  let dano = danoFixo ?? danoDe(tipo, golpe.parte);
+  if (mundo.economia) {
+    const r = danoComColete(alvo.equip, golpe.parte, dano);
+    dano = r.dano;
+    alvo.equip.colete = r.colete;
+  }
   alvo.hp = Math.max(0, alvo.hp - dano);
   eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto });
   if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
@@ -170,6 +184,7 @@ function aplicarDano(atirador, tipo, golpe, eventos, danoFixo) {
   // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.
   atirador.kills += 1;
   alvo.mortes += 1;
+  if (mundo.economia) premiarKill(atirador, tipo);
   const cabeca = golpe.parte === 'cabeca';
   if (cabeca) atirador.killsCabeca += 1;
   eventos.push({ tipo: 'morte', vitima: alvo.id, assassino: atirador.id, arma: tipo, cabeca });
@@ -183,7 +198,7 @@ function atirarRaio(mundo, e, tipo, desvio, eventos) {
   const golpe = raycastEntidades(o, dir, mundo.entidades, ALCANCE_TIRO, e.id);
   let ate;
   if (golpe && (!parede || golpe.dist <= parede.dist)) {
-    aplicarDano(e, tipo, golpe, eventos);
+    aplicarDano(mundo, e, tipo, golpe, eventos);
     ate = golpe.ponto;
   } else if (parede) {
     eventos.push({ tipo: 'impacto', ponto: parede.ponto, normal: parede.normal });
@@ -216,7 +231,7 @@ function golpearFaca(mundo, e, cmd, arma, eventos) {
   const noCorpo = alvo && (!parede || alvo.dist <= parede.dist);
   const costas = Boolean(noCorpo && pelasCostas(e, alvo.ent));
   eventos.push({ tipo: 'golpe', atirador: e.id, forte, acerto: noCorpo ? 'corpo' : parede ? 'parede' : null, costas });
-  if (noCorpo) aplicarDano(e, 'faca', alvo, eventos, costas ? g.costas : g.dano);
+  if (noCorpo) aplicarDano(mundo, e, 'faca', alvo, eventos, costas ? g.costas : g.dano);
 }
 
 const ORDEM_SLOTS = ['primaria', 'pistola', 'faca'];
@@ -225,8 +240,9 @@ const ORDEM_SLOTS = ['primaria', 'pistola', 'faca'];
 function slotPedido(e, slot) {
   if (slot === 'anterior') return e.slotAnterior;
   if (slot === 'roda+' || slot === 'roda-') {
-    const i = ORDEM_SLOTS.indexOf(e.slot);
-    return ORDEM_SLOTS[(i + (slot === 'roda+' ? 1 : ORDEM_SLOTS.length - 1)) % ORDEM_SLOTS.length];
+    const ordem = ORDEM_SLOTS.filter((s) => e.armas[s]); // sem primária comprada, a roda pula esse slot
+    const i = ordem.indexOf(e.slot);
+    return ordem[(i + (slot === 'roda+' ? 1 : ordem.length - 1)) % ordem.length];
   }
   return slot;
 }
@@ -283,7 +299,11 @@ export function passo(mundo, dt, comandos, { congelado = false, comBomba = true 
   }
   if (comBomba && !congelado) tickBomba(mundo, dt, agindo, eventos);
   // Trocas no mesmo passo valem para os dois lados: as mortes só têm efeito depois de todos agirem.
-  for (const e of mundo.entidades) if (e.vivo && e.hp <= 0) e.vivo = false;
+  for (const e of mundo.entidades) {
+    if (!e.vivo || e.hp > 0) continue;
+    e.vivo = false;
+    if (mundo.economia) perderEquip(e); // morrer perde primária, colete, kit e granadas
+  }
   mundo.tempo += dt;
   registrarRuidos(mundo, eventos);
   return eventos;

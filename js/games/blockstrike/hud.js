@@ -3,12 +3,12 @@
  * Só toca no DOM dentro de `raiz`; `atualizar` escreve apenas quando o valor muda.
  */
 
-import { ARMAS } from './config.js';
+import { ARMAS, ITENS } from './config.js';
 
 const PRIMARIAS = ['rifle', 'smg', 'sniper', 'escopeta'];
 const DIFICULDADES = [['facil', 'Fácil'], ['medio', 'Médio'], ['dificil', 'Difícil']];
 const MODOS = [
-  ['partida', 'Partida 5x5', 'Contra bots · primeiro a 13 rounds'],
+  ['partida', 'Partida 5x5', 'Desarme com economia · primeiro a 13'],
   ['treino', 'Treino livre', 'Sozinho no mapa · munição infinita'],
 ];
 const TAMANHOS = [['normal', 'Normal'], ['grande', 'Grande']];
@@ -33,6 +33,11 @@ const DICAS_C4 = {
   plantar: 'Segure E para plantar a C4', desarmar: 'Segure E para desarmar a C4',
 };
 const VIDA_ANUNCIO_MS = 3000;
+const VIDA_GANHO_MS = 1800;
+const GRUPOS_COMPRA = [['arma', 'Armas'], ['equip', 'Equipamento'], ['granada', 'Granadas']];
+const TECLAS_COMPRA = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'];
+const ROTULO_MOTIVO = { dinheiro: 'sem $', 'ja-tem': 'tem', papel: 'só CT' };
+const dolar = (n) => `$${n}`;
 
 const el = (tag, props = {}, ...filhos) => {
   const e = document.createElement(tag);
@@ -184,7 +189,7 @@ export function criarHud(raiz, handlers) {
     el('h2', { class: 'bs-menu-titulo', texto: 'Block Strike' }),
     menuTexto,
     gradeModos,
-    el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária' }), gradeMenu),
+    el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária (treino)' }), gradeMenu),
     el('div', { class: 'bs-linha' },
       campoDif,
       el('label', { class: 'bs-campo' },
@@ -421,6 +426,59 @@ export function criarHud(raiz, handlers) {
   palco.append(loadout);
   marcarSelecionada(gradeLoadout, estado.primaria);
   // Digit1–Digit4 no freeze: o index chama isto a partir de entrada.aoTecla.
+  // --- Menu de compra (partida com economia): teclas 1-9 e 0 compram na ordem dos itens ---
+  const ordemItens = Object.keys(ITENS);
+  const botoesCompra = new Map();
+  const compraTitulo = el('strong', { texto: 'Compra' });
+  const compraColunas = el('div', { class: 'bs-compra-colunas' });
+  for (const [grupo, rotulo] of GRUPOS_COMPRA) {
+    const col = el('div', { class: 'bs-compra-col' }, el('small', { texto: rotulo }));
+    for (const id of ordemItens.filter((i) => ITENS[i].grupo === grupo)) {
+      const b = el('button', { type: 'button', class: 'bs-compra-item', 'data-item': id },
+        el('kbd', { texto: String((ordemItens.indexOf(id) + 1) % 10) }),
+        el('span', { texto: ITENS[id].nome }), el('em', { texto: dolar(ITENS[id].preco) }));
+      b.addEventListener('click', () => handlers.comprar(id));
+      botoesCompra.set(id, b);
+      col.append(b);
+    }
+    compraColunas.append(col);
+  }
+  const compra = el('div', { class: 'bs-loadout bs-compra', id: 'bs-compra', hidden: true },
+    compraTitulo, compraColunas,
+    el('small', { class: 'bs-loadout-dica', texto: 'Compre com as teclas ou clicando. O que sobreviver continua com você.' }));
+  palco.append(compra);
+  let chaveCompra = '';
+  const renderCompra = (v) => {
+    escrever(compraTitulo, `Compra · ${dolar(v.dinheiro)} · fecha em ${Math.max(0, Math.ceil(v.tempo))}s`);
+    const chave = v.compra.map((i) => `${i.id}:${i.motivo ?? ''}`).join('|');
+    if (chave === chaveCompra) return;
+    chaveCompra = chave;
+    for (const i of v.compra) {
+      const b = botoesCompra.get(i.id);
+      b.classList.toggle('sem-dinheiro', i.motivo === 'dinheiro');
+      b.classList.toggle('tem', i.motivo === 'ja-tem');
+      b.classList.toggle('indisponivel', i.motivo === 'papel');
+      b.title = i.motivo ? ROTULO_MOTIVO[i.motivo] ?? '' : '';
+    }
+  };
+  hud.teclaCompra = (code) => {
+    const i = TECLAS_COMPRA.indexOf(code);
+    if (i < 0 || compra.hidden) return false;
+    handlers.comprar(ordemItens[i]);
+    return true;
+  };
+  // Dinheiro e equipamento na base da tela; "+$" sobe quando entra dinheiro.
+  const dinheiroEl = el('div', { class: 'bs-dinheiro', id: 'bs-dinheiro', hidden: true });
+  const ganhoEl = el('div', { class: 'bs-ganho', id: 'bs-ganho', hidden: true });
+  let timerGanho = null;
+  hud.ganhou = (valor, motivo = '') => {
+    if (!valor || valor <= 0) return;
+    escrever(ganhoEl, `+${dolar(valor)}${motivo ? ` · ${motivo}` : ''}`);
+    mostrar(ganhoEl, true);
+    if (timerGanho) { clearTimeout(timerGanho); timers.delete(timerGanho); }
+    timerGanho = depois(() => mostrar(ganhoEl, false), VIDA_GANHO_MS);
+  };
+  hudEl.append(dinheiroEl, ganhoEl);
   hud.loadoutAberto = () => !loadout.hidden;
   hud.textoLoadout = (texto) => escrever(loadout.querySelector('.bs-loadout-dica'), texto);
   hud.teclaLoadout = (code) => {
@@ -576,7 +634,15 @@ export function criarHud(raiz, handlers) {
     mostrar(mira, v.vivo);
     mostrar(espectando, !v.vivo && Boolean(v.espectando));
     if (v.espectando) escrever(espectando, `Assistindo: ${v.espectando}`);
-    mostrar(loadout, (v.fase === 'freeze' || v.loadout) && v.vivo);
+    mostrar(loadout, !v.compra && (v.fase === 'freeze' || v.loadout) && v.vivo);
+    mostrar(compra, Boolean(v.compra));
+    if (v.compra) renderCompra(v);
+    mostrar(dinheiroEl, v.dinheiro !== null && v.dinheiro !== undefined);
+    if (v.dinheiro !== null && v.dinheiro !== undefined) {
+      const eq = v.equip;
+      escrever(dinheiroEl, [dolar(v.dinheiro), eq.colete > 0 ? `${eq.capacete ? 'colete+capacete' : 'colete'} ${eq.colete}` : '', eq.kit ? 'kit' : '']
+        .filter(Boolean).join(' · '));
+    }
     // vencedorRound/motivo persistem no freeze seguinte: só valem em fim-round.
     const emFimRound = v.fase === 'fim-round';
     mostrar(fimRound, emFimRound);
@@ -595,7 +661,7 @@ export function criarHud(raiz, handlers) {
   hud.destruir = () => {
     for (const t of timers) clearTimeout(t);
     timers.clear();
-    for (const e of [menu, hudEl, loadout, tabela, pausa, fim]) e.remove();
+    for (const e of [menu, hudEl, loadout, compra, tabela, pausa, fim]) e.remove();
   };
   // FIM-SECOES
   return hud;
