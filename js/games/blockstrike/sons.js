@@ -1,51 +1,283 @@
 /**
- * Block Strike — efeitos sonoros sintetizados.
- * `audio` é injetado (playTone do core); este módulo não toca em window/document.
+ * Block Strike — efeitos sonoros sintetizados em Web Audio (ruído filtrado, osciladores e pan).
+ * `audio.contexto()` (core) entrega o AudioContext, ou null com o som desligado; este módulo
+ * não toca em window/document. Tudo é agendado no relógio do áudio, sem setTimeout.
  */
 
-const DIST_AUDIVEL = 60; // metros até o som sumir
+const DIST_AUDIVEL = 70; // metros até o som sumir
+const REF_DIST = 10; // até aqui o volume cai pouco
+const CORTE_PERTO = 16000; // Hz do passa-baixa para sons perto; longe fica abafado
+const CORTE_LONGE = 900;
 
-// freq (Hz), forma de onda, duração (s) e volume por arma.
+// Tiro em três camadas: estalo (ruído agudo), corpo (ruído grave) e soco (seno que despenca).
+// estalo/corpo: [freq Hz, duração s, ganho]; soco: [freq inicial, freq final, duração, ganho].
 const TIROS = {
-  rifle: [140, 'sawtooth', 0.09, 0.2],
-  smg: [200, 'square', 0.06, 0.14],
-  sniper: [90, 'sawtooth', 0.35, 0.28],
-  escopeta: [70, 'sawtooth', 0.22, 0.3],
-  pistola: [260, 'square', 0.08, 0.18],
-  faca: [520, 'triangle', 0.07, 0.1],
+  rifle: { estalo: [2600, 0.07, 0.55], corpo: [900, 0.24, 0.6], soco: [150, 45, 0.12, 0.7] },
+  smg: { estalo: [3300, 0.05, 0.42], corpo: [1300, 0.15, 0.45], soco: [180, 60, 0.08, 0.5] },
+  sniper: { estalo: [2000, 0.12, 0.75], corpo: [600, 0.65, 0.85], soco: [110, 32, 0.26, 0.95] },
+  escopeta: { estalo: [1800, 0.1, 0.6], corpo: [520, 0.45, 0.9], soco: [100, 32, 0.22, 1] },
+  pistola: { estalo: [3000, 0.05, 0.45], corpo: [1500, 0.12, 0.4], soco: [210, 70, 0.08, 0.45] },
 };
 
+// Atenuação por distância: quase cheio até REF_DIST e zero em DIST_AUDIVEL.
+export function ganhoDistancia(d) {
+  if (d >= DIST_AUDIVEL) return 0;
+  const queda = REF_DIST / (REF_DIST + Math.max(0, d - REF_DIST) * 0.6);
+  return queda * (1 - d / DIST_AUDIVEL);
+}
+
 export function criarSons(audio) {
-  const vol = (base, distancia = 0) => base * Math.max(0, 1 - distancia / DIST_AUDIVEL);
-  const tom = (freq, tipo, dur, ganho, distancia) => {
-    const g = vol(ganho, distancia);
-    if (g > 0.001) audio.playTone(freq, tipo, dur, g);
-  };
-  const depois = (ms, fn) => setTimeout(fn, ms);
+  let ctx = null;
+  let mestre = null;
+  let ruido = null;
+  let volume = 0.8;
+
+  // Liga a cadeia na primeira vez (ou quando o core recria o contexto): mestre → compressor → saída.
+  function pronto() {
+    const c = audio.contexto?.() ?? null;
+    if (!c) return null;
+    if (c !== ctx) {
+      ctx = c;
+      const comp = c.createDynamicsCompressor();
+      comp.threshold.value = -14;
+      comp.ratio.value = 6;
+      mestre = c.createGain();
+      mestre.gain.value = volume;
+      mestre.connect(comp);
+      comp.connect(c.destination);
+      const n = Math.floor(c.sampleRate * 2);
+      ruido = c.createBuffer(1, n, c.sampleRate);
+      const dados = ruido.getChannelData(0);
+      for (let i = 0; i < n; i++) dados[i] = Math.random() * 2 - 1;
+    }
+    return ctx;
+  }
+
+  // Entrada de uma voz: ganho → passa-baixa (distância) → pan → mestre. null se inaudível.
+  function voz({ distancia = 0, pan = 0, ganho = 1 } = {}) {
+    const c = pronto();
+    if (!c) return null;
+    const g = ganho * ganhoDistancia(distancia);
+    if (g < 0.002) return null;
+    const entrada = c.createGain();
+    entrada.gain.value = g;
+    const filtro = c.createBiquadFilter();
+    filtro.type = 'lowpass';
+    const t = Math.min(1, distancia / 45);
+    filtro.frequency.value = CORTE_PERTO * (1 - t) + CORTE_LONGE * t;
+    entrada.connect(filtro);
+    let ultimo = filtro;
+    if (pan !== 0 && c.createStereoPanner) {
+      const p = c.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, pan));
+      ultimo.connect(p);
+      ultimo = p;
+    }
+    ultimo.connect(mestre);
+    return { c, entrada, t0: c.currentTime };
+  }
+
+  function envelope(param, t, ataque, dur, pico) {
+    param.setValueAtTime(0.0001, t);
+    param.linearRampToValueAtTime(pico, t + ataque);
+    param.exponentialRampToValueAtTime(0.0001, t + dur);
+  }
+
+  // Rajada de ruído filtrado. tipo: lowpass | highpass | bandpass; freqFim varre o filtro.
+  function chiado(v, t, { tipo = 'bandpass', freq, freqFim, q = 1, dur, ganho, ataque = 0.002 }) {
+    const { c, entrada } = v;
+    const fonte = c.createBufferSource();
+    fonte.buffer = ruido;
+    const f = c.createBiquadFilter();
+    f.type = tipo;
+    f.Q.value = q;
+    f.frequency.setValueAtTime(freq, t);
+    if (freqFim) f.frequency.exponentialRampToValueAtTime(freqFim, t + dur);
+    const g = c.createGain();
+    envelope(g.gain, t, ataque, dur, ganho);
+    fonte.connect(f);
+    f.connect(g);
+    g.connect(entrada);
+    fonte.start(t, Math.random() * 0.5);
+    fonte.stop(t + dur + 0.02);
+  }
+
+  function tom(v, t, { onda = 'sine', freq, freqFim, dur, ganho, ataque = 0.002 }) {
+    const { c, entrada } = v;
+    const o = c.createOscillator();
+    o.type = onda;
+    o.frequency.setValueAtTime(freq, t);
+    if (freqFim) o.frequency.exponentialRampToValueAtTime(freqFim, t + dur);
+    const g = c.createGain();
+    envelope(g.gain, t, ataque, dur, ganho);
+    o.connect(g);
+    g.connect(entrada);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  // Clique mecânico (peça de metal): ruído agudo curtíssimo mais um tom metálico.
+  function clique(v, t, freq = 2400, ganho = 0.35) {
+    chiado(v, t, { tipo: 'bandpass', freq, q: 6, dur: 0.03, ganho });
+    tom(v, t, { onda: 'square', freq: freq / 3, dur: 0.025, ganho: ganho * 0.25 });
+  }
+
+  const varia = (x, p = 0.06) => x * (1 + (Math.random() * 2 - 1) * p);
 
   return {
-    tiro(tipo, distancia = 0) {
-      const [f, onda, dur, g] = TIROS[tipo] ?? TIROS.rifle;
-      tom(f, onda, dur, g, distancia);
-      if (tipo === 'escopeta') tom(f * 1.6, 'square', dur * 0.5, g * 0.6, distancia);
+    definirVolume(n) {
+      volume = Math.max(0, Math.min(1, n));
+      if (mestre) mestre.gain.value = volume;
     },
-    passo(distancia = 0) {
-      tom(70, 'triangle', 0.05, 0.05, distancia);
+
+    tiro(tipo, distancia = 0, pan = 0) {
+      const d = TIROS[tipo] ?? TIROS.rifle;
+      const v = voz({ distancia, pan });
+      if (!v) return;
+      const t = v.t0;
+      chiado(v, t, { tipo: 'highpass', freq: varia(d.estalo[0]), dur: d.estalo[1], ganho: d.estalo[2] });
+      chiado(v, t, { tipo: 'lowpass', freq: varia(d.corpo[0]), freqFim: 180, dur: d.corpo[1], ganho: d.corpo[2], ataque: 0.004 });
+      tom(v, t, { freq: varia(d.soco[0]), freqFim: d.soco[1], dur: d.soco[2], ganho: d.soco[3] });
+      if (tipo === 'escopeta' || tipo === 'sniper') {
+        // Eco curto: o estampido "rola" pelo mapa.
+        chiado(v, t + 0.09, { tipo: 'lowpass', freq: 700, freqFim: 150, dur: 0.5, ganho: d.corpo[2] * 0.3, ataque: 0.03 });
+      }
     },
+
+    passo(distancia = 0, pan = 0, proprio = false) {
+      const v = voz({ distancia, pan, ganho: proprio ? 0.35 : 0.6 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'lowpass', freq: varia(650, 0.2), freqFim: 200, dur: 0.07, ganho: 0.5 });
+      chiado(v, v.t0, { tipo: 'bandpass', freq: varia(2200, 0.2), q: 2, dur: 0.025, ganho: 0.12 });
+    },
+
+    pouso(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.6 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'lowpass', freq: 500, freqFim: 120, dur: 0.12, ganho: 0.6 });
+      tom(v, v.t0, { freq: 90, freqFim: 45, dur: 0.1, ganho: 0.35 });
+    },
+
+    pulo() {
+      const v = voz({ ganho: 0.3 });
+      if (v) chiado(v, v.t0, { tipo: 'bandpass', freq: 900, freqFim: 400, q: 1.5, dur: 0.08, ganho: 0.4, ataque: 0.01 });
+    },
+
+    // Hitmarker: estalinho seco. Cabeça: o "dink" metálico do capacete.
     acerto(cabeca) {
-      if (cabeca) tom(1100, 'square', 0.1, 0.16, 0);
-      else tom(600, 'triangle', 0.06, 0.12, 0);
+      const v = voz({ ganho: 0.6 });
+      if (!v) return;
+      if (cabeca) {
+        for (const [f, g] of [[2900, 0.4], [4350, 0.22], [6100, 0.12]]) {
+          tom(v, v.t0, { onda: 'sine', freq: f, dur: 0.35, ganho: g });
+        }
+        chiado(v, v.t0, { tipo: 'highpass', freq: 5000, dur: 0.02, ganho: 0.3 });
+      } else {
+        chiado(v, v.t0, { tipo: 'bandpass', freq: 1700, q: 3, dur: 0.04, ganho: 0.5 });
+        tom(v, v.t0, { freq: 320, freqFim: 160, dur: 0.05, ganho: 0.25 });
+      }
     },
+
+    // Levou tiro: baque abafado no peito.
+    dano() {
+      const v = voz({ ganho: 0.7 });
+      if (!v) return;
+      tom(v, v.t0, { freq: 120, freqFim: 50, dur: 0.16, ganho: 0.6 });
+      chiado(v, v.t0, { tipo: 'lowpass', freq: 400, dur: 0.12, ganho: 0.4 });
+    },
+
+    // Abate confirmado (o jogador matou): dois toques curtos e brilhantes.
+    abate(cabeca) {
+      const v = voz({ ganho: 0.4 });
+      if (!v) return;
+      tom(v, v.t0 + 0.05, { onda: 'triangle', freq: cabeca ? 1320 : 990, dur: 0.12, ganho: 0.35 });
+      tom(v, v.t0 + 0.12, { onda: 'triangle', freq: cabeca ? 1760 : 1320, dur: 0.18, ganho: 0.3 });
+    },
+
     morte() {
-      tom(180, 'sawtooth', 0.25, 0.16, 0);
+      const v = voz({ ganho: 0.7 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'sawtooth', freq: 220, freqFim: 55, dur: 0.6, ganho: 0.25 });
+      chiado(v, v.t0, { tipo: 'lowpass', freq: 600, freqFim: 100, dur: 0.5, ganho: 0.3 });
     },
+
+    inicioRound() {
+      const v = voz({ ganho: 0.4 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'square', freq: 660, dur: 0.12, ganho: 0.18 });
+      tom(v, v.t0 + 0.14, { onda: 'square', freq: 880, dur: 0.22, ganho: 0.2 });
+    },
+
+    // Últimos segundos do round: bipe curto.
+    bipe() {
+      const v = voz({ ganho: 0.3 });
+      if (v) tom(v, v.t0, { onda: 'square', freq: 1500, dur: 0.06, ganho: 0.15 });
+    },
+
     fimRound(venceu) {
-      const notas = venceu ? [440, 554, 659, 880] : [400, 340, 280, 220];
-      notas.forEach((f, i) => depois(i * 110, () => tom(f, venceu ? 'triangle' : 'sawtooth', 0.22, 0.18, 0)));
+      const v = voz({ ganho: 0.5 });
+      if (!v) return;
+      const notas = venceu ? [523, 659, 784, 1047] : [440, 370, 311, 262];
+      notas.forEach((f, i) => tom(v, v.t0 + i * 0.12, {
+        onda: venceu ? 'triangle' : 'sawtooth', freq: f, dur: 0.3, ganho: venceu ? 0.35 : 0.18,
+      }));
     },
-    recarga() {
-      tom(320, 'square', 0.04, 0.1, 0);
-      depois(180, () => tom(480, 'square', 0.05, 0.1, 0));
+
+    // Recarga em três tempos ao longo de `duracao`: pente sai, pente entra, ferrolho.
+    recarga(duracao = 2.5, distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.8 });
+      if (!v) return;
+      const t = v.t0;
+      clique(v, t + duracao * 0.12, 1800, 0.3);
+      chiado(v, t + duracao * 0.15, { tipo: 'bandpass', freq: 1200, q: 1, dur: 0.12, ganho: 0.15, ataque: 0.02 });
+      chiado(v, t + duracao * 0.55, { tipo: 'lowpass', freq: 900, dur: 0.06, ganho: 0.4 });
+      clique(v, t + duracao * 0.56, 2200, 0.35);
+      clique(v, t + duracao * 0.85, 2600, 0.4);
+      clique(v, t + duracao * 0.85 + 0.07, 1900, 0.35);
+    },
+
+    // Sacar a arma: pano raspando e um clique.
+    saque(tipo) {
+      const v = voz({ ganho: 0.5 });
+      if (!v) return;
+      if (tipo === 'faca') {
+        chiado(v, v.t0, { tipo: 'highpass', freq: 3000, freqFim: 7000, dur: 0.18, ganho: 0.18, ataque: 0.05 });
+        return;
+      }
+      chiado(v, v.t0, { tipo: 'bandpass', freq: 800, q: 0.8, dur: 0.12, ganho: 0.18, ataque: 0.03 });
+      clique(v, v.t0 + 0.1, 2300, 0.3);
+    },
+
+    // Faca: zunido do golpe; acerto no corpo é um baque, na parede um tinido.
+    golpe(forte, acerto, distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.7 });
+      if (!v) return;
+      const t = v.t0;
+      chiado(v, t, {
+        tipo: 'bandpass', freq: forte ? 900 : 1400, freqFim: forte ? 3000 : 4500, q: 1.2,
+        dur: forte ? 0.22 : 0.14, ganho: 0.4, ataque: 0.04,
+      });
+      const ta = t + (forte ? 0.12 : 0.07);
+      if (acerto === 'corpo') {
+        tom(v, ta, { freq: 160, freqFim: 60, dur: 0.12, ganho: 0.6 });
+        chiado(v, ta, { tipo: 'lowpass', freq: 1200, dur: 0.1, ganho: 0.45 });
+      } else if (acerto === 'parede') {
+        tom(v, ta, { onda: 'triangle', freq: 3100, dur: 0.15, ganho: 0.25 });
+        chiado(v, ta, { tipo: 'highpass', freq: 4000, dur: 0.04, ganho: 0.3 });
+      }
+    },
+
+    // Bala batendo perto do jogador ou na parede: estalo curto.
+    ricochete(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.25 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'bandpass', freq: varia(3500, 0.2), q: 4, dur: 0.04, ganho: 0.4 });
+    },
+
+    // Gatilho com pente vazio e sem reserva.
+    vazio() {
+      const v = voz({ ganho: 0.5 });
+      if (v) clique(v, v.t0, 3000, 0.3);
     },
   };
 }

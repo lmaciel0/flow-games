@@ -5,13 +5,18 @@
 
 import { JOGADOR, NOMES_BOTS, ARMAS } from './config.js';
 import { moverComColisao, direcao, olho, hitboxes, raycastCaixas, raycastEntidades } from './fisica.js';
-import { criarArma, podeAtirar, disparar, atualizarArma, iniciarRecarga, danoDe } from './armas.js';
+import {
+  criarArma, podeAtirar, disparar, atualizarArma, iniciarRecarga, danoDe, velocidadeDe, SAQUE,
+} from './armas.js';
 import { escolherPrimaria } from './bots.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 1.8;
 const ID_JOGADOR = 0;
 const ALCANCE_TIRO = 200;
+const ALCANCE_RASTRO = 80; // tiro que não bate em nada: o rastro visual para aqui
+const QUEDA_POUSO = 4; // m/s de queda a partir dos quais o pouso faz barulho
+const COSTAS = -0.5; // cosseno: atacante atrás do alvo (faca pelas costas)
 
 function criarEntidade(id, nome, time, bot, primariaEscolhida) {
   return {
@@ -24,15 +29,16 @@ function criarEntidade(id, nome, time, bot, primariaEscolhida) {
   };
 }
 
-export function criarMundo({ mapa, primariaJogador, dificuldade, rng }) {
+// modo 'treino': só o jogador no mapa, munição de reserva infinita e sem rounds.
+export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'partida' }) {
   const entidades = [criarEntidade(ID_JOGADOR, 'Você', 'azul', false, primariaJogador)];
   // Índice entre os bots do time: o 0 (sniper) é o primeiro bot, já que o jogador fica com a dele.
-  for (let i = 1; i < 10; i++) {
+  for (let i = 1; i < (modo === 'treino' ? 1 : 10); i++) {
     const time = i < 5 ? 'azul' : 'laranja';
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo };
 }
 
 export function posicionarParaRound(mundo, ladoAzul) {
@@ -49,6 +55,7 @@ export function posicionarParaRound(mundo, ladoAzul) {
     e.hp = JOGADOR.hp;
     e.vivo = true;
     e.slot = 'primaria';
+    e.slotAnterior = 'pistola';
     e.passoAcc = 0;
     e.velHoriz = 0;
     e.armas = {
@@ -80,25 +87,31 @@ function moverEntidade(e, cmd, dt, caixas, congelado, eventos) {
   let vx = 0;
   let vz = 0;
   const correndo = !e.agachado && !cmd.devagar;
+  const tipo = e.armas?.[e.slot]?.tipo;
   if (!congelado) {
     const f = direcao(e.yaw, 0);
     const dx = f.x * cmd.frente + -f.z * cmd.lado;
     const dz = f.z * cmd.frente + f.x * cmd.lado;
     const norma = Math.hypot(dx, dz);
     if (norma > 0) {
-      const vel = e.agachado ? JOGADOR.velAgachado : cmd.devagar ? JOGADOR.velDevagar : JOGADOR.velCorrer;
+      const vel = velocidadeDe(tipo, { agachado: e.agachado, devagar: cmd.devagar, zoom: cmd.zoom });
       vx = (dx / norma) * vel;
       vz = (dz / norma) * vel;
     }
   }
 
-  if (cmd.pular && e.noChao && !congelado) e.velY = JOGADOR.pulo;
+  if (cmd.pular && e.noChao && !congelado) {
+    e.velY = JOGADOR.pulo;
+    eventos.push({ tipo: 'pulo', id: e.id });
+  }
   e.velY -= JOGADOR.gravidade * dt;
+  const queda = -e.velY;
 
   const altura = e.agachado ? JOGADOR.alturaAgachado : JOGADOR.altura;
   const antes = e.pos;
   const r = moverComColisao(e.pos, { x: vx * dt, y: e.velY * dt, z: vz * dt }, JOGADOR.raio, altura, caixas);
   e.pos = r.pos;
+  if (r.noChao && !e.noChao && queda > QUEDA_POUSO) eventos.push({ tipo: 'pouso', id: e.id });
   e.noChao = r.noChao;
   if (r.noChao && e.velY < 0) e.velY = 0;
   if (r.bateuTeto && e.velY > 0) e.velY = 0;
@@ -130,13 +143,14 @@ function alvoColado(o, entidades, ignorarId) {
   return null;
 }
 
-function aplicarDano(atirador, tipo, golpe, eventos) {
+// `danoFixo`: a faca tira o mesmo em qualquer parte do corpo (só as costas mudam o valor).
+function aplicarDano(atirador, tipo, golpe, eventos, danoFixo) {
   const alvo = golpe.ent;
   if (alvo.time === atirador.time) return; // fogo amigo desligado (mas o corpo bloqueia o tiro)
   if (alvo.hp <= 0) return; // morte já registrada neste passo, só falta o `vivo` cair
-  const dano = danoDe(tipo, golpe.parte);
+  const dano = danoFixo ?? danoDe(tipo, golpe.parte);
   alvo.hp = Math.max(0, alvo.hp - dano);
-  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano });
+  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto });
   if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
   if (alvo.hp > 0) return;
   // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.
@@ -147,31 +161,86 @@ function aplicarDano(atirador, tipo, golpe, eventos) {
   eventos.push({ tipo: 'morte', vitima: alvo.id, assassino: atirador.id, arma: tipo, cabeca });
 }
 
-// Um raio (chumbo ou golpe): para no primeiro entre caixa e entidade.
+// Um raio (bala ou chumbo): para no primeiro entre caixa e entidade.
 function atirarRaio(mundo, e, tipo, desvio, eventos) {
   const o = olho(e);
   const dir = direcao(e.yaw + desvio.dx, e.pitch + desvio.dy);
-  const alcance = ARMAS[tipo].alcance ?? ALCANCE_TIRO;
-  const parede = raycastCaixas(o, dir, mundo.mapa.caixas, alcance);
-  let golpe = raycastEntidades(o, dir, mundo.entidades, alcance, e.id);
-  if (tipo === 'faca') golpe = alvoColado(o, mundo.entidades, e.id) ?? golpe;
-  if (golpe && (!parede || golpe.dist <= parede.dist)) aplicarDano(e, tipo, golpe, eventos);
-  else if (parede) eventos.push({ tipo: 'impacto', ponto: parede.ponto, normal: parede.normal });
+  const parede = raycastCaixas(o, dir, mundo.mapa.caixas, ALCANCE_TIRO);
+  const golpe = raycastEntidades(o, dir, mundo.entidades, ALCANCE_TIRO, e.id);
+  let ate;
+  if (golpe && (!parede || golpe.dist <= parede.dist)) {
+    aplicarDano(e, tipo, golpe, eventos);
+    ate = golpe.ponto;
+  } else if (parede) {
+    eventos.push({ tipo: 'impacto', ponto: parede.ponto, normal: parede.normal });
+    ate = parede.ponto;
+  } else {
+    ate = { x: o.x + dir.x * ALCANCE_RASTRO, y: o.y + dir.y * ALCANCE_RASTRO, z: o.z + dir.z * ALCANCE_RASTRO };
+  }
+  eventos.push({ tipo: 'raio', atirador: e.id, de: o, ate });
+}
+
+// Atacante atrás do alvo: o alvo olha para o lado oposto de quem ataca.
+function pelasCostas(atacante, alvo) {
+  const f = direcao(alvo.yaw, 0);
+  const vx = atacante.pos.x - alvo.pos.x;
+  const vz = atacante.pos.z - alvo.pos.z;
+  const n = Math.hypot(vx, vz);
+  return n > 1e-6 && (vx * f.x + vz * f.z) / n < COSTAS;
+}
+
+// Faca: botão esquerdo = golpe leve, direito = estocada. Corpo a corpo, sem tiro nem rastro.
+function golpearFaca(mundo, e, cmd, arma, eventos) {
+  if (!(cmd.atirar || cmd.zoom) || mundo.tempo < arma.prontaEm) return;
+  const forte = !cmd.atirar;
+  const g = ARMAS.faca.golpes[forte ? 'forte' : 'leve'];
+  arma.prontaEm = mundo.tempo + g.intervalo;
+  const o = olho(e);
+  const dir = direcao(e.yaw, e.pitch);
+  const parede = raycastCaixas(o, dir, mundo.mapa.caixas, g.alcance);
+  const alvo = alvoColado(o, mundo.entidades, e.id) ?? raycastEntidades(o, dir, mundo.entidades, g.alcance, e.id);
+  const noCorpo = alvo && (!parede || alvo.dist <= parede.dist);
+  const costas = Boolean(noCorpo && pelasCostas(e, alvo.ent));
+  eventos.push({ tipo: 'golpe', atirador: e.id, forte, acerto: noCorpo ? 'corpo' : parede ? 'parede' : null, costas });
+  if (noCorpo) aplicarDano(e, 'faca', alvo, eventos, costas ? g.costas : g.dano);
+}
+
+const ORDEM_SLOTS = ['primaria', 'pistola', 'faca'];
+
+// `slot` do comando: um slot, 'anterior' (Q, a última arma) ou 'roda+'/'roda-' (roda do mouse).
+function slotPedido(e, slot) {
+  if (slot === 'anterior') return e.slotAnterior;
+  if (slot === 'roda+' || slot === 'roda-') {
+    const i = ORDEM_SLOTS.indexOf(e.slot);
+    return ORDEM_SLOTS[(i + (slot === 'roda+' ? 1 : ORDEM_SLOTS.length - 1)) % ORDEM_SLOTS.length];
+  }
+  return slot;
 }
 
 function combate(mundo, e, cmd, dt, eventos) {
   if (!e.armas) return;
-  if (cmd.slot && cmd.slot !== e.slot && e.armas[cmd.slot]) {
+  const pedido = slotPedido(e, cmd.slot);
+  if (pedido && pedido !== e.slot && e.armas[pedido]) {
     e.armas[e.slot].recarregandoAte = 0; // trocar de arma cancela a recarga
     e.armas[e.slot].recuoAcum = 0; // e só a arma em mãos perde o recuo: sem isso a mira pularia ao voltar
-    e.slot = cmd.slot;
+    e.slotAnterior = e.slot;
+    e.slot = pedido;
+    const nova = e.armas[e.slot];
+    nova.prontaEm = Math.max(nova.prontaEm, mundo.tempo + SAQUE[e.slot]); // sacar leva um instante
+    eventos.push({ tipo: 'saque', id: e.id, arma: nova.tipo });
   }
   const arma = e.armas[e.slot];
   const agora = mundo.tempo;
+  if (mundo.modo === 'treino') arma.reserva = ARMAS[arma.tipo].reserva; // treino: reserva nunca acaba
+  if (arma.tipo === 'faca') {
+    golpearFaca(mundo, e, cmd, arma, eventos);
+    atualizarArma(arma, agora, dt, cmd.atirar);
+    return;
+  }
   if (cmd.recarregar && iniciarRecarga(arma, agora)) eventos.push({ tipo: 'recarga', atirador: e.id });
   if (podeAtirar(arma, agora, cmd.atirar)) {
     const estado = {
-      velHoriz: e.velHoriz, velMax: JOGADOR.velCorrer, noChao: e.noChao, agachado: e.agachado, zoom: cmd.zoom,
+      velHoriz: e.velHoriz, velMax: velocidadeDe(arma.tipo), noChao: e.noChao, agachado: e.agachado, zoom: cmd.zoom,
     };
     const desvios = disparar(arma, agora, estado, mundo.rng);
     eventos.push({ tipo: 'tiro', atirador: e.id, arma: arma.tipo });

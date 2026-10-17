@@ -5,6 +5,8 @@
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { olho } from './fisica.js';
+import { ARMAS } from './config.js';
+import { SAQUE } from './armas.js';
 
 const FOV_PADRAO = 75;
 const PITCH_CAM = Math.PI / 2 - 0.01; // pitch + recuo nunca passa da vertical
@@ -12,6 +14,12 @@ const COR_CABECA = 0xf5cd30;
 const COR_TIME = { azul: 0x2f6fde, laranja: 0xf08a24 };
 const MAX_IMPACTOS = 64;
 const DURACAO_CLARAO = 0.05;
+const MAX_RASTROS = 24;
+const VIDA_RASTRO = 0.05;
+const MAX_GOTAS = 48;
+const VIDA_GOTA = 0.45;
+const POS_VIEW = { x: 0.24, y: -0.22, z: -0.4 }; // arma em repouso, no espaço da câmera
+const VEL_OLHO = 10; // 1/s: suaviza a câmera ao agachar e levantar
 
 // Armas em primeira pessoa: [largura, altura, profundidade, x, y, z, madeira?] no espaço da câmera.
 // A primeira caixa é o corpo (define a altura do clarão); `boca` é o z do cano.
@@ -113,9 +121,11 @@ export function criarRender(canvas, mapa) {
     tronco: new THREE.BoxGeometry(0.5, 0.6, 0.28).translate(0, 0.3, 0),
     braco: topo(0.18, 0.6, 0.18),
     perna: topo(0.22, 0.8, 0.22),
+    armaAvatar: new THREE.BoxGeometry(0.08, 0.1, 0.55),
   };
   const mat = {
     cabeca: new THREE.MeshLambertMaterial({ color: COR_CABECA }),
+    armaAvatar: new THREE.MeshLambertMaterial({ color: 0x2a2c31 }),
     olho: new THREE.MeshBasicMaterial({ color: 0x111111 }),
   };
   for (const [time, hex] of Object.entries(COR_TIME)) {
@@ -141,6 +151,8 @@ export function criarRender(canvas, mapa) {
     const bracoD = parte(geo.braco, escuro, 0.34, 1.4);
     const pernaE = parte(geo.perna, escuro, -0.12, 0.8);
     const pernaD = parte(geo.perna, escuro, 0.12, 0.8);
+    const arma = parte(geo.armaAvatar, mat.armaAvatar, 0.22, 1.18);
+    arma.position.z = -0.32;
     scene.add(g);
     return { g, bracoE, bracoD, pernaE, pernaD, dist: ent.distAndada, amp: 0 };
   }
@@ -190,6 +202,76 @@ export function criarRender(canvas, mapa) {
     for (const m of impactos) scene.remove(m);
     impactos.length = 0;
     proxImpacto = 0;
+    for (const r of rastros) { r.vida = 0; r.linha.visible = false; }
+    for (const gt of gotas) { gt.vida = 0; gt.m.visible = false; }
+  }
+
+  // Rastros de bala: segmentos de linha reaproveitados, visíveis por um instante.
+  const matRastro = new THREE.LineBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.75 });
+  const rastros = [];
+  let proxRastro = 0;
+  const tmp = new THREE.Vector3();
+
+  function rastro(de, ate, proprio) {
+    if (rastros.length < MAX_RASTROS) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const linha = new THREE.Line(g, matRastro);
+      linha.frustumCulled = false;
+      linha.visible = false;
+      scene.add(linha);
+      rastros.push({ linha, vida: 0 });
+    }
+    const r = rastros[proxRastro % MAX_RASTROS];
+    proxRastro += 1;
+    // Do jogador, o rastro sai da boca da arma; dos outros, um pouco abaixo do olho.
+    if (proprio && viewAtual) viewAtual.boca.getWorldPosition(tmp);
+    else tmp.set(de.x, de.y - 0.2, de.z);
+    const pos = r.linha.geometry.attributes.position;
+    pos.setXYZ(0, tmp.x, tmp.y, tmp.z);
+    pos.setXYZ(1, ate.x, ate.y, ate.z);
+    pos.needsUpdate = true;
+    r.linha.visible = true;
+    r.vida = VIDA_RASTRO;
+  }
+
+  // Sangue: gotas (caixinhas vermelhas) com gravidade, de um pool fixo.
+  const geoGota = new THREE.BoxGeometry(0.06, 0.06, 0.06);
+  const matGota = new THREE.MeshBasicMaterial({ color: 0xb3121b });
+  const gotas = [];
+  let proxGota = 0;
+
+  function sangue(ponto, cabeca) {
+    const n = cabeca ? 8 : 5;
+    for (let i = 0; i < n; i++) {
+      if (gotas.length < MAX_GOTAS) {
+        const m = new THREE.Mesh(geoGota, matGota);
+        m.visible = false;
+        scene.add(m);
+        gotas.push({ m, vida: 0, v: new THREE.Vector3() });
+      }
+      const gt = gotas[proxGota % MAX_GOTAS];
+      proxGota += 1;
+      gt.m.position.set(ponto.x, ponto.y, ponto.z);
+      gt.v.set((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3);
+      gt.m.visible = true;
+      gt.vida = VIDA_GOTA;
+    }
+  }
+
+  function animarEfeitos(dt) {
+    for (const r of rastros) {
+      if (r.vida <= 0) continue;
+      r.vida -= dt;
+      if (r.vida <= 0) r.linha.visible = false;
+    }
+    for (const gt of gotas) {
+      if (gt.vida <= 0) continue;
+      gt.vida -= dt;
+      gt.v.y -= 12 * dt;
+      gt.m.position.addScaledVector(gt.v, dt);
+      if (gt.vida <= 0) gt.m.visible = false;
+    }
   }
 
   // Arma em primeira pessoa: caixas presas à câmera, uma por slot, trocada conforme a arma ativa.
@@ -221,7 +303,7 @@ export function criarRender(canvas, mapa) {
     boca.position.set(0, modelo.caixas[0][4], modelo.boca);
     boca.visible = false;
     g.add(boca);
-    g.position.set(0.24, -0.22, -0.4);
+    g.position.set(POS_VIEW.x, POS_VIEW.y, POS_VIEW.z);
     g.visible = false;
     camera.add(g);
     return { g, boca };
@@ -233,6 +315,22 @@ export function criarRender(canvas, mapa) {
   }
 
   const flash = () => { clarao = DURACAO_CLARAO; };
+  // Animações da arma na mão (tempos em s): saque ao trocar, golpe da faca.
+  let saque = 0;
+  let saqueDur = 0.3;
+  let golpeT = 0;
+  let golpeForte = false;
+  let golpeLado = 1;
+  const golpe = (forte) => {
+    golpeForte = forte;
+    golpeT = forte ? 0.45 : 0.3;
+    golpeLado = -golpeLado; // golpes leves alternam o lado, como no CS
+  };
+  let balanco = 0; // amplitude do balanço ao andar (0..1)
+  let yawAntes = null;
+  let ginga = 0; // a arma atrasa um pouco quando a mira gira
+  let olhoY = null;
+  let vistaAntes = null;
   const recuoVisual = () => {
     recuo = 0.04;
     recuoArma = 0.08;
@@ -251,6 +349,60 @@ export function criarRender(canvas, mapa) {
 
   let ultimo = performance.now();
   let fovAtual = FOV_PADRAO;
+  let tipoAntes = null;
+
+  // Posição e giro da arma na mão: balanço ao andar, ginga ao mirar, saque, recarga e golpe.
+  function posarArma(vista, mundo, dt) {
+    const g = viewAtual.g;
+    const arma = vista.armas[vista.slot];
+    const andando = vista.noChao && vista.velHoriz > 0.5;
+    balanco += ((andando ? Math.min(1, vista.velHoriz / 5) : 0) - balanco) * Math.min(1, dt * 8);
+    const fase = vista.distAndada * 2.2;
+    let x = POS_VIEW.x + Math.sin(fase) * 0.012 * balanco;
+    let y = POS_VIEW.y - Math.abs(Math.cos(fase)) * 0.012 * balanco;
+    let z = POS_VIEW.z + recuoArma;
+    let rx = 0;
+    let ry = 0;
+    let rz = 0;
+    if (yawAntes !== null) {
+      const giro = Math.atan2(Math.sin(vista.yaw - yawAntes), Math.cos(vista.yaw - yawAntes));
+      ginga += (Math.max(-0.08, Math.min(0.08, giro * 2)) - ginga) * Math.min(1, dt * 12);
+    }
+    yawAntes = vista.yaw;
+    ry += ginga;
+    x -= ginga * 0.3;
+    if (!vista.noChao) y += 0.02; // no ar a arma sobe um pouco
+    // Recarga: abaixa e gira a arma; volta no fim (curva em seno do progresso).
+    if (arma.recarregandoAte > 0) {
+      const def = ARMAS[arma.tipo];
+      const p = 1 - Math.max(0, arma.recarregandoAte - mundo.tempo) / def.recarga;
+      const k = Math.sin(Math.min(1, Math.max(0, p)) * Math.PI);
+      y -= 0.12 * k;
+      rx -= 0.5 * k;
+      rz += 0.6 * k;
+    }
+    if (saque > 0) {
+      const k = saque / saqueDur;
+      y -= 0.3 * k;
+      rx -= 0.8 * k;
+    }
+    if (golpeT > 0) {
+      const total = golpeForte ? 0.45 : 0.3;
+      const k = Math.sin((1 - golpeT / total) * Math.PI);
+      if (golpeForte) {
+        z -= 0.28 * k; // estocada para a frente
+        x -= 0.12 * k;
+        rx -= 0.3 * k;
+      } else {
+        x -= 0.22 * k * golpeLado; // corte de lado a lado
+        ry += 1.1 * k * golpeLado;
+        rz -= 0.5 * k * golpeLado;
+      }
+    }
+    g.position.set(x, y, z);
+    g.rotation.set(rx, ry, rz);
+    viewAtual.boca.visible = clarao > 0;
+  }
 
   function desenhar(mundo, idVista, { zoomFov } = {}) {
     const agora = performance.now();
@@ -266,7 +418,12 @@ export function criarRender(canvas, mapa) {
       camera.updateProjectionMatrix();
     }
     const o = olho(vista);
-    camera.position.set(o.x, o.y, o.z);
+    // Agachar/levantar suave: a altura do olho persegue o alvo (troca de vista é instantânea).
+    const altura = o.y - vista.pos.y;
+    if (vistaAntes !== idVista || olhoY === null) olhoY = altura;
+    else olhoY += (altura - olhoY) * Math.min(1, dt * VEL_OLHO);
+    vistaAntes = idVista;
+    camera.position.set(o.x, vista.pos.y + olhoY, o.z);
     const subida = vista.vivo && vista.armas ? vista.armas[vista.slot].recuoAcum : 0; // a mira acompanha o spray
     const inclina = vista.pitch + subida + recuo;
     camera.rotation.set(Math.max(-PITCH_CAM, Math.min(PITCH_CAM, inclina)), vista.yaw, 0);
@@ -277,15 +434,22 @@ export function criarRender(canvas, mapa) {
     const alvoView = tipoAtivo && zoomFov === undefined ? viewmodelDe(tipoAtivo) : null;
     if (alvoView !== viewAtual) {
       if (viewAtual) viewAtual.g.visible = false;
+      // Arma nova (não a mesma voltando do zoom): sobe de baixo da tela durante o saque.
+      if (alvoView && tipoAtivo !== tipoAntes) {
+        saqueDur = SAQUE[ARMAS[tipoAtivo].slot] ?? 0.3;
+        saque = saqueDur;
+        golpeT = 0;
+      }
       viewAtual = alvoView;
       if (viewAtual) viewAtual.g.visible = true;
     }
+    if (tipoAtivo) tipoAntes = tipoAtivo;
     clarao = Math.max(0, clarao - dt);
     recuoArma = Math.max(0, recuoArma - dt * 0.6);
-    if (viewAtual) {
-      viewAtual.g.position.z = -0.4 + recuoArma;
-      viewAtual.boca.visible = clarao > 0;
-    }
+    saque = Math.max(0, saque - dt);
+    golpeT = Math.max(0, golpeT - dt);
+    animarEfeitos(dt);
+    if (viewAtual) posarArma(vista, mundo, dt);
     luzTiro.intensity = clarao > 0 ? 2 : 0;
     luzTiro.position.copy(camera.position);
     renderer.render(scene, camera);
@@ -300,11 +464,17 @@ export function criarRender(canvas, mapa) {
     geoArma.forEach((g) => g.dispose());
     [matArma, matArmaClara, matFaca, matClarao].forEach((m) => m.dispose());
     geoClarao.dispose();
+    for (const r of rastros) r.linha.geometry.dispose();
+    matRastro.dispose();
+    geoGota.dispose();
+    matGota.dispose();
     Object.values(geo).forEach((g) => g.dispose());
     Object.values(mat).forEach((m) => m.dispose());
     avatares.clear();
     renderer.dispose();
   }
 
-  return { desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, destruir };
+  return {
+    desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, destruir,
+  };
 }
