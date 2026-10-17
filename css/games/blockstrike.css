@@ -187,6 +187,9 @@
 }
 .bs-dano.anim i { animation: bs-dano-some 0.6s ease-out forwards; }
 @keyframes bs-dano-some { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bs-pisca { 50% { opacity: 0.45; } }
+@keyframes bs-anuncio-entra { from { opacity: 0; transform: translate(-50%, -0.4rem); } }
+@keyframes bs-clarao { 0% { opacity: var(--forca, 1); } 30% { opacity: calc(var(--forca, 1) * 0.8); } 100% { opacity: 0; } }
 
 .bs-killfeed {
   position: absolute; top: 0.5rem; right: 0.5rem; max-width: 55%;
@@ -337,6 +340,37 @@
   font-size: 0.72rem; color: var(--text-secondary); padding: 0.15rem 0.6rem; background: rgba(5, 6, 10, 0.5);
   border-radius: var(--radius-sm);
 }
+
+/* C4: relógio vermelho, aviso do bombsite, barra de plantar/desarmar, dica de tecla e anúncio central */
+.bs-timer.bomba { color: #f87171; animation: bs-pisca 1s steps(2, jump-none) infinite; }
+.bs-bomba-info {
+  position: absolute; top: 4.4rem; left: 50%; transform: translateX(-50%); width: max-content;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; color: #fecaca; padding: 0.1rem 0.6rem;
+  background: rgba(127, 29, 29, 0.6); border-radius: var(--radius-sm);
+}
+.bs-acao {
+  position: absolute; left: 50%; top: 56%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem; font-weight: 700;
+}
+.bs-acao small { font-size: 0.7rem; letter-spacing: 0.14em; }
+.bs-acao .bs-recarga-barra { width: 11rem; height: 6px; }
+.bs-acao .bs-recarga-barra i { background: #f87171; }
+.bs-dica-c4 {
+  position: absolute; left: 50%; top: 62%; transform: translateX(-50%); width: max-content; max-width: 80%;
+  font-size: 0.85rem; font-weight: 700; padding: 0.2rem 0.7rem; background: rgba(5, 6, 10, 0.6);
+  border-radius: var(--radius-sm); color: #fde68a;
+}
+.bs-anuncio {
+  position: absolute; left: 50%; top: 15%; transform: translateX(-50%); width: max-content; max-width: 90%;
+  font-size: clamp(1rem, 2.4vw, 1.6rem); font-weight: 800; padding: 0.3rem 1rem; border-radius: var(--radius-sm);
+  background: rgba(5, 6, 10, 0.7); text-shadow: 0 1px 4px #000; animation: bs-anuncio-entra 0.25s ease-out;
+}
+.bs-anuncio.perigo { color: #fca5a5; box-shadow: inset 0 -3px 0 #ef4444; }
+.bs-anuncio.ok { color: #86efac; box-shadow: inset 0 -3px 0 #22c55e; }
+.bs-anuncio.aviso { color: #fde68a; box-shadow: inset 0 -3px 0 #f59e0b; }
+.bs-explosao { position: absolute; inset: 0; pointer-events: none; background: #fff7d6; opacity: 0; }
+.bs-explosao.anim { animation: bs-clarao 1.4s ease-out forwards; }
+.bs-treino .bs-bomba-info, .bs-treino .bs-acao, .bs-treino .bs-dica-c4 { display: none; }
 
 /* Luneta da sniper: tudo preto fora do círculo, retícula fina no meio. */
 .bs-luneta {

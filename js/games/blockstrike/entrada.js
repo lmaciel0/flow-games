@@ -122,6 +122,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
         atirar: botoes.has(0),
         zoom: botoes.has(2),
         recarregar: recarregarPendente,
+        usar: teclas.has('KeyE'), // segurar: plantar ou desarmar a C4
         slot: slotPendente,
         yaw,
         pitch,

@@ -116,6 +116,48 @@ export function criarRender(canvas, mapa) {
   const matMapa = new THREE.MeshLambertMaterial({ vertexColors: true });
   scene.add(new THREE.Mesh(geoMapa, matMapa));
 
+  // Bombsites: retângulo amarelo translúcido no chão com a letra grande (textura de canvas, uma por site).
+  const marcasSite = [];
+  for (const [nome, s] of Object.entries(mapa.bombsites ?? {})) {
+    const larg = s.max.x - s.min.x;
+    const prof = s.max.z - s.min.z;
+    const tela = document.createElement('canvas');
+    tela.width = 256;
+    tela.height = Math.round(256 * (prof / larg));
+    const c2 = tela.getContext('2d');
+    c2.fillStyle = 'rgba(250, 204, 21, 0.18)';
+    c2.fillRect(0, 0, tela.width, tela.height);
+    c2.strokeStyle = 'rgba(250, 204, 21, 0.9)';
+    c2.lineWidth = 6;
+    c2.strokeRect(3, 3, tela.width - 6, tela.height - 6);
+    c2.fillStyle = 'rgba(250, 204, 21, 0.85)';
+    c2.font = `bold ${Math.round(tela.height * 0.7)}px sans-serif`;
+    c2.textAlign = 'center';
+    c2.textBaseline = 'middle';
+    c2.fillText(nome, tela.width / 2, tela.height / 2 + 4);
+    const textura = new THREE.CanvasTexture(tela);
+    const marca = new THREE.Mesh(
+      new THREE.PlaneGeometry(larg, prof).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: textura, transparent: true, depthWrite: false }));
+    marca.position.set(s.centro.x, 0.02, s.centro.z);
+    scene.add(marca);
+    marcasSite.push(marca);
+  }
+
+  // C4 no chão: caixa escura com LED. Aparece solta ou plantada; o LED pisca vermelho (verde se desarmada).
+  const matC4 = new THREE.MeshLambertMaterial({ color: 0x2b2e35 });
+  const matLed = new THREE.MeshBasicMaterial({ color: 0xff2020 });
+  const geoC4 = new THREE.BoxGeometry(0.4, 0.16, 0.28);
+  const geoLed = new THREE.BoxGeometry(0.06, 0.03, 0.06);
+  const c4 = new THREE.Group();
+  const c4Corpo = new THREE.Mesh(geoC4, matC4);
+  c4Corpo.position.y = 0.08;
+  const c4Led = new THREE.Mesh(geoLed, matLed);
+  c4Led.position.set(0.12, 0.175, 0);
+  c4.add(c4Corpo, c4Led);
+  c4.visible = false;
+  scene.add(c4);
+
   // Avatares estilo Roblox: caixas compartilhadas, criados na primeira vez que a entidade aparece.
   const topo = (w, h, d) => new THREE.BoxGeometry(w, h, d).translate(0, -h / 2, 0); // pivô no topo
   const geo = {
@@ -211,6 +253,10 @@ export function criarRender(canvas, mapa) {
     for (const r of rastros) { r.vida = 0; r.linha.visible = false; }
     for (const gt of gotas) { gt.vida = 0; gt.m.visible = false; }
     for (const p of pecas) { p.vida = 0; p.m.visible = false; }
+    fogoT = 0;
+    fogo.visible = false;
+    tremor = 0;
+    for (const f of faiscas) { f.vida = 0; f.m.visible = false; }
   }
 
   // Rastros de bala: segmentos de linha reaproveitados, visíveis por um instante.
@@ -322,8 +368,64 @@ export function criarRender(canvas, mapa) {
     }
   }
 
+  // Explosão da C4: bola de fogo que cresce e some, faíscas com gravidade e tremor da câmera por perto.
+  const matFogo = new THREE.MeshBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0, depthWrite: false });
+  const geoFogo = new THREE.BoxGeometry(1, 1, 1);
+  const fogo = new THREE.Mesh(geoFogo, matFogo);
+  fogo.visible = false;
+  scene.add(fogo);
+  const matFaisca = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+  const geoFaisca = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+  const faiscas = [];
+  const VIDA_FOGO = 0.9;
+  let fogoT = 0;
+  let tremor = 0;
+  let tremorDe = null;
+
+  function explosao(ponto) {
+    fogo.position.set(ponto.x, ponto.y + 1, ponto.z);
+    fogoT = VIDA_FOGO;
+    fogo.visible = true;
+    tremor = 1;
+    tremorDe = ponto;
+    for (let i = 0; i < 28; i++) {
+      if (faiscas.length < 28) {
+        const m = new THREE.Mesh(geoFaisca, matFaisca);
+        m.visible = false;
+        scene.add(m);
+        faiscas.push({ m, vida: 0, v: new THREE.Vector3() });
+      }
+      const f = faiscas[i];
+      f.m.position.set(ponto.x, ponto.y + 0.5, ponto.z);
+      f.v.set((Math.random() - 0.5) * 18, 4 + Math.random() * 12, (Math.random() - 0.5) * 18);
+      f.m.visible = true;
+      f.vida = 1.4;
+    }
+    // Quem estava perto vira blocos pelo evento de morte; aqui só o ambiente.
+  }
+
+  function animarExplosao(dt) {
+    if (fogoT > 0) {
+      fogoT -= dt;
+      const k = 1 - Math.max(0, fogoT) / VIDA_FOGO;
+      fogo.scale.setScalar(1 + k * 20);
+      matFogo.opacity = Math.max(0, 0.85 * (1 - k * k));
+      if (fogoT <= 0) fogo.visible = false;
+    }
+    for (const f of faiscas) {
+      if (f.vida <= 0) continue;
+      f.vida -= dt;
+      f.v.y -= 18 * dt;
+      f.m.position.addScaledVector(f.v, dt);
+      if (f.m.position.y < 0.1) { f.m.position.y = 0.1; f.v.multiplyScalar(0.3); }
+      if (f.vida <= 0) f.m.visible = false;
+    }
+    tremor = Math.max(0, tremor - dt * 1.1);
+  }
+
   function animarEfeitos(dt) {
     animarPecas(dt);
+    animarExplosao(dt);
     for (const r of rastros) {
       if (r.vida <= 0) continue;
       r.vida -= dt;
@@ -528,7 +630,22 @@ export function criarRender(canvas, mapa) {
     if (vistaAntes !== idVista || olhoY === null) olhoY = altura;
     else olhoY += (altura - olhoY) * Math.min(1, dt * VEL_OLHO);
     vistaAntes = idVista;
-    camera.position.set(o.x, vista.pos.y + olhoY, o.z);
+    // Tremor da explosão: some com a distância e com o tempo.
+    let tx = 0;
+    let ty = 0;
+    if (tremor > 0 && tremorDe) {
+      const forca = Math.max(0, 1 - Math.hypot(o.x - tremorDe.x, o.z - tremorDe.z) / 45) * tremor * 0.18;
+      tx = (Math.random() - 0.5) * forca;
+      ty = (Math.random() - 0.5) * forca;
+    }
+    camera.position.set(o.x + tx, vista.pos.y + olhoY + ty, o.z);
+    // C4 no chão: visível solta ou plantada; LED pisca vermelho (verde depois de desarmada).
+    const bomba = mundo.bomba;
+    c4.visible = Boolean(bomba && bomba.pos);
+    if (c4.visible) {
+      c4.position.set(bomba.pos.x, bomba.pos.y, bomba.pos.z);
+      matLed.color.setHex(bomba.desarmada ? 0x22dd55 : Math.floor(agora / (bomba.plantada ? 250 : 700)) % 2 ? 0xff2020 : 0x550808);
+    }
     const subida = vista.vivo && vista.armas ? vista.armas[vista.slot].recuoAcum : 0; // a mira acompanha o spray
     const inclina = vista.pitch + subida + recuo;
     camera.rotation.set(Math.max(-PITCH_CAM, Math.min(PITCH_CAM, inclina)), vista.yaw, 0);
@@ -571,6 +688,9 @@ export function criarRender(canvas, mapa) {
     geoArma.forEach((g) => g.dispose());
     [matArma, matArmaClara, matFaca, matClarao].forEach((m) => m.dispose());
     geoClarao.dispose();
+    for (const m of marcasSite) { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); }
+    [geoC4, geoLed, geoFogo, geoFaisca].forEach((g) => g.dispose());
+    [matC4, matLed, matFogo, matFaisca].forEach((m) => m.dispose());
     for (const r of rastros) r.linha.geometry.dispose();
     matRastro.dispose();
     geoGota.dispose();
@@ -583,6 +703,6 @@ export function criarRender(canvas, mapa) {
 
   return {
     desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, desmanchar,
-    inspecionar, destruir,
+    explosao, inspecionar, destruir,
   };
 }

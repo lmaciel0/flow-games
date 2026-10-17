@@ -17,6 +17,7 @@ import { criarHud } from './hud.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
 import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
+import { criarBomba, acaoPossivel } from './bomba.js';
 
 const DT_MAX = 0.05;
 const AVISTAR_A_CADA = 0.25; // s entre recálculos dos inimigos avistados (radar)
@@ -29,7 +30,7 @@ const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
 // Cérebros novos a cada round: rotas e alvos antigos não valem depois do reposicionamento.
 function recriarCerebros(mundo, grafo, rng) {
-  for (const e of mundo.entidades) if (e.bot) e.cerebro = criarCerebro(e, grafo, rng, MAPA.caixas);
+  for (const e of mundo.entidades) if (e.bot) e.cerebro = criarCerebro(e, grafo, rng, MAPA.caixas, mundo);
 }
 
 // Espectador: o próximo aliado vivo depois de `idAtual`; sem nenhum vivo, mantém a vista.
@@ -255,7 +256,7 @@ function montar(raiz, ctx) {
         else sons.oof(distDe(ev.vitima), panDe(ev.vitima));
         render.desmanchar(mundo.entidades[ev.vitima]);
         hud.morte({
-          assassino: mundo.entidades[ev.assassino], vitima: mundo.entidades[ev.vitima],
+          assassino: mundo.entidades[ev.assassino] ?? null, vitima: mundo.entidades[ev.vitima],
           arma: ev.arma, cabeca: ev.cabeca,
         });
       } else if (ev.tipo === 'recarga') {
@@ -270,8 +271,46 @@ function montar(raiz, ctx) {
         if (ev.id === eu.id) sons.pulo();
       } else if (ev.tipo === 'pouso') {
         sons.pouso(distDe(ev.id), panDe(ev.id));
+      } else {
+        reagirBomba(p, ev, { eu, ouvido });
       }
     }
+  }
+
+  // Eventos da C4: sons, avisos na tela e o efeito da explosão.
+  function reagirBomba(p, ev, { eu, ouvido }) {
+    const { mundo, render } = p;
+    const dist = (pt) => (pt ? distancia(ouvido, pt) : 0);
+    const pan = (pt) => (pt ? Math.sin((anguloDe(eu, { pos: pt }) * Math.PI) / 180) : 0);
+    if (ev.tipo === 'acao-inicio') {
+      const ent = mundo.entidades[ev.id];
+      sons.acaoC4(ev.acao, dist(ent.pos), ev.id === eu.id ? 0 : pan(ent.pos));
+    } else if (ev.tipo === 'plantada') {
+      sons.plantada(dist(ev.ponto), pan(ev.ponto));
+      hud.anuncio(`C4 plantada no bombsite ${ev.site ?? ''}`.trim(), 'perigo');
+    } else if (ev.tipo === 'desarmada') {
+      sons.desarmada();
+      hud.anuncio('C4 desarmada', 'ok');
+    } else if (ev.tipo === 'explosao') {
+      sons.explosao(dist(ev.ponto), pan(ev.ponto));
+      render.explosao(ev.ponto);
+      hud.flashExplosao(dist(ev.ponto));
+    } else if (ev.tipo === 'bomba-solta') {
+      if (mundo.bomba?.terroristas === eu.time) hud.anuncio('A C4 caiu no chão', 'aviso');
+    } else if (ev.tipo === 'bomba-pega') {
+      if (mundo.bomba?.terroristas === eu.time) hud.anuncio(`${mundo.entidades[ev.id].nome} pegou a C4`, 'aviso');
+    }
+  }
+
+  // Bipe da C4 plantada, cada vez mais rápido; sai do ponto onde ela está.
+  function bipesDaBomba(p, dt) {
+    const b = p.mundo.bomba;
+    if (!b || !b.plantada || b.explodiu || b.desarmada || p.partida.fase !== 'jogo') return;
+    p.proxBip -= dt;
+    if (p.proxBip > 0) return;
+    p.proxBip = 0.12 + 0.88 * (b.restante / 40) ** 1.5;
+    const eu = p.mundo.entidades[p.mundo.jogadorId];
+    sons.bipC4(distancia(olho(eu), b.pos), Math.sin((anguloDe(eu, { pos: b.pos }) * Math.PI) / 180), b.restante);
   }
 
   // Inimigos que algum aliado vivo enxerga (ou que atiraram há pouco): aparecem no radar.
@@ -294,6 +333,8 @@ function montar(raiz, ctx) {
   // Troca de round: reposiciona todos, recria os cérebros, limpa as marcas e volta a vista ao jogador.
   function novoRound(p) {
     posicionarParaRound(p.mundo, ladoAzul(p.partida.round));
+    p.mundo.bomba = p.treino ? null : criarBomba(p.mundo, p.partida.terroristas);
+    p.proxBip = 0;
     recriarCerebros(p.mundo, p.grafo, p.rngBots);
     p.render.limparImpactos();
     hud.limparEfeitos();
@@ -330,6 +371,20 @@ function montar(raiz, ctx) {
     if (raiz.dataset.fase !== partida.fase) raiz.dataset.fase = partida.fase;
   }
 
+  // C4 para o HUD (null no treino): relógio, bombsite, progresso de plantar/desarmar e a dica do que dá para fazer.
+  function estadoBomba(p, eu) {
+    const b = p.mundo.bomba;
+    if (!b) return null;
+    const aoVivo = eu.vivo && p.partida.fase === 'jogo';
+    const acao = aoVivo ? acaoPossivel(p.mundo, eu) : null;
+    const meu = b.acao && b.acao.id === eu.id ? b.acao : null;
+    return {
+      plantada: b.plantada, restante: b.restante, site: b.site, solta: b.portador === null && !b.plantada,
+      levaC4: aoVivo && b.portador === eu.id, dica: acao,
+      progresso: meu ? Math.min(1, meu.t / meu.dur) : 0, acao: meu ? meu.tipo : null,
+    };
+  }
+
   // Dados do HUD para este frame: vida e arma são de quem está sendo visto (o jogador ou o aliado assistido).
   function estadoVisivel(p, cmd) {
     const { mundo, partida: regras } = p;
@@ -346,6 +401,7 @@ function montar(raiz, ctx) {
     const progressoRecarga = arma && arma.recarregandoAte > 0
       ? 1 - (arma.recarregandoAte - mundo.tempo) / def.recarga : 0;
     return {
+      bomba: estadoBomba(p, eu), papel: eu.time === regras.terroristas ? 'T' : 'CT',
       fase: regras.fase, round: regras.round, tempo: regras.tempo, placar: regras.placar,
       hp: alvo.hp, vivo: eu.vivo, arma: arma && { ...arma, pente: def.pente }, spread, progressoRecarga,
       luneta: eu.vivo && Boolean(cmd.zoom && def?.zoomFov),
@@ -365,7 +421,7 @@ function montar(raiz, ctx) {
     // Só se atira com o round em jogo; fora disso (inclusive em fim-partida) o mundo segue sem tiros.
     // No freeze as teclas 1–4 escolhem a primária (hud.teclaLoadout): o slot do comando é ignorado.
     const atira = regras.fase === 'jogo';
-    const cmdJogador = atira ? cmd : { ...cmd, atirar: false, slot: regras.fase === 'freeze' ? null : cmd.slot };
+    const cmdJogador = atira ? cmd : { ...cmd, atirar: false, usar: false, slot: regras.fase === 'freeze' ? null : cmd.slot };
     // Painel de armas aberto no treino: 1–4 escolhem a primária, não trocam de slot.
     if (p.treino && p.loadoutAberto) cmdJogador.slot = null;
     const armaMao = jogador.vivo && jogador.armas[jogador.slot];
@@ -378,11 +434,12 @@ function montar(raiz, ctx) {
       const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
       comandos.set(e.id, atira ? c : { ...c, atirar: false });
     }
-    reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze' }));
+    reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze', comBomba: atira }));
+    bipesDaBomba(p, dt);
     if (p.treino) regras.tempo += dt;
     else if (regras.fase !== 'fim-partida') {
       const segAntes = Math.ceil(regras.tempo);
-      aplicarEventosPartida(p, tickPartida(regras, dt, vivosPorTime(mundo)));
+      aplicarEventosPartida(p, tickPartida(regras, dt, vivosPorTime(mundo), mundo.bomba));
       // Bipe nos últimos 5 s do round e da contagem do freeze.
       const seg = Math.ceil(regras.tempo);
       if ((regras.fase === 'jogo' || regras.fase === 'freeze') && seg !== segAntes && seg <= 5 && seg > 0) sons.bipe();
@@ -402,7 +459,10 @@ function montar(raiz, ctx) {
       avistar(p);
     }
     const vista = mundo.entidades[p.idVista];
-    hud.radar({ caixas: MAPA.caixas, eu: vista, entidades: mundo.entidades, avistados: p.avistados });
+    hud.radar({
+      caixas: MAPA.caixas, eu: vista, entidades: mundo.entidades, avistados: p.avistados,
+      sites: p.treino ? null : MAPA.bombsites, bomba: mundo.bomba,
+    });
     // Dica só enquanto o mouse nunca prendeu: depois de uma trava, perder a trava abre a pausa.
     hud.mostrarDica(!p.lock.travou && (regras.fase === 'freeze' || regras.fase === 'jogo'));
     p.raf = requestAnimationFrame(quadro);
@@ -536,13 +596,14 @@ function montar(raiz, ctx) {
         modo: cfg.modo,
       });
       posicionarParaRound(mundo, 'A');
+      if (!treino) mundo.bomba = criarBomba(mundo, 'laranja');
       const grafo = criarGrafo(MAPA.waypoints, MAPA.arestas);
       const rngBots = criarRng(Date.now() ^ 0x5bd1e995);
       recriarCerebros(mundo, grafo, rngBots);
       const render = criarRender(canvas, MAPA);
       partida = {
         mundo, render, entrada, grafo, rngBots, partida: treino ? criarTreino() : criarPartida(), treino,
-        loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0,
+        loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
         idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock, pausado: false,
         desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),
       };
