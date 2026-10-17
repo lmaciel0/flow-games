@@ -8,9 +8,15 @@ import { ROUND } from './config.js';
 
 const DT_MAX = 0.05;
 
+// Quem planta a C4: laranja na primeira metade e azul depois da troca de lados.
+export function terroristasDe(round) {
+  return round <= ROUND.trocaLados ? 'laranja' : 'azul';
+}
+
 export function criarPartida() {
   return {
     placar: { azul: 0, laranja: 0 },
+    terroristas: terroristasDe(1),
     round: 1,
     fase: 'freeze',
     tempo: ROUND.freeze,
@@ -47,7 +53,22 @@ function resultadoFinal(placar) {
   return placar.azul > placar.laranja ? 'azul' : 'laranja';
 }
 
-export function tickPartida(p, dt, vivos) {
+// Round com C4 (`bomba` = { plantada, explodiu, desarmada }): terroristas vencem plantando e explodindo
+// (ou eliminando os CTs); CTs vencem eliminando os Ts sem plantio, desarmando ou esgotando o tempo.
+function tickJogoBomba(p, passo, vivos, bomba) {
+  const t = p.terroristas;
+  const ct = t === 'azul' ? 'laranja' : 'azul';
+  if (bomba.explodiu) return encerrarRound(p, t, 'bomba-explodiu');
+  if (bomba.desarmada) return encerrarRound(p, ct, 'bomba-desarmada');
+  if (!bomba.plantada) p.tempo -= passo;
+  if (vivos[ct].n === 0 && vivos[t].n === 0) return encerrarRound(p, bomba.plantada ? t : null, 'eliminacao');
+  if (vivos[ct].n === 0) return encerrarRound(p, t, 'eliminacao');
+  if (vivos[t].n === 0 && !bomba.plantada) return encerrarRound(p, ct, 'eliminacao');
+  if (!bomba.plantada && p.tempo <= 0) return encerrarRound(p, ct, 'tempo');
+  return [];
+}
+
+export function tickPartida(p, dt, vivos, bomba) {
   const passo = Math.min(dt, DT_MAX);
   if (p.fase === 'freeze') {
     p.tempo -= passo;
@@ -58,6 +79,7 @@ export function tickPartida(p, dt, vivos) {
     p.motivo = null;
     return ['inicio-round'];
   }
+  if (p.fase === 'jogo' && bomba) return tickJogoBomba(p, passo, vivos, bomba);
   if (p.fase === 'jogo') {
     p.tempo -= passo;
     const { azul, laranja } = vivos;
@@ -78,6 +100,7 @@ export function tickPartida(p, dt, vivos) {
       return ['fim-partida'];
     }
     p.round += 1;
+    p.terroristas = terroristasDe(p.round);
     p.fase = 'freeze';
     p.tempo = ROUND.freeze;
     return p.round === ROUND.trocaLados + 1 ? ['novo-round', 'troca-lados'] : ['novo-round'];

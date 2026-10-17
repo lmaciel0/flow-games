@@ -9,6 +9,7 @@ import {
   criarArma, podeAtirar, disparar, atualizarArma, iniciarRecarga, danoDe, velocidadeDe, SAQUE,
 } from './armas.js';
 import { escolherPrimaria } from './bots.js';
+import { acaoPossivel, tickBomba } from './bomba.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 1.8;
@@ -39,7 +40,7 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [] };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null };
 }
 
 // Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
@@ -81,7 +82,7 @@ export function posicionarParaRound(mundo, ladoAzul) {
 
 const idle = (e) => ({
   frente: 0, lado: 0, pular: false, agachar: false, devagar: false, atirar: false,
-  zoom: false, recarregar: false, slot: null, yaw: e.yaw, pitch: e.pitch,
+  zoom: false, recarregar: false, usar: false, slot: null, yaw: e.yaw, pitch: e.pitch,
 });
 
 // Só levanta se o corpo em pé couber (sem teto em cima).
@@ -264,14 +265,23 @@ function combate(mundo, e, cmd, dt, eventos) {
   if (antes === 0 && arma.recarregandoAte > 0) eventos.push({ tipo: 'recarga', atirador: e.id }); // pente vazio
 }
 
-export function passo(mundo, dt, comandos, { congelado = false } = {}) {
+// `comBomba` falso (fim do round) congela a C4: ninguém age e o relógio dela para.
+export function passo(mundo, dt, comandos, { congelado = false, comBomba = true } = {}) {
   const eventos = [];
+  const agindo = new Map();
   for (const e of mundo.entidades) {
     if (!e.vivo) continue;
-    const cmd = comandos.get(e.id) ?? idle(e);
+    let cmd = comandos.get(e.id) ?? idle(e);
+    // Segurando a tecla de uso onde dá para plantar/desarmar: fica parado e não atira.
+    const acao = comBomba && !congelado && cmd.usar ? acaoPossivel(mundo, e) : null;
+    if (acao) {
+      agindo.set(e.id, acao);
+      cmd = { ...cmd, frente: 0, lado: 0, pular: false, atirar: false, recarregar: false, slot: null };
+    }
     moverEntidade(e, cmd, dt, mundo.mapa.caixas, congelado, eventos);
     if (!congelado) combate(mundo, e, cmd, dt, eventos);
   }
+  if (comBomba && !congelado) tickBomba(mundo, dt, agindo, eventos);
   // Trocas no mesmo passo valem para os dois lados: as mortes só têm efeito depois de todos agirem.
   for (const e of mundo.entidades) if (e.vivo && e.hp <= 0) e.vivo = false;
   mundo.tempo += dt;

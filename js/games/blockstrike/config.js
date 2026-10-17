@@ -27,6 +27,14 @@ export const ROUND = {
   trocaLados: 12,
 };
 
+// Modo desarme: tempos em segundos, raios em metros. `explode` conta a partir da plantada.
+export const BOMBA = {
+  plantar: 3.2, desarmar: 10, desarmarKit: 5, explode: 40,
+  raioAcao: 1.6, // distância da C4 para desarmar
+  raioPegar: 1.2, // distância da C4 solta para o terrorista pegar
+  raioExplosao: 14, // todo mundo a menos disto morre
+};
+
 // Multiplicador de dano por parte do corpo atingida.
 export const MULT_PARTE = { cabeca: 4, tronco: 1, pernas: 0.75 };
 
