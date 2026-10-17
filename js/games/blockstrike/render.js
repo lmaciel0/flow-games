@@ -7,6 +7,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { olho } from './fisica.js';
 import { ARMAS } from './config.js';
 import { SAQUE } from './armas.js';
+import { criarRng } from './rng.js';
 
 const FOV_PADRAO = 75;
 const PITCH_CAM = Math.PI / 2 - 0.01; // pitch + recuo nunca passa da vertical
@@ -99,6 +100,7 @@ function geometriaDoMapa(caixas) {
 }
 
 export function criarRender(canvas, mapa) {
+  const aleatorio = criarRng(Date.now()); // efeitos visuais: sangue, destroços, faíscas e tremor
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   const scene = new THREE.Scene();
@@ -308,7 +310,7 @@ export function criarRender(canvas, mapa) {
       const gt = gotas[proxGota % MAX_GOTAS];
       proxGota += 1;
       gt.m.position.set(ponto.x, ponto.y, ponto.z);
-      gt.v.set((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3);
+      gt.v.set((aleatorio() - 0.5) * 3, aleatorio() * 2.5, (aleatorio() - 0.5) * 3);
       gt.m.visible = true;
       gt.vida = VIDA_GOTA;
     }
@@ -342,8 +344,8 @@ export function criarRender(canvas, mapa) {
       p.m.material = material === 'time' ? mat[ent.time] : material === 'escuro' ? mat[`${ent.time}Escuro`] : mat.cabeca;
       p.m.position.set(ent.pos.x + ox * cos, ent.pos.y + oy, ent.pos.z - ox * sen);
       p.m.rotation.set(0, ent.yaw, 0);
-      p.v.set((Math.random() - 0.5) * vel, 2 + Math.random() * 2.5, (Math.random() - 0.5) * vel);
-      p.giro.set((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 12);
+      p.v.set((aleatorio() - 0.5) * vel, 2 + aleatorio() * 2.5, (aleatorio() - 0.5) * vel);
+      p.giro.set((aleatorio() - 0.5) * 12, (aleatorio() - 0.5) * 8, (aleatorio() - 0.5) * 12);
       p.piso = ent.pos.y + piso;
       p.m.visible = true;
       p.vida = VIDA_PECA;
@@ -403,7 +405,7 @@ export function criarRender(canvas, mapa) {
       }
       const f = faiscas[i];
       f.m.position.set(ponto.x, ponto.y + 0.5, ponto.z);
-      f.v.set((Math.random() - 0.5) * 18, 4 + Math.random() * 12, (Math.random() - 0.5) * 18);
+      f.v.set((aleatorio() - 0.5) * 18, 4 + aleatorio() * 12, (aleatorio() - 0.5) * 18);
       f.m.visible = true;
       f.vida = 1.4;
     }
@@ -714,8 +716,8 @@ export function criarRender(canvas, mapa) {
     let ty = 0;
     if (tremor > 0 && tremorDe) {
       const forca = Math.max(0, 1 - Math.hypot(o.x - tremorDe.x, o.z - tremorDe.z) / 45) * tremor * 0.18;
-      tx = (Math.random() - 0.5) * forca;
-      ty = (Math.random() - 0.5) * forca;
+      tx = (aleatorio() - 0.5) * forca;
+      ty = (aleatorio() - 0.5) * forca;
     }
     camera.position.set(o.x + tx, vista.pos.y + olhoY + ty, o.z);
     // C4 no chão: visível solta ou plantada; LED pisca vermelho (verde depois de desarmada).
