@@ -17,6 +17,7 @@ const ALCANCE_TIRO = 200;
 const ALCANCE_RASTRO = 80; // tiro que não bate em nada: o rastro visual para aqui
 const QUEDA_POUSO = 4; // m/s de queda a partir dos quais o pouso faz barulho
 const COSTAS = -0.5; // cosseno: atacante atrás do alvo (faca pelas costas)
+const VIDA_RUIDO = 2; // s que um ruído de passo continua audível para os bots
 
 function criarEntidade(id, nome, time, bot, primariaEscolhida) {
   return {
@@ -38,7 +39,19 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [] };
+}
+
+// Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
+// Quem anda com Shift ou agachado não emite 'passo', então não deixa rastro aqui.
+function registrarRuidos(mundo, eventos) {
+  for (const ev of eventos) {
+    if (ev.tipo !== 'passo' && ev.tipo !== 'pouso') continue;
+    const e = mundo.entidades[ev.id];
+    mundo.ruidos.push({ id: e.id, time: e.time, x: e.pos.x, z: e.pos.z, em: mundo.tempo });
+  }
+  const limite = mundo.tempo - VIDA_RUIDO;
+  while (mundo.ruidos.length && mundo.ruidos[0].em < limite) mundo.ruidos.shift();
 }
 
 export function posicionarParaRound(mundo, ladoAzul) {
@@ -262,6 +275,7 @@ export function passo(mundo, dt, comandos, { congelado = false } = {}) {
   // Trocas no mesmo passo valem para os dois lados: as mortes só têm efeito depois de todos agirem.
   for (const e of mundo.entidades) if (e.vivo && e.hp <= 0) e.vivo = false;
   mundo.tempo += dt;
+  registrarRuidos(mundo, eventos);
   return eventos;
 }
 

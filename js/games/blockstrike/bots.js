@@ -27,6 +27,9 @@ const REFAZER_ROTA = 2; // s entre recálculos da rota até o alvo
 // Distância (m) até onde o bot avança no alvo, nas pausas entre os tiros.
 const ALCANCE_IDEAL = { sniper: 60, rifle: 20, smg: 12, escopeta: 7, pistola: 15 };
 
+const ALCANCE_OUVIDO = 15; // m: passo de inimigo até aqui chama a atenção do bot
+const OLHAR_RUIDO = 1; // s olhando para onde veio o barulho
+
 const PESOS = [['rifle', 0.55], ['smg', 0.25], ['escopeta', 0.2]];
 
 export function escolherPrimaria(indiceNoTime, rng) {
@@ -88,6 +91,7 @@ export function criarCerebro(ent, grafo, rng, caixas = []) {
     passoRota: 0, ultimaPos: null, perdidoHa: 0, esperaAte: 0, chegou: false,
     erro: { yaw: 0, pitch: 0 }, erroAte: 0, cabeca: false, municaoVista: null,
     gatilho: false, emRajada: false, preso: 0, queriaAndar: false,
+    ouvidoEm: -Infinity, ouvidoAte: 0, ouvidoPos: null,
   };
 }
 
@@ -115,6 +119,17 @@ function enxergar(ent, mundo) {
   }
   vistos.sort((a, b) => a.d - b.d);
   return vistos;
+}
+
+// Ruído de inimigo mais recente ao alcance do ouvido que o bot ainda não tratou; null se não houver.
+export function ouvir(ent, mundo, c) {
+  let melhor = null;
+  for (const r of mundo.ruidos ?? []) {
+    if (r.time === ent.time || r.em <= c.ouvidoEm) continue;
+    if (distXZ(ent.pos, r) > ALCANCE_OUVIDO) continue;
+    if (melhor === null || r.em > melhor.em) melhor = r;
+  }
+  return melhor;
 }
 
 // Gira no máximo GIRO_MAX*dt em direção ao ângulo desejado.
@@ -324,6 +339,14 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
       voltarParaRota(ent, c, grafo, caixas, objetivo(ent, grafo, rng));
       destino = seguirRota(ent, c, grafo, dt, cmd);
     }
+    // Ouviu passos de inimigo: segue a rota, mas com a mira virada para o barulho.
+    const ruido = ouvir(ent, mundo, c);
+    if (ruido) {
+      c.ouvidoEm = ruido.em;
+      c.ouvidoAte = agora + OLHAR_RUIDO;
+      c.ouvidoPos = { x: ruido.x, z: ruido.z };
+    }
+    if (c.ouvidoPos && agora < c.ouvidoAte) cmd.yaw = girar(ent.yaw, yawPara(ent.pos, c.ouvidoPos), dt);
   }
   if (destino) {
     const mov = andarPara(ent.pos, cmd.yaw, destino);
