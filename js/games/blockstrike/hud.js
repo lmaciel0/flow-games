@@ -3,12 +3,12 @@
  * Só toca no DOM dentro de `raiz`; `atualizar` escreve apenas quando o valor muda.
  */
 
-import { ARMAS } from './config.js';
+import { ARMAS, ITENS } from './config.js';
 
 const PRIMARIAS = ['rifle', 'smg', 'sniper', 'escopeta'];
 const DIFICULDADES = [['facil', 'Fácil'], ['medio', 'Médio'], ['dificil', 'Difícil']];
 const MODOS = [
-  ['partida', 'Partida 5x5', 'Contra bots · primeiro a 13 rounds'],
+  ['partida', 'Partida 5x5', 'Desarme com economia · primeiro a 13'],
   ['treino', 'Treino livre', 'Sozinho no mapa · munição infinita'],
 ];
 const TAMANHOS = [['normal', 'Normal'], ['grande', 'Grande']];
@@ -16,7 +16,7 @@ const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ci
 const CONTROLES = [
   ['WASD', 'andar'], ['Mouse', 'mirar'], ['Clique', 'atirar'], ['Botão direito', 'luneta / estocada'],
   ['R', 'recarregar'], ['Espaço', 'pular'], ['C', 'agachar'], ['Shift', 'andar em silêncio'],
-  ['1 2 3 / roda', 'armas'], ['Q', 'última arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
+  ['E (segurar)', 'plantar / desarmar C4'], ['Z X V', 'flash / smoke / HE'], ['1 2 3 / roda', 'armas'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
 const RADAR_ESCALA = 2.6; // px por metro
 const RADAR_LADO = 132; // px
@@ -24,7 +24,20 @@ const MAX_LINHAS_FEED = 5;
 const VIDA_FEED_MS = 5000;
 const VIDA_DANO_MS = 600;
 const VIDA_HIT_MS = 180;
-const MOTIVOS = { eliminacao: 'Time adversário eliminado', tempo: 'Tempo esgotado' };
+const MOTIVOS = {
+  eliminacao: 'Time adversário eliminado', tempo: 'Tempo esgotado',
+  'bomba-explodiu': 'A C4 explodiu', 'bomba-desarmada': 'A C4 foi desarmada',
+};
+const PAPEIS = { T: 'Terrorista', CT: 'Contra-terrorista' };
+const DICAS_C4 = {
+  plantar: 'Segure E para plantar a C4', desarmar: 'Segure E para desarmar a C4',
+};
+const VIDA_ANUNCIO_MS = 3000;
+const VIDA_GANHO_MS = 1800;
+const GRUPOS_COMPRA = [['arma', 'Armas'], ['equip', 'Equipamento'], ['granada', 'Granadas']];
+const TECLAS_COMPRA = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'];
+const ROTULO_MOTIVO = { dinheiro: 'sem $', 'ja-tem': 'tem', papel: 'só CT' };
+const dolar = (n) => `$${n}`;
 
 const el = (tag, props = {}, ...filhos) => {
   const e = document.createElement(tag);
@@ -176,7 +189,7 @@ export function criarHud(raiz, handlers) {
     el('h2', { class: 'bs-menu-titulo', texto: 'Block Strike' }),
     menuTexto,
     gradeModos,
-    el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária' }), gradeMenu),
+    el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária (treino)' }), gradeMenu),
     el('div', { class: 'bs-linha' },
       campoDif,
       el('label', { class: 'bs-campo' },
@@ -247,13 +260,22 @@ export function criarHud(raiz, handlers) {
   const luneta = el('div', { class: 'bs-luneta', id: 'bs-luneta', hidden: true });
   const vinheta = el('div', { class: 'bs-vinheta', id: 'bs-vinheta' });
   const dicaTreino = el('div', { class: 'bs-dica-treino', id: 'bs-dica-treino', hidden: true,
-    texto: 'Treino · B troca a arma · Esc pausa' });
+    texto: 'Treino · B troca a arma · Z X V granadas · Esc pausa' });
   const radar = el('canvas', { class: 'bs-radar', id: 'bs-radar', width: RADAR_LADO, height: RADAR_LADO });
+  // C4: aviso do bombsite, barra de plantar/desarmar, dica de tecla, anúncio central e clarão da explosão.
+  const bombaInfo = el('div', { class: 'bs-bomba-info', id: 'bs-bomba-info', hidden: true });
+  const acaoBarra = el('div', { class: 'bs-acao', id: 'bs-acao', hidden: true },
+    el('small'), el('div', { class: 'bs-recarga-barra' }, el('i')));
+  const dicaC4 = el('div', { class: 'bs-dica-c4', id: 'bs-dica-c4', hidden: true });
+  const anuncio = el('div', { class: 'bs-anuncio', id: 'bs-anuncio', hidden: true });
+  const clarao = el('div', { class: 'bs-explosao', id: 'bs-explosao', hidden: true });
+  const cegueira = el('div', { class: 'bs-cegueira', id: 'bs-cegueira', hidden: true });
   const hudEl = el('div', { class: 'bs-hud', id: 'bs-hud', hidden: true },
     luneta, vinheta,
     el('div', { class: 'bs-topo' },
       el('div', { class: 'bs-placar' }, vivosAzul, placarAzul, timerEl, placarLaranja, vivosLaranja), roundEl),
     radar, killfeed, mira, hitmarker, danoArco, espectando, fimRound, dicaTrava, dicaTreino, recarga, avisoMunicao,
+    bombaInfo, acaoBarra, dicaC4, anuncio, clarao, cegueira,
     el('div', { class: 'bs-base' }, el('div', { class: 'bs-vida' }, el('small', { texto: 'VIDA' }), hpEl),
       el('div', { class: 'bs-arma' }, armaEl, municaoEl)));
   palco.append(hudEl);
@@ -283,13 +305,31 @@ export function criarHud(raiz, handlers) {
   };
   hud.morte = ({ assassino, vitima, arma, cabeca }) => {
     const nome = (e) => el('b', { class: `bs-time-${e.time}`, texto: e.nome });
-    const linha = el('div', { class: 'bs-feed-linha' }, nome(assassino),
-      el('span', { class: 'bs-feed-arma', texto: `[${ARMAS[arma].nome}]` }));
+    // Morte pela explosão da C4 não tem assassino: só a vítima e o rótulo da bomba.
+    const linha = el('div', { class: 'bs-feed-linha' }, assassino ? nome(assassino) : null,
+      el('span', { class: 'bs-feed-arma', texto: `[${ARMAS[arma]?.nome ?? 'C4'}]` }));
     if (cabeca) linha.append(el('span', { class: 'bs-feed-cabeca', texto: '☠', title: 'Headshot' }));
     linha.append(nome(vitima));
     killfeed.append(linha);
     while (killfeed.children.length > MAX_LINHAS_FEED) killfeed.firstChild.remove();
     depois(() => linha.remove(), VIDA_FEED_MS);
+  };
+  // Anúncio grande no centro (C4 plantada, desarmada...) e clarão branco da explosão (mais forte de perto).
+  let timerAnuncio = null;
+  hud.anuncio = (texto, tom = 'aviso') => {
+    anuncio.className = `bs-anuncio ${tom}`;
+    escrever(anuncio, texto);
+    mostrar(anuncio, true);
+    if (timerAnuncio) { clearTimeout(timerAnuncio); timers.delete(timerAnuncio); }
+    timerAnuncio = depois(() => mostrar(anuncio, false), VIDA_ANUNCIO_MS);
+  };
+  hud.flashExplosao = (distancia = 0) => {
+    clarao.style.setProperty('--forca', String(Math.max(0.25, Math.min(1, 1.1 - distancia / 40))));
+    clarao.classList.remove('anim');
+    mostrar(clarao, true);
+    void clarao.offsetWidth;
+    clarao.classList.add('anim');
+    depois(() => mostrar(clarao, false), 1400);
   };
   // --- Radar (canto superior esquerdo): mapa de cima girando com a mira, aliados e inimigos avistados ---
   let fundoRadar = null; // { img, minX, minZ } desenhado uma vez a partir das caixas
@@ -313,7 +353,34 @@ export function criarHud(raiz, handlers) {
     }
     return { img, minX, minZ };
   }
-  // r: { caixas, eu: { pos, yaw, time }, entidades, avistados: Set<id> }
+  // Bombsites (retângulo com a letra) e a C4 solta ou plantada, no mesmo referencial do radar.
+  function desenharBombsites(c, r) {
+    const px = (x) => (x - r.eu.pos.x) * RADAR_ESCALA;
+    const pz = (z) => (z - r.eu.pos.z) * RADAR_ESCALA;
+    c.lineWidth = 1.5;
+    c.strokeStyle = 'rgba(250, 204, 21, 0.9)';
+    c.fillStyle = 'rgba(250, 204, 21, 0.12)';
+    c.font = 'bold 13px sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    for (const [nome, s] of Object.entries(r.sites)) {
+      c.fillRect(px(s.min.x), pz(s.min.z), (s.max.x - s.min.x) * RADAR_ESCALA, (s.max.z - s.min.z) * RADAR_ESCALA);
+      c.strokeRect(px(s.min.x), pz(s.min.z), (s.max.x - s.min.x) * RADAR_ESCALA, (s.max.z - s.min.z) * RADAR_ESCALA);
+      c.save();
+      c.translate(px(s.centro.x), pz(s.centro.z));
+      c.rotate(-r.eu.yaw); // a letra fica em pé, mesmo com o mapa girando
+      c.fillStyle = '#facc15';
+      c.fillText(nome, 0, 0);
+      c.restore();
+    }
+    const b = r.bomba;
+    if (b && b.pos && !b.desarmada) {
+      const pisca = b.plantada && Math.floor(performance.now() / 300) % 2 === 0;
+      c.fillStyle = b.plantada ? (pisca ? '#ffffff' : '#ef4444') : '#facc15';
+      c.fillRect(px(b.pos.x) - 3, pz(b.pos.z) - 3, 6, 6);
+    }
+  }
+  // r: { caixas, eu: { pos, yaw, time }, entidades, avistados: Set<id>, sites?, bomba? }
   hud.radar = (r) => {
     if (!ctxRadar) return;
     if (!fundoRadar) fundoRadar = desenharFundo(r.caixas);
@@ -324,6 +391,7 @@ export function criarHud(raiz, handlers) {
     c.translate(meio, meio);
     c.rotate(r.eu.yaw); // a frente do jogador aponta para cima
     c.drawImage(fundoRadar.img, -(r.eu.pos.x - fundoRadar.minX) * RADAR_ESCALA, -(r.eu.pos.z - fundoRadar.minZ) * RADAR_ESCALA);
+    if (r.sites) desenharBombsites(c, r);
     for (const e of r.entidades) {
       if (!e.vivo || e === r.eu) continue;
       const aliado = e.time === r.eu.time;
@@ -345,6 +413,8 @@ export function criarHud(raiz, handlers) {
   };
 
   hud.limparEfeitos = () => {
+    mostrar(anuncio, false);
+    mostrar(clarao, false);
     killfeed.replaceChildren();
     mostrar(hitmarker, false);
     mostrar(danoArco, false);
@@ -357,6 +427,59 @@ export function criarHud(raiz, handlers) {
   palco.append(loadout);
   marcarSelecionada(gradeLoadout, estado.primaria);
   // Digit1–Digit4 no freeze: o index chama isto a partir de entrada.aoTecla.
+  // --- Menu de compra (partida com economia): teclas 1-9 e 0 compram na ordem dos itens ---
+  const ordemItens = Object.keys(ITENS);
+  const botoesCompra = new Map();
+  const compraTitulo = el('strong', { texto: 'Compra' });
+  const compraColunas = el('div', { class: 'bs-compra-colunas' });
+  for (const [grupo, rotulo] of GRUPOS_COMPRA) {
+    const col = el('div', { class: 'bs-compra-col' }, el('small', { texto: rotulo }));
+    for (const id of ordemItens.filter((i) => ITENS[i].grupo === grupo)) {
+      const b = el('button', { type: 'button', class: 'bs-compra-item', 'data-item': id },
+        el('kbd', { texto: String((ordemItens.indexOf(id) + 1) % 10) }),
+        el('span', { texto: ITENS[id].nome }), el('em', { texto: dolar(ITENS[id].preco) }));
+      b.addEventListener('click', () => handlers.comprar(id));
+      botoesCompra.set(id, b);
+      col.append(b);
+    }
+    compraColunas.append(col);
+  }
+  const compra = el('div', { class: 'bs-loadout bs-compra', id: 'bs-compra', hidden: true },
+    compraTitulo, compraColunas,
+    el('small', { class: 'bs-loadout-dica', texto: 'Compre com as teclas ou clicando. O que sobreviver continua com você.' }));
+  palco.append(compra);
+  let chaveCompra = '';
+  const renderCompra = (v) => {
+    escrever(compraTitulo, `Compra · ${dolar(v.dinheiro)} · fecha em ${Math.max(0, Math.ceil(v.tempo))}s`);
+    const chave = v.compra.map((i) => `${i.id}:${i.motivo ?? ''}`).join('|');
+    if (chave === chaveCompra) return;
+    chaveCompra = chave;
+    for (const i of v.compra) {
+      const b = botoesCompra.get(i.id);
+      b.classList.toggle('sem-dinheiro', i.motivo === 'dinheiro');
+      b.classList.toggle('tem', i.motivo === 'ja-tem');
+      b.classList.toggle('indisponivel', i.motivo === 'papel');
+      b.title = i.motivo ? ROTULO_MOTIVO[i.motivo] ?? '' : '';
+    }
+  };
+  hud.teclaCompra = (code) => {
+    const i = TECLAS_COMPRA.indexOf(code);
+    if (i < 0 || compra.hidden) return false;
+    handlers.comprar(ordemItens[i]);
+    return true;
+  };
+  // Dinheiro e equipamento na base da tela; "+$" sobe quando entra dinheiro.
+  const dinheiroEl = el('div', { class: 'bs-dinheiro', id: 'bs-dinheiro', hidden: true });
+  const ganhoEl = el('div', { class: 'bs-ganho', id: 'bs-ganho', hidden: true });
+  let timerGanho = null;
+  hud.ganhou = (valor, motivo = '') => {
+    if (!valor || valor <= 0) return;
+    escrever(ganhoEl, `+${dolar(valor)}${motivo ? ` · ${motivo}` : ''}`);
+    mostrar(ganhoEl, true);
+    if (timerGanho) { clearTimeout(timerGanho); timers.delete(timerGanho); }
+    timerGanho = depois(() => mostrar(ganhoEl, false), VIDA_GANHO_MS);
+  };
+  hudEl.append(dinheiroEl, ganhoEl);
   hud.loadoutAberto = () => !loadout.hidden;
   hud.textoLoadout = (texto) => escrever(loadout.querySelector('.bs-loadout-dica'), texto);
   hud.teclaLoadout = (code) => {
@@ -452,9 +575,32 @@ export function criarHud(raiz, handlers) {
     escrever(placarAzul, String(v.placar.azul));
     escrever(placarLaranja, String(v.placar.laranja));
     const treino = v.modo === 'treino';
-    escrever(roundEl, treino ? 'Treino livre' : `Round ${v.round}`);
-    escrever(timerEl, v.fase === 'freeze' ? String(Math.max(0, Math.ceil(v.tempo))) : mmss(v.tempo));
-    timerEl.classList.toggle('acabando', !treino && v.fase === 'jogo' && v.tempo <= 10);
+    escrever(roundEl, treino ? 'Treino livre' : `Round ${v.round} · ${PAPEIS[v.papel] ?? ''}`);
+    const b = v.bomba;
+    const plantada = Boolean(b && b.plantada && v.fase === 'jogo');
+    // Plantada: o relógio do round dá lugar ao da C4.
+    const texto = v.fase === 'freeze' ? String(Math.max(0, Math.ceil(v.tempo)))
+      : plantada ? String(Math.max(0, Math.ceil(b.restante))) : mmss(v.tempo);
+    escrever(timerEl, texto);
+    timerEl.classList.toggle('acabando', !treino && !plantada && v.fase === 'jogo' && v.tempo <= 10);
+    timerEl.classList.toggle('bomba', plantada);
+    mostrar(bombaInfo, plantada);
+    if (plantada) escrever(bombaInfo, `C4 plantada · bombsite ${b.site ?? ''}`.trim());
+    // Plantar/desarmar: barra de progresso e a dica da tecla.
+    const agindo = Boolean(b && b.acao && v.vivo);
+    mostrar(acaoBarra, agindo);
+    if (agindo) {
+      escrever(acaoBarra.firstChild, b.acao === 'plantar' ? 'PLANTANDO' : 'DESARMANDO');
+      const p = String(Math.round(b.progresso * 100));
+      if (acaoBarra.dataset.p !== p) {
+        acaoBarra.dataset.p = p;
+        acaoBarra.querySelector('i').style.width = `${p}%`;
+      }
+    }
+    const dica = b && v.vivo && !agindo
+      ? DICAS_C4[b.dica] ?? (b.levaC4 ? 'Você leva a C4 · vá a um bombsite (A ou B)' : '') : '';
+    mostrar(dicaC4, Boolean(dica));
+    if (dica) escrever(dicaC4, dica);
     hudEl.classList.toggle('bs-treino', treino);
     mostrar(dicaTreino, treino && v.vivo);
     marcarVivos(vivosAzul, v.entidades, 'azul');
@@ -489,7 +635,20 @@ export function criarHud(raiz, handlers) {
     mostrar(mira, v.vivo);
     mostrar(espectando, !v.vivo && Boolean(v.espectando));
     if (v.espectando) escrever(espectando, `Assistindo: ${v.espectando}`);
-    mostrar(loadout, (v.fase === 'freeze' || v.loadout) && v.vivo);
+    mostrar(loadout, !v.compra && (v.fase === 'freeze' || v.loadout) && v.vivo);
+    // Flash: tela branca que some aos poucos (a intensidade vem pronta, de 0 a 1).
+    mostrar(cegueira, v.cegueira > 0);
+    if (v.cegueira > 0) cegueira.style.opacity = String(v.cegueira.toFixed(2));
+    mostrar(compra, Boolean(v.compra));
+    if (v.compra) renderCompra(v);
+    mostrar(dinheiroEl, v.dinheiro !== null && v.dinheiro !== undefined);
+    if (v.dinheiro !== null && v.dinheiro !== undefined) {
+      const eq = v.equip;
+      const g = eq.granadas;
+      escrever(dinheiroEl, [dolar(v.dinheiro), eq.colete > 0 ? `${eq.capacete ? 'colete+capacete' : 'colete'} ${eq.colete}` : '',
+        eq.kit ? 'kit' : '', g.flash ? `Z flash ${g.flash}` : '', g.smoke ? `X smoke ${g.smoke}` : '', g.he ? `V HE ${g.he}` : '']
+        .filter(Boolean).join(' · '));
+    }
     // vencedorRound/motivo persistem no freeze seguinte: só valem em fim-round.
     const emFimRound = v.fase === 'fim-round';
     mostrar(fimRound, emFimRound);
@@ -508,7 +667,7 @@ export function criarHud(raiz, handlers) {
   hud.destruir = () => {
     for (const t of timers) clearTimeout(t);
     timers.clear();
-    for (const e of [menu, hudEl, loadout, tabela, pausa, fim]) e.remove();
+    for (const e of [menu, hudEl, loadout, compra, tabela, pausa, fim]) e.remove();
   };
   // FIM-SECOES
   return hud;

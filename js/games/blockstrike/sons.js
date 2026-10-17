@@ -201,6 +201,119 @@ export function criarSons(audio) {
       chiado(v, v.t0, { tipo: 'lowpass', freq: 600, freqFim: 100, dur: 0.5, ganho: 0.3 });
     },
 
+    // Arremesso: sopro do braço e o pino saindo.
+    arremesso(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.5 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'bandpass', freq: 500, freqFim: 1800, q: 1, dur: 0.16, ganho: 0.25, ataque: 0.05 });
+      clique(v, v.t0 + 0.02, 2000, 0.25);
+    },
+
+    quiqueGranada(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.45 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'triangle', freq: varia(1300, 0.15), freqFim: 700, dur: 0.07, ganho: 0.25 });
+      chiado(v, v.t0, { tipo: 'bandpass', freq: 2500, q: 3, dur: 0.03, ganho: 0.25 });
+    },
+
+    // HE: estrondo mais curto que o da C4.
+    he(distancia = 0, pan = 0) {
+      const v = voz({ distancia: distancia * 0.6, pan, ganho: 0.95 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 2200, dur: 0.1, ganho: 0.7 });
+      chiado(v, v.t0, { tipo: 'lowpass', freq: 1400, freqFim: 100, dur: 0.9, ganho: 0.85, ataque: 0.004 });
+      tom(v, v.t0, { freq: 120, freqFim: 35, dur: 0.6, ganho: 0.9 });
+    },
+
+    // Flash: estalo agudo seco.
+    flash(distancia = 0, pan = 0) {
+      const v = voz({ distancia: distancia * 0.7, pan, ganho: 0.8 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 3500, dur: 0.12, ganho: 0.8 });
+      tom(v, v.t0, { freq: 220, freqFim: 60, dur: 0.1, ganho: 0.6 });
+    },
+
+    // Zumbido de quem foi cegado: seno agudo que decai por `dur` segundos.
+    zumbido(dur = 3) {
+      const v = voz({ ganho: 0.35 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'sine', freq: 3500, dur, ganho: 0.3, ataque: 0.02 });
+      tom(v, v.t0, { onda: 'sine', freq: 3720, dur: dur * 0.8, ganho: 0.12, ataque: 0.02 });
+    },
+
+    // Smoke estourando: chiado longo.
+    fumaca(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.6 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'bandpass', freq: 3500, freqFim: 1800, q: 0.7, dur: 1.4, ganho: 0.3, ataque: 0.05 });
+      tom(v, v.t0, { freq: 140, freqFim: 70, dur: 0.15, ganho: 0.4 });
+    },
+
+    // Compra aceita: caixa registradora curtinha.
+    compra() {
+      const v = voz({ ganho: 0.5 });
+      if (!v) return;
+      clique(v, v.t0, 2800, 0.25);
+      tom(v, v.t0 + 0.05, { onda: 'triangle', freq: 1760, dur: 0.12, ganho: 0.2 });
+      tom(v, v.t0 + 0.1, { onda: 'triangle', freq: 2349, dur: 0.18, ganho: 0.18 });
+    },
+
+    // Bipe da C4 plantada; nos últimos 5 s fica mais agudo.
+    bipC4(distancia = 0, pan = 0, restante = 40) {
+      const v = voz({ distancia, pan, ganho: 0.6 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'square', freq: restante < 5 ? 1500 : 1050, dur: 0.09, ganho: 0.3 });
+      if (restante < 10) tom(v, v.t0, { onda: 'sine', freq: 520, dur: 0.12, ganho: 0.25 });
+    },
+
+    // Começou a plantar (três bipes rápidos) ou a desarmar (cliques descendo).
+    acaoC4(acao, distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.6 });
+      if (!v) return;
+      if (acao === 'plantar') {
+        [0, 0.16, 0.32].forEach((d) => tom(v, v.t0 + d, { onda: 'square', freq: 800, dur: 0.07, ganho: 0.2 }));
+      } else {
+        [0, 0.12, 0.24, 0.36].forEach((d, i) => clique(v, v.t0 + d, 2600 - i * 350, 0.3));
+      }
+    },
+
+    plantada(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.8 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'square', freq: 700, dur: 0.1, ganho: 0.2 });
+      tom(v, v.t0 + 0.14, { onda: 'square', freq: 900, dur: 0.1, ganho: 0.2 });
+      tom(v, v.t0 + 0.3, { onda: 'square', freq: 1200, dur: 0.45, ganho: 0.25 });
+    },
+
+    desarmada() {
+      const v = voz({ ganho: 0.7 });
+      if (!v) return;
+      clique(v, v.t0, 2000, 0.3);
+      [523, 659, 784].forEach((f, i) => tom(v, v.t0 + 0.12 + i * 0.1, { onda: 'triangle', freq: f, dur: 0.35, ganho: 0.3 }));
+    },
+
+    // Explosão: estalo, estrondo grave que rola e subgrave. Ouve-se no mapa inteiro (distância encolhida).
+    explosao(distancia = 0, pan = 0) {
+      const v = voz({ distancia: distancia * 0.35, pan, ganho: 1 });
+      if (!v) return;
+      const t = v.t0;
+      chiado(v, t, { tipo: 'highpass', freq: 2500, dur: 0.18, ganho: 0.8 });
+      chiado(v, t, { tipo: 'lowpass', freq: 1800, freqFim: 90, dur: 1.9, ganho: 0.95, ataque: 0.005 });
+      tom(v, t, { freq: 95, freqFim: 28, dur: 1.5, ganho: 1 });
+      chiado(v, t + 0.25, { tipo: 'lowpass', freq: 600, freqFim: 120, dur: 1.2, ganho: 0.35, ataque: 0.08 });
+    },
+
+    // "Oof" de boneco de blocos: voz grave que cai de tom, com um sopro de ar no começo.
+    oof(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.7 });
+      if (!v) return;
+      const t = v.t0;
+      tom(v, t, { onda: 'sawtooth', freq: varia(320, 0.08), freqFim: 140, dur: 0.3, ganho: 0.22, ataque: 0.01 });
+      tom(v, t, { onda: 'triangle', freq: varia(160, 0.08), freqFim: 85, dur: 0.34, ganho: 0.3, ataque: 0.01 });
+      chiado(v, t, { tipo: 'bandpass', freq: 650, freqFim: 380, q: 3, dur: 0.26, ganho: 0.2, ataque: 0.01 });
+      chiado(v, t, { tipo: 'lowpass', freq: 1200, dur: 0.07, ganho: 0.3 });
+    },
+
     inicioRound() {
       const v = voz({ ganho: 0.4 });
       if (!v) return;

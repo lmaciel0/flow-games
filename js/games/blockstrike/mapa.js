@@ -3,6 +3,7 @@
  * Módulo puro: só dados. Base A em z>0 olhando para -z (yaw 0), base B em z<0
  * (yaw PI). O lado B é gerado espelhando em z o lado A, então o mapa é simétrico.
  * Rotas: corredor longo à esquerda (x<0), meio com caixas, túnel à direita.
+ * Bombsites A (corredor) e B (túnel) ficam em z perto de 0, nas saídas dessas rotas.
  * Para ajustar, abrir no navegador e andar.
  */
 
@@ -72,6 +73,11 @@ const wpA = [
 ];
 // Waypoints no eixo z = 0 (ids 2N..2N+2): saída do corredor, meio e túnel.
 const wpC = [[-34, 0], [0, 0], [33, 0]];
+// Waypoints dos bombsites, no centro de cada um (ids 2N+3 e 2N+4).
+const SITES = {
+  A: { min: { x: -30, z: -4 }, max: { x: -19, z: 4 }, centro: { x: -24.5, z: 0 } },
+  B: { min: { x: 14, z: -4 }, max: { x: 25, z: 4 }, centro: { x: 19.5, z: 0 } },
+};
 const N = wpA.length;
 const espelharId = (i) => (i >= N ? i : i + N);
 
@@ -97,12 +103,20 @@ export const MAPA = {
     ...wpA.map(([x, z, c]) => ({ x, z, ...(c && { cobertura: true }) })),
     ...wpA.map(([x, z, c]) => ({ x, z: -z, ...(c && { cobertura: true }) })),
     ...wpC.map(([x, z]) => ({ x, z })),
+    { ...SITES.A.centro }, { ...SITES.B.centro },
   ].map((w, id) => ({ id, ...w })),
   arestas: [
     ...arestasA,
     ...arestasA.map(([a, b]) => [espelharId(a), espelharId(b)]),
     [2 * N, 2 * N + 1], [2 * N + 1, 2 * N + 2],
+    [2 * N, 2 * N + 3], [2 * N + 1, 2 * N + 3], [2 * N + 1, 2 * N + 4], [2 * N + 2, 2 * N + 4],
   ],
+  // Bombsites do modo desarme (retângulos no chão, em z perto de 0, entre as rotas).
+  bombsites: {
+    // `espera`: waypoint onde os CTs seguram o site antes da plantada ([metade z>0, metade z<0]), a ~10 m do site.
+    A: { ...SITES.A, waypoint: 2 * N + 3, espera: [9, 9 + N] },
+    B: { ...SITES.B, waypoint: 2 * N + 4, espera: [17, 17 + N] },
+  },
   ceu: 0x87ceeb,
   neblina: [30, 90],
 };

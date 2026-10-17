@@ -9,6 +9,9 @@ import {
   criarArma, podeAtirar, disparar, atualizarArma, iniciarRecarga, danoDe, velocidadeDe, SAQUE,
 } from './armas.js';
 import { escolherPrimaria } from './bots.js';
+import { acaoPossivel, tickBomba } from './bomba.js';
+import { armasDoEquip, danoComColete, perderEquip, premiarKill } from './economia.js';
+import { abrirBuracos, atualizarGranadas, lancar, limparGranadas } from './granadas.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 1.8;
@@ -17,6 +20,7 @@ const ALCANCE_TIRO = 200;
 const ALCANCE_RASTRO = 80; // tiro que não bate em nada: o rastro visual para aqui
 const QUEDA_POUSO = 4; // m/s de queda a partir dos quais o pouso faz barulho
 const COSTAS = -0.5; // cosseno: atacante atrás do alvo (faca pelas costas)
+const VIDA_RUIDO = 2; // s que um ruído de passo continua audível para os bots
 
 function criarEntidade(id, nome, time, bot, primariaEscolhida) {
   return {
@@ -38,10 +42,23 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [] };
+}
+
+// Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
+// Quem anda com Shift ou agachado não emite 'passo', então não deixa rastro aqui.
+function registrarRuidos(mundo, eventos) {
+  for (const ev of eventos) {
+    if (ev.tipo !== 'passo' && ev.tipo !== 'pouso') continue;
+    const e = mundo.entidades[ev.id];
+    mundo.ruidos.push({ id: e.id, time: e.time, x: e.pos.x, z: e.pos.z, em: mundo.tempo });
+  }
+  const limite = mundo.tempo - VIDA_RUIDO;
+  while (mundo.ruidos.length && mundo.ruidos[0].em < limite) mundo.ruidos.shift();
 }
 
 export function posicionarParaRound(mundo, ladoAzul) {
+  limparGranadas(mundo);
   const ladoLaranja = ladoAzul === 'A' ? 'B' : 'A';
   mundo.entidades.forEach((e, i) => {
     const lado = e.time === 'azul' ? ladoAzul : ladoLaranja;
@@ -54,21 +71,29 @@ export function posicionarParaRound(mundo, ladoAzul) {
     e.noChao = false;
     e.hp = JOGADOR.hp;
     e.vivo = true;
-    e.slot = 'primaria';
-    e.slotAnterior = 'pistola';
     e.passoAcc = 0;
     e.velHoriz = 0;
-    e.armas = {
-      primaria: criarArma(e.primariaEscolhida),
-      pistola: criarArma('pistola'),
-      faca: criarArma('faca'),
-    };
+    if (mundo.economia) {
+      // Com economia vale o que foi comprado (e sobreviveu): sem primária, começa com a pistola na mão.
+      e.armas = armasDoEquip(e);
+      e.slot = e.armas.primaria ? 'primaria' : 'pistola';
+      e.slotAnterior = e.armas.primaria ? 'pistola' : 'faca';
+      e.kit = e.equip.kit;
+    } else {
+      e.slot = 'primaria';
+      e.slotAnterior = 'pistola';
+      e.armas = {
+        primaria: criarArma(e.primariaEscolhida),
+        pistola: criarArma('pistola'),
+        faca: criarArma('faca'),
+      };
+    }
   });
 }
 
 const idle = (e) => ({
   frente: 0, lado: 0, pular: false, agachar: false, devagar: false, atirar: false,
-  zoom: false, recarregar: false, slot: null, yaw: e.yaw, pitch: e.pitch,
+  zoom: false, recarregar: false, usar: false, granada: null, slot: null, yaw: e.yaw, pitch: e.pitch,
 });
 
 // Só levanta se o corpo em pé couber (sem teto em cima).
@@ -144,11 +169,16 @@ function alvoColado(o, entidades, ignorarId) {
 }
 
 // `danoFixo`: a faca tira o mesmo em qualquer parte do corpo (só as costas mudam o valor).
-function aplicarDano(atirador, tipo, golpe, eventos, danoFixo) {
+function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   const alvo = golpe.ent;
   if (alvo.time === atirador.time) return; // fogo amigo desligado (mas o corpo bloqueia o tiro)
   if (alvo.hp <= 0) return; // morte já registrada neste passo, só falta o `vivo` cair
-  const dano = danoFixo ?? danoDe(tipo, golpe.parte);
+  let dano = danoFixo ?? danoDe(tipo, golpe.parte);
+  if (mundo.economia) {
+    const r = danoComColete(alvo.equip, golpe.parte, dano);
+    dano = r.dano;
+    alvo.equip.colete = r.colete;
+  }
   alvo.hp = Math.max(0, alvo.hp - dano);
   eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto });
   if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
@@ -156,6 +186,7 @@ function aplicarDano(atirador, tipo, golpe, eventos, danoFixo) {
   // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.
   atirador.kills += 1;
   alvo.mortes += 1;
+  if (mundo.economia) premiarKill(atirador, tipo);
   const cabeca = golpe.parte === 'cabeca';
   if (cabeca) atirador.killsCabeca += 1;
   eventos.push({ tipo: 'morte', vitima: alvo.id, assassino: atirador.id, arma: tipo, cabeca });
@@ -169,7 +200,7 @@ function atirarRaio(mundo, e, tipo, desvio, eventos) {
   const golpe = raycastEntidades(o, dir, mundo.entidades, ALCANCE_TIRO, e.id);
   let ate;
   if (golpe && (!parede || golpe.dist <= parede.dist)) {
-    aplicarDano(e, tipo, golpe, eventos);
+    aplicarDano(mundo, e, tipo, golpe, eventos);
     ate = golpe.ponto;
   } else if (parede) {
     eventos.push({ tipo: 'impacto', ponto: parede.ponto, normal: parede.normal });
@@ -177,6 +208,7 @@ function atirarRaio(mundo, e, tipo, desvio, eventos) {
   } else {
     ate = { x: o.x + dir.x * ALCANCE_RASTRO, y: o.y + dir.y * ALCANCE_RASTRO, z: o.z + dir.z * ALCANCE_RASTRO };
   }
+  if (mundo.fumacas?.length) abrirBuracos(mundo, o, ate); // o tiro atravessa a fumaça e abre um buraco
   eventos.push({ tipo: 'raio', atirador: e.id, de: o, ate });
 }
 
@@ -202,7 +234,7 @@ function golpearFaca(mundo, e, cmd, arma, eventos) {
   const noCorpo = alvo && (!parede || alvo.dist <= parede.dist);
   const costas = Boolean(noCorpo && pelasCostas(e, alvo.ent));
   eventos.push({ tipo: 'golpe', atirador: e.id, forte, acerto: noCorpo ? 'corpo' : parede ? 'parede' : null, costas });
-  if (noCorpo) aplicarDano(e, 'faca', alvo, eventos, costas ? g.costas : g.dano);
+  if (noCorpo) aplicarDano(mundo, e, 'faca', alvo, eventos, costas ? g.costas : g.dano);
 }
 
 const ORDEM_SLOTS = ['primaria', 'pistola', 'faca'];
@@ -211,8 +243,9 @@ const ORDEM_SLOTS = ['primaria', 'pistola', 'faca'];
 function slotPedido(e, slot) {
   if (slot === 'anterior') return e.slotAnterior;
   if (slot === 'roda+' || slot === 'roda-') {
-    const i = ORDEM_SLOTS.indexOf(e.slot);
-    return ORDEM_SLOTS[(i + (slot === 'roda+' ? 1 : ORDEM_SLOTS.length - 1)) % ORDEM_SLOTS.length];
+    const ordem = ORDEM_SLOTS.filter((s) => e.armas[s]); // sem primária comprada, a roda pula esse slot
+    const i = ordem.indexOf(e.slot);
+    return ordem[(i + (slot === 'roda+' ? 1 : ordem.length - 1)) % ordem.length];
   }
   return slot;
 }
@@ -251,17 +284,37 @@ function combate(mundo, e, cmd, dt, eventos) {
   if (antes === 0 && arma.recarregandoAte > 0) eventos.push({ tipo: 'recarga', atirador: e.id }); // pente vazio
 }
 
-export function passo(mundo, dt, comandos, { congelado = false } = {}) {
+// `comBomba` falso (fim do round) congela a C4: ninguém age e o relógio dela para.
+export function passo(mundo, dt, comandos, { congelado = false, comBomba = true } = {}) {
   const eventos = [];
+  const agindo = new Map();
   for (const e of mundo.entidades) {
     if (!e.vivo) continue;
-    const cmd = comandos.get(e.id) ?? idle(e);
+    let cmd = comandos.get(e.id) ?? idle(e);
+    // Segurando a tecla de uso onde dá para plantar/desarmar: fica parado e não atira.
+    const acao = comBomba && !congelado && cmd.usar ? acaoPossivel(mundo, e) : null;
+    if (acao) {
+      agindo.set(e.id, acao);
+      cmd = { ...cmd, frente: 0, lado: 0, pular: false, atirar: false, recarregar: false, granada: null, slot: null };
+    }
     moverEntidade(e, cmd, dt, mundo.mapa.caixas, congelado, eventos);
     if (!congelado) combate(mundo, e, cmd, dt, eventos);
+    if (comBomba && !congelado && cmd.granada) lancar(mundo, e, cmd.granada, eventos, cmd.granadaAlvo ?? null);
+  }
+  if (comBomba && !congelado) {
+    tickBomba(mundo, dt, agindo, eventos);
+    atualizarGranadas(mundo, dt, eventos, (dono, alvo, dano, tipo, evs) => aplicarDano(mundo, dono, tipo, {
+      ent: alvo, parte: 'tronco', ponto: { x: alvo.pos.x, y: alvo.pos.y + 0.9, z: alvo.pos.z },
+    }, evs, dano));
   }
   // Trocas no mesmo passo valem para os dois lados: as mortes só têm efeito depois de todos agirem.
-  for (const e of mundo.entidades) if (e.vivo && e.hp <= 0) e.vivo = false;
+  for (const e of mundo.entidades) {
+    if (!e.vivo || e.hp > 0) continue;
+    e.vivo = false;
+    if (mundo.economia) perderEquip(e); // morrer perde primária, colete, kit e granadas
+  }
   mundo.tempo += dt;
+  registrarRuidos(mundo, eventos);
   return eventos;
 }
 

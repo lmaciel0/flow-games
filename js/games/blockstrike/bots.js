@@ -4,9 +4,11 @@
  * `pensar` devolve o mesmo Comando que a entrada do jogador (yaw/pitch absolutos).
  */
 
-import { ARMAS, DIFICULDADE, RECUO_MAX } from './config.js';
+import { ARMAS, BOMBA, DIFICULDADE, RECUO_MAX } from './config.js';
 import { olho, direcao, temVisada } from './fisica.js';
 import { caminho, maisProximo, coberturaPerto } from './navegacao.js';
+import { siteEm } from './bomba.js';
+import { visadaLivre } from './granadas.js';
 
 const ALCANCE_VISAO = 60;
 const MEIO_CONE = (110 / 2) * (Math.PI / 180);
@@ -26,6 +28,13 @@ const LIMITE_ROTA = 20; // |x| que separa corredor, meio e túnel
 const REFAZER_ROTA = 2; // s entre recálculos da rota até o alvo
 // Distância (m) até onde o bot avança no alvo, nas pausas entre os tiros.
 const ALCANCE_IDEAL = { sniper: 60, rifle: 20, smg: 12, escopeta: 7, pistola: 15 };
+
+const ALCANCE_OUVIDO = 15; // m: passo de inimigo até aqui chama a atenção do bot
+const OLHAR_RUIDO = 1; // s olhando para onde veio o barulho
+const GRANADA_INTERVALO = [6, 12]; // s entre arremessos do mesmo bot
+const ALCANCE_HE = [9, 28];
+const ALCANCE_FLASH = [6, 25];
+const FUMACA_RECUO = 6; // m à frente para a smoke que cobre a fuga
 
 const PESOS = [['rifle', 0.55], ['smg', 0.25], ['escopeta', 0.2]];
 
@@ -78,16 +87,19 @@ function objetivo(ent, grafo, rng, faixaPedida = null) {
   return opcoes[Math.floor(rng() * opcoes.length)].id;
 }
 
-export function criarCerebro(ent, grafo, rng, caixas = []) {
+export function criarCerebro(ent, grafo, rng, caixas = [], mundo = null) {
   const indice = ent.id % 5;
   const ordem = [1, 2, 0]; // meio, túnel, corredor
-  const destino = objetivo(ent, grafo, rng, ordem[indice % 3]);
+  const bomba = mundo ? destinoBomba(ent, mundo) : null;
+  const destino = bomba ? bomba.waypoint : objetivo(ent, grafo, rng, ordem[indice % 3]);
   return {
     estado: 'rota', rota: rotaAte(ent, grafo, caixas, destino), alvoId: null, vistoHa: 0,
     rajada: 0, pausaAte: 0, ultimoDanoDe: null,
     passoRota: 0, ultimaPos: null, perdidoHa: 0, esperaAte: 0, chegou: false,
     erro: { yaw: 0, pitch: 0 }, erroAte: 0, cabeca: false, municaoVista: null,
     gatilho: false, emRajada: false, preso: 0, queriaAndar: false,
+    ouvidoEm: -Infinity, ouvidoAte: 0, ouvidoPos: null, chaveBomba: bomba ? bomba.chave : null,
+    proxGranada: 0, cegoVisto: 0, casaZ: ent.pos.z >= 0 ? 0 : 1, // metade do mapa onde nasceu
   };
 }
 
@@ -102,19 +114,116 @@ function pontosDoCorpo(alvo, alturaTronco = 1.1) {
 // Inimigos visíveis do olho do bot, do mais perto ao mais longe.
 function enxergar(ent, mundo) {
   const o = olho(ent);
-  const caixas = mundo.mapa.caixas;
   const vistos = [];
+  if (mundo.tempo < (ent.cegoAte ?? 0)) return vistos; // cego pela flash: não vê ninguém
   for (const outro of mundo.entidades) {
     if (!outro.vivo || outro.time === ent.time) continue;
     const d = distXZ(o, outro.pos);
     if (d > ALCANCE_VISAO) continue;
     if (d > VISAO_360 && Math.abs(angulo(yawPara(o, outro.pos) - ent.yaw)) > MEIO_CONE) continue;
     const p = pontosDoCorpo(outro);
-    if (!temVisada(o, p.cabeca, caixas) && !temVisada(o, p.tronco, caixas)) continue;
+    if (!visadaLivre(mundo, o, p.cabeca) && !visadaLivre(mundo, o, p.tronco)) continue; // fumaça também corta a visão
     vistos.push({ ent: outro, d });
   }
   vistos.sort((a, b) => a.d - b.d);
   return vistos;
+}
+
+// Ruído de inimigo mais recente ao alcance do ouvido que o bot ainda não tratou; null se não houver.
+export function ouvir(ent, mundo, c) {
+  let melhor = null;
+  for (const r of mundo.ruidos ?? []) {
+    if (r.time === ent.time || r.em <= c.ouvidoEm) continue;
+    if (distXZ(ent.pos, r) > ALCANCE_OUVIDO) continue;
+    if (melhor === null || r.em > melhor.em) melhor = r;
+  }
+  return melhor;
+}
+
+// Para onde o bot vai por causa da C4: { chave, waypoint? , ponto? } ou null (sem bomba em jogo).
+// A chave muda quando o objetivo muda (C4 plantada, caiu, outro bombsite): aí o bot refaz a rota.
+function destinoBomba(ent, mundo) {
+  const b = mundo.bomba;
+  if (!b || b.explodiu || b.desarmada) return null;
+  const sites = mundo.mapa.bombsites;
+  if (ent.time === b.terroristas) {
+    if (b.plantada) return { chave: `site:${b.site}`, waypoint: sites[b.site]?.waypoint };
+    if (b.portador === null && b.pos) {
+      // Só o terrorista vivo mais perto vai buscar a C4 solta; os outros esperam no bombsite.
+      const meu = distXZ(ent.pos, b.pos);
+      const maisPerto = mundo.entidades.every((o) => o === ent || !o.vivo || o.time !== ent.time || !o.bot ||
+        distXZ(o.pos, b.pos) >= meu);
+      if (maisPerto) return { chave: 'solta', ponto: b.pos };
+    }
+    return { chave: `site:${b.siteAlvo}`, waypoint: sites[b.siteAlvo].waypoint };
+  }
+  if (b.plantada) return { chave: `site:${b.site}`, waypoint: sites[b.site]?.waypoint };
+  // Antes da plantada, o CT segura o site de um pouco atrás, do lado da própria base (mira o corredor de entrada).
+  const site = ent.id % 2 === 0 ? 'A' : 'B';
+  return { chave: `espera:${site}`, waypoint: sites[site].espera[ent.cerebro?.casaZ ?? (ent.pos.z >= 0 ? 0 : 1)] };
+}
+
+// Visada limpa na altura da cintura entre o bot e um ponto do chão.
+const veDireto = (ent, mundo, p) => temVisada(
+  { x: ent.pos.x, y: 0.9, z: ent.pos.z }, { x: p.x, y: 0.9, z: p.z }, mundo.mapa.caixas);
+
+// Ações da C4 enquanto o bot não tem inimigo à vista. Devolve { direto?, parado?, segurar? } ou null:
+// direto = anda reto até o ponto; parado = fica onde está (planta/desarma); segurar = rota acabou, espera.
+function tarefaBomba(ent, mundo, cmd) {
+  const b = mundo.bomba;
+  if (!b || b.explodiu || b.desarmada) return null;
+  if (ent.time === b.terroristas) {
+    if (b.plantada) return { segurar: true };
+    if (b.portador === ent.id) {
+      if (!siteEm(mundo.mapa, ent.pos)) return null;
+      cmd.usar = true;
+      return { parado: true, segurar: true };
+    }
+    if (b.portador === null && b.pos && distXZ(ent.pos, b.pos) < 8 && veDireto(ent, mundo, b.pos)) {
+      return { direto: b.pos, segurar: true };
+    }
+    return b.portador === null && b.pos ? null : { segurar: true };
+  }
+  if (!b.plantada) return { segurar: true };
+  const d = distXZ(ent.pos, b.pos);
+  if (d <= BOMBA.raioAcao - 0.3) {
+    if (!b.acao || b.acao.id === ent.id) cmd.usar = true; // só um CT desarma; o resto cobre
+    return { parado: true, segurar: true };
+  }
+  return d < 16 && veDireto(ent, mundo, b.pos) ? { direto: b.pos, segurar: true } : null;
+}
+
+// Waypoint do próximo trecho: o da C4 se houver bomba em jogo, senão um sorteio na metade inimiga.
+function proximoObjetivo(ent, c, mundo, grafo, rng) {
+  const bomba = destinoBomba(ent, mundo);
+  if (!bomba) return objetivo(ent, grafo, rng);
+  c.chaveBomba = bomba.chave;
+  return bomba.waypoint ?? waypointPerto(grafo, bomba.ponto, mundo.mapa.caixas);
+}
+
+// Granada no meio da briga: HE ou flash no inimigo à vista, com intervalo e um pouco de sorte.
+// `granadaAlvo` é o ponto onde o arco deve cair (ver `lancar` em granadas.js).
+function jogarGranada(ent, c, alvo, mundo, cmd, rng) {
+  const g = ent.equip?.granadas;
+  if (!g || mundo.tempo < c.proxGranada) return;
+  const d = distXZ(ent.pos, alvo.pos);
+  let tipo = null;
+  if (g.he > 0 && d >= ALCANCE_HE[0] && d <= ALCANCE_HE[1] && rng() < 0.5) tipo = 'he';
+  else if (g.flash > 0 && d >= ALCANCE_FLASH[0] && d <= ALCANCE_FLASH[1] && rng() < 0.4) tipo = 'flash';
+  if (!tipo) return;
+  cmd.granada = tipo;
+  cmd.granadaAlvo = { x: alvo.pos.x, y: alvo.pos.y + (tipo === 'flash' ? 1.5 : 0.1), z: alvo.pos.z };
+  c.proxGranada = mundo.tempo + sortear(rng, GRANADA_INTERVALO);
+}
+
+// Fuga: smoke na direção da ameaça para cobrir a retirada.
+function fumacaDeFuga(ent, c, ameaca, mundo, cmd) {
+  if (!(ent.equip?.granadas?.smoke > 0) || mundo.tempo < c.proxGranada) return;
+  const d = Math.max(1, distXZ(ent.pos, ameaca));
+  const k = Math.min(FUMACA_RECUO, d) / d;
+  cmd.granada = 'smoke';
+  cmd.granadaAlvo = { x: ent.pos.x + (ameaca.x - ent.pos.x) * k, y: 0.3, z: ent.pos.z + (ameaca.z - ent.pos.z) * k };
+  c.proxGranada = mundo.tempo + sortear(() => 0.5, GRANADA_INTERVALO);
 }
 
 // Gira no máximo GIRO_MAX*dt em direção ao ângulo desejado.
@@ -126,7 +235,7 @@ function girar(atual, desejado, dt) {
 
 const comandoBase = (ent) => ({
   frente: 0, lado: 0, pular: false, agachar: false, devagar: false, atirar: false,
-  zoom: false, recarregar: false, slot: null, yaw: ent.yaw, pitch: ent.pitch,
+  zoom: false, recarregar: false, usar: false, granada: null, slot: null, yaw: ent.yaw, pitch: ent.pitch,
 });
 
 // Mira (com erro humano e giro limitado) e decide o gatilho. Mexe só em yaw/pitch/atirar/zoom/lado.
@@ -267,7 +376,7 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
   if (!ent.vivo || !ent.armas) return cmd;
   const dif = typeof dificuldade === 'string' ? DIFICULDADE[dificuldade] : dificuldade;
   const caixas = mundo.mapa.caixas;
-  const c = ent.cerebro ?? (ent.cerebro = criarCerebro(ent, grafo, rng, caixas));
+  const c = ent.cerebro ?? (ent.cerebro = criarCerebro(ent, grafo, rng, caixas, mundo));
   const agora = mundo.tempo;
 
   // Visão: mantém o alvo atual enquanto visível; senão, o inimigo mais perto.
@@ -291,7 +400,12 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     if (atirador && !visto && c.estado !== 'recuo') irParaCobertura(ent, c, grafo, caixas, atirador.pos, 'cobertura');
   }
   if (alvo && ent.hp < HP_RECUO && c.estado !== 'recuo') {
-    irParaCobertura(ent, c, grafo, caixas, alvo.pos, 'recuo');
+    if (irParaCobertura(ent, c, grafo, caixas, alvo.pos, 'recuo')) fumacaDeFuga(ent, c, alvo.pos, mundo, cmd);
+  }
+  // Cegado pela flash: larga o combate e vai para a cobertura mais perto do último inimigo visto.
+  if (agora < (ent.cegoAte ?? 0) && c.cegoVisto !== ent.cegoAte) {
+    c.cegoVisto = ent.cegoAte;
+    if (c.ultimaPos && c.estado !== 'recuo') irParaCobertura(ent, c, grafo, caixas, c.ultimaPos, 'cobertura');
   }
 
   let destino = null;
@@ -304,13 +418,14 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
       }
       if (c.estado === 'recuo') cmd.agachar = true;
       if (alvo) atacar(ent, c, alvo, mundo, dif, dt, rng, cmd, { strafe: false });
-      else if (agora >= c.esperaAte) voltarParaRota(ent, c, grafo, caixas, objetivo(ent, grafo, rng));
+      else if (agora >= c.esperaAte) voltarParaRota(ent, c, grafo, caixas, proximoObjetivo(ent, c, mundo, grafo, rng));
     } else if (alvo && c.estado === 'cobertura') {
       atacar(ent, c, alvo, mundo, dif, dt, rng, cmd, { strafe: false });
     }
   } else if (alvo) {
     c.estado = 'combate';
     atacar(ent, c, alvo, mundo, dif, dt, rng, cmd, { strafe: true });
+    jogarGranada(ent, c, alvo, mundo, cmd, rng);
     destino = avancar(ent, c, alvo, grafo, caixas, agora, dt, cmd);
   } else if (c.estado === 'combate') {
     c.perdidoHa += dt;
@@ -319,11 +434,30 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
       voltarParaRota(ent, c, grafo, caixas, waypointPerto(grafo, c.ultimaPos, caixas));
     }
   } else {
+    // C4: o objetivo mudou (plantada, caiu, outro bombsite) → refaz a rota.
+    const bomba = destinoBomba(ent, mundo);
+    if (bomba && bomba.chave !== c.chaveBomba) {
+      voltarParaRota(ent, c, grafo, caixas, proximoObjetivo(ent, c, mundo, grafo, rng));
+    }
     destino = seguirRota(ent, c, grafo, dt, cmd);
-    if (!destino) {
-      voltarParaRota(ent, c, grafo, caixas, objetivo(ent, grafo, rng));
+    const tarefa = tarefaBomba(ent, mundo, cmd);
+    if (tarefa?.direto) {
+      cmd.yaw = girar(ent.yaw, yawPara(ent.pos, tarefa.direto), dt);
+      destino = tarefa.direto;
+    } else if (tarefa?.parado) {
+      destino = null;
+    } else if (!destino && !tarefa?.segurar) {
+      voltarParaRota(ent, c, grafo, caixas, proximoObjetivo(ent, c, mundo, grafo, rng));
       destino = seguirRota(ent, c, grafo, dt, cmd);
     }
+    // Ouviu passos de inimigo: segue a rota, mas com a mira virada para o barulho.
+    const ruido = ouvir(ent, mundo, c);
+    if (ruido) {
+      c.ouvidoEm = ruido.em;
+      c.ouvidoAte = agora + OLHAR_RUIDO;
+      c.ouvidoPos = { x: ruido.x, z: ruido.z };
+    }
+    if (c.ouvidoPos && agora < c.ouvidoAte) cmd.yaw = girar(ent.yaw, yawPara(ent.pos, c.ouvidoPos), dt);
   }
   if (destino) {
     const mov = andarPara(ent.pos, cmd.yaw, destino);

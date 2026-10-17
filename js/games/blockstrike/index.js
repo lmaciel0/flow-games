@@ -10,13 +10,18 @@ import { criarMundo, posicionarParaRound, passo, vivosPorTime } from './mundo.js
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
-import { ARMAS, DIFICULDADE } from './config.js';
-import { olho, direcao, temVisada } from './fisica.js';
+import { ARMAS, DIFICULDADE, ECONOMIA } from './config.js';
+import { olho, direcao } from './fisica.js';
+import { visadaLivre } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
 import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
+import { criarBomba, acaoPossivel } from './bomba.js';
+import {
+  iniciarEconomia, resetarEconomia, premiarRound, botComprar, comprar, estadoCompra,
+} from './economia.js';
 
 const DT_MAX = 0.05;
 const AVISTAR_A_CADA = 0.25; // s entre recálculos dos inimigos avistados (radar)
@@ -27,9 +32,16 @@ const COR_MIRA = /^#[0-9a-f]{6}$/i;
 
 const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
+// Compras dos bots no começo do freeze (arma preferida, colete, kit, granadas conforme o dinheiro).
+function comprasDosBots(mundo, regras) {
+  for (const e of mundo.entidades) {
+    if (e.bot) botComprar(e, e.time === regras.terroristas ? 'T' : 'CT');
+  }
+}
+
 // Cérebros novos a cada round: rotas e alvos antigos não valem depois do reposicionamento.
 function recriarCerebros(mundo, grafo, rng) {
-  for (const e of mundo.entidades) if (e.bot) e.cerebro = criarCerebro(e, grafo, rng, MAPA.caixas);
+  for (const e of mundo.entidades) if (e.bot) e.cerebro = criarCerebro(e, grafo, rng, MAPA.caixas, mundo);
 }
 
 // Espectador: o próximo aliado vivo depois de `idAtual`; sem nenhum vivo, mantém a vista.
@@ -48,7 +60,7 @@ const HTML = `
           <span class="badge-text">FPS 5X5 · SÓ NO COMPUTADOR</span>
         </div>
         <h1 class="app-title">Block <span class="gradient-text-bs">Strike</span></h1>
-        <p class="app-subtitle">Mata-mata 5x5 contra bots ou treino livre. Primeiro a 13 vence.</p>
+        <p class="app-subtitle">Desarme 5x5 contra bots com economia e C4, ou treino livre. Primeiro a 13 vence.</p>
       </header>
 
       <div class="bs-stage glass-card">
@@ -170,6 +182,7 @@ function montar(raiz, ctx) {
       eu.primariaEscolhida = tipo;
       // Só no freeze troca a arma em mãos; nos outros momentos vale a partir do próximo round.
       // No treino troca na hora (e já vem na mão) e fecha o painel.
+      if (partida.mundo.economia) return; // com economia a arma vem da compra
       if (partida.partida.fase === 'freeze') eu.armas.primaria = criarArma(tipo);
       else if (partida.treino && eu.vivo) {
         eu.armas.primaria = criarArma(tipo);
@@ -178,6 +191,19 @@ function montar(raiz, ctx) {
         partida.loadoutAberto = false;
         sons.saque(tipo);
       }
+    },
+    comprar(item) {
+      if (!partida || !partida.mundo.economia || partida.partida.fase !== 'freeze') return false;
+      const eu = partida.mundo.entidades[partida.mundo.jogadorId];
+      if (!eu.vivo) return false;
+      const r = comprar(eu, item, eu.time === partida.partida.terroristas ? 'T' : 'CT');
+      if (!r.ok) {
+        sons.vazio();
+        return false;
+      }
+      sons.compra();
+      if (ARMAS[item]) sons.saque(item);
+      return true;
     },
     mudarModo(m) {
       cfg.modo = m;
@@ -250,10 +276,15 @@ function montar(raiz, ctx) {
           hud.dano(anguloDe(eu, mundo.entidades[ev.atirador]));
         }
       } else if (ev.tipo === 'morte') {
-        if (ev.assassino === eu.id) sons.abate(ev.cabeca);
+        if (ev.assassino === eu.id) {
+          sons.abate(ev.cabeca);
+          if (!p.treino) hud.ganhou(ECONOMIA.recompensaKill[ev.arma] ?? 300, 'Abate');
+        }
         if (ev.vitima === eu.id) sons.morte();
+        else sons.oof(distDe(ev.vitima), panDe(ev.vitima));
+        render.desmanchar(mundo.entidades[ev.vitima]);
         hud.morte({
-          assassino: mundo.entidades[ev.assassino], vitima: mundo.entidades[ev.vitima],
+          assassino: mundo.entidades[ev.assassino] ?? null, vitima: mundo.entidades[ev.vitima],
           arma: ev.arma, cabeca: ev.cabeca,
         });
       } else if (ev.tipo === 'recarga') {
@@ -268,8 +299,67 @@ function montar(raiz, ctx) {
         if (ev.id === eu.id) sons.pulo();
       } else if (ev.tipo === 'pouso') {
         sons.pouso(distDe(ev.id), panDe(ev.id));
+      } else if (ev.tipo === 'arremesso' || ev.tipo === 'granada-quique' || ev.tipo === 'explosao-he' ||
+        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca') {
+        reagirGranada(p, ev, { eu, ouvido });
+      } else {
+        reagirBomba(p, ev, { eu, ouvido });
       }
     }
+  }
+
+  // Eventos das granadas: sons com distância e pan, clarões e o zumbido de quem foi cegado.
+  function reagirGranada(p, ev, { eu, ouvido }) {
+    const { render } = p;
+    const pt = ev.ponto;
+    const dist = pt ? distancia(ouvido, pt) : 0;
+    const pan = pt ? Math.sin((anguloDe(eu, { pos: pt }) * Math.PI) / 180) : 0;
+    if (ev.tipo === 'arremesso') sons.arremesso(ev.atirador === eu.id ? 0 : dist, ev.atirador === eu.id ? 0 : pan);
+    else if (ev.tipo === 'granada-quique') sons.quiqueGranada(dist, pan);
+    else if (ev.tipo === 'explosao-he') {
+      sons.he(dist, pan);
+      render.explosao(pt, true);
+    } else if (ev.tipo === 'flash') {
+      sons.flash(dist, pan);
+      render.clarao(pt);
+    } else if (ev.tipo === 'fumaca') sons.fumaca(dist, pan);
+    else if (ev.tipo === 'cegueira' && ev.id === eu.id) sons.zumbido(ev.dur);
+  }
+
+  // Eventos da C4: sons, avisos na tela e o efeito da explosão.
+  function reagirBomba(p, ev, { eu, ouvido }) {
+    const { mundo, render } = p;
+    const dist = (pt) => (pt ? distancia(ouvido, pt) : 0);
+    const pan = (pt) => (pt ? Math.sin((anguloDe(eu, { pos: pt }) * Math.PI) / 180) : 0);
+    if (ev.tipo === 'acao-inicio') {
+      const ent = mundo.entidades[ev.id];
+      sons.acaoC4(ev.acao, dist(ent.pos), ev.id === eu.id ? 0 : pan(ent.pos));
+    } else if (ev.tipo === 'plantada') {
+      sons.plantada(dist(ev.ponto), pan(ev.ponto));
+      hud.anuncio(`C4 plantada no bombsite ${ev.site ?? ''}`.trim(), 'perigo');
+    } else if (ev.tipo === 'desarmada') {
+      sons.desarmada();
+      hud.anuncio('C4 desarmada', 'ok');
+    } else if (ev.tipo === 'explosao') {
+      sons.explosao(dist(ev.ponto), pan(ev.ponto));
+      render.explosao(ev.ponto);
+      hud.flashExplosao(dist(ev.ponto));
+    } else if (ev.tipo === 'bomba-solta') {
+      if (mundo.bomba?.terroristas === eu.time) hud.anuncio('A C4 caiu no chão', 'aviso');
+    } else if (ev.tipo === 'bomba-pega') {
+      if (mundo.bomba?.terroristas === eu.time) hud.anuncio(`${mundo.entidades[ev.id].nome} pegou a C4`, 'aviso');
+    }
+  }
+
+  // Bipe da C4 plantada, cada vez mais rápido; sai do ponto onde ela está.
+  function bipesDaBomba(p, dt) {
+    const b = p.mundo.bomba;
+    if (!b || !b.plantada || b.explodiu || b.desarmada || p.partida.fase !== 'jogo') return;
+    p.proxBip -= dt;
+    if (p.proxBip > 0) return;
+    p.proxBip = 0.12 + 0.88 * (b.restante / 40) ** 1.5;
+    const eu = p.mundo.entidades[p.mundo.jogadorId];
+    sons.bipC4(distancia(olho(eu), b.pos), Math.sin((anguloDe(eu, { pos: b.pos }) * Math.PI) / 180), b.restante);
   }
 
   // Inimigos que algum aliado vivo enxerga (ou que atiraram há pouco): aparecem no radar.
@@ -282,7 +372,7 @@ function montar(raiz, ctx) {
       if (!e.vivo || e.time === eu.time) continue;
       if (mundo.tempo - (p.ultimoTiro.get(e.id) ?? -Infinity) < 1.5) { vistos.add(e.id); continue; }
       const alvo = olho(e);
-      if (aliados.some((a) => distancia(olho(a), alvo) < ALCANCE_AVISTAR && temVisada(olho(a), alvo, mundo.mapa.caixas))) {
+      if (aliados.some((a) => distancia(olho(a), alvo) < ALCANCE_AVISTAR && visadaLivre(mundo, olho(a), alvo))) {
         vistos.add(e.id);
       }
     }
@@ -291,7 +381,10 @@ function montar(raiz, ctx) {
 
   // Troca de round: reposiciona todos, recria os cérebros, limpa as marcas e volta a vista ao jogador.
   function novoRound(p) {
+    if (!p.treino) comprasDosBots(p.mundo, p.partida);
     posicionarParaRound(p.mundo, ladoAzul(p.partida.round));
+    p.mundo.bomba = p.treino ? null : criarBomba(p.mundo, p.partida.terroristas);
+    p.proxBip = 0;
     recriarCerebros(p.mundo, p.grafo, p.rngBots);
     p.render.limparImpactos();
     hud.limparEfeitos();
@@ -318,14 +411,34 @@ function montar(raiz, ctx) {
 
   function aplicarEventosPartida(p, eventos) {
     const { partida, mundo } = p;
+    const eu = mundo.entidades[mundo.jogadorId];
+    // Intervalo: dinheiro e equipamento voltam ao começo antes de os bots comprarem no novo round.
+    if (eventos.includes('troca-lados')) resetarEconomia(mundo, partida);
     for (const ev of eventos) {
       if (ev === 'novo-round') novoRound(p);
       else if (ev === 'inicio-round') sons.inicioRound();
-      else if (ev === 'fim-round' && partida.vencedorRound) {
-        sons.fimRound(partida.vencedorRound === mundo.entidades[mundo.jogadorId].time);
+      else if (ev === 'fim-round') {
+        const antes = eu.dinheiro;
+        premiarRound(mundo, partida, partida.vencedorRound ?? null);
+        hud.ganhou(eu.dinheiro - antes, 'Fim de round');
+        if (partida.vencedorRound) sons.fimRound(partida.vencedorRound === eu.time);
       } else if (ev === 'fim-partida') finalizarPartida(p);
     }
     if (raiz.dataset.fase !== partida.fase) raiz.dataset.fase = partida.fase;
+  }
+
+  // C4 para o HUD (null no treino): relógio, bombsite, progresso de plantar/desarmar e a dica do que dá para fazer.
+  function estadoBomba(p, eu) {
+    const b = p.mundo.bomba;
+    if (!b) return null;
+    const aoVivo = eu.vivo && p.partida.fase === 'jogo';
+    const acao = aoVivo ? acaoPossivel(p.mundo, eu) : null;
+    const meu = b.acao && b.acao.id === eu.id ? b.acao : null;
+    return {
+      plantada: b.plantada, restante: b.restante, site: b.site, solta: b.portador === null && !b.plantada,
+      levaC4: aoVivo && b.portador === eu.id, dica: acao,
+      progresso: meu ? Math.min(1, meu.t / meu.dur) : 0, acao: meu ? meu.tipo : null,
+    };
   }
 
   // Dados do HUD para este frame: vida e arma são de quem está sendo visto (o jogador ou o aliado assistido).
@@ -344,6 +457,14 @@ function montar(raiz, ctx) {
     const progressoRecarga = arma && arma.recarregandoAte > 0
       ? 1 - (arma.recarregandoAte - mundo.tempo) / def.recarga : 0;
     return {
+      bomba: estadoBomba(p, eu), papel: eu.time === regras.terroristas ? 'T' : 'CT',
+      compra: eu.vivo && p.mundo.economia && regras.fase === 'freeze'
+        ? estadoCompra(eu, eu.time === regras.terroristas ? 'T' : 'CT') : null,
+      dinheiro: p.mundo.economia ? eu.dinheiro : null,
+      equip: p.mundo.economia
+        ? { colete: eu.equip.colete, capacete: eu.equip.capacete, kit: eu.equip.kit, granadas: { ...eu.equip.granadas } } : null,
+      cegueira: eu.vivo && mundo.tempo < (eu.cegoAte ?? 0)
+        ? Math.min(1, (eu.cegoAte - mundo.tempo) / Math.max(0.2, eu.cegoDur * 0.5)) : 0,
       fase: regras.fase, round: regras.round, tempo: regras.tempo, placar: regras.placar,
       hp: alvo.hp, vivo: eu.vivo, arma: arma && { ...arma, pente: def.pente }, spread, progressoRecarga,
       luneta: eu.vivo && Boolean(cmd.zoom && def?.zoomFov),
@@ -363,7 +484,7 @@ function montar(raiz, ctx) {
     // Só se atira com o round em jogo; fora disso (inclusive em fim-partida) o mundo segue sem tiros.
     // No freeze as teclas 1–4 escolhem a primária (hud.teclaLoadout): o slot do comando é ignorado.
     const atira = regras.fase === 'jogo';
-    const cmdJogador = atira ? cmd : { ...cmd, atirar: false, slot: regras.fase === 'freeze' ? null : cmd.slot };
+    const cmdJogador = atira ? cmd : { ...cmd, atirar: false, usar: false, granada: null, slot: regras.fase === 'freeze' ? null : cmd.slot };
     // Painel de armas aberto no treino: 1–4 escolhem a primária, não trocam de slot.
     if (p.treino && p.loadoutAberto) cmdJogador.slot = null;
     const armaMao = jogador.vivo && jogador.armas[jogador.slot];
@@ -376,11 +497,12 @@ function montar(raiz, ctx) {
       const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
       comandos.set(e.id, atira ? c : { ...c, atirar: false });
     }
-    reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze' }));
+    reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze', comBomba: atira }));
+    bipesDaBomba(p, dt);
     if (p.treino) regras.tempo += dt;
     else if (regras.fase !== 'fim-partida') {
       const segAntes = Math.ceil(regras.tempo);
-      aplicarEventosPartida(p, tickPartida(regras, dt, vivosPorTime(mundo)));
+      aplicarEventosPartida(p, tickPartida(regras, dt, vivosPorTime(mundo), mundo.bomba));
       // Bipe nos últimos 5 s do round e da contagem do freeze.
       const seg = Math.ceil(regras.tempo);
       if ((regras.fase === 'jogo' || regras.fase === 'freeze') && seg !== segAntes && seg <= 5 && seg > 0) sons.bipe();
@@ -400,7 +522,10 @@ function montar(raiz, ctx) {
       avistar(p);
     }
     const vista = mundo.entidades[p.idVista];
-    hud.radar({ caixas: MAPA.caixas, eu: vista, entidades: mundo.entidades, avistados: p.avistados });
+    hud.radar({
+      caixas: MAPA.caixas, eu: vista, entidades: mundo.entidades, avistados: p.avistados,
+      sites: p.treino ? null : MAPA.bombsites, bomba: mundo.bomba,
+    });
     // Dica só enquanto o mouse nunca prendeu: depois de uma trava, perder a trava abre a pausa.
     hud.mostrarDica(!p.lock.travou && (regras.fase === 'freeze' || regras.fase === 'jogo'));
     p.raf = requestAnimationFrame(quadro);
@@ -507,8 +632,10 @@ function montar(raiz, ctx) {
     entrada.aoTab((v) => hud.mostrarTabela(v));
     entrada.aoTecla((code) => {
       if (!partida) return;
+      const eu = partida.mundo.entidades[partida.mundo.jogadorId];
+      if (code === 'KeyF' && eu.vivo && partida.partida.fase !== 'fim-partida') partida.render.inspecionar();
       let usada = false;
-      if (partida.partida.fase === 'freeze') usada = hud.teclaLoadout(code);
+      if (partida.partida.fase === 'freeze') usada = partida.mundo.economia ? hud.teclaCompra(code) : hud.teclaLoadout(code);
       else if (partida.treino) {
         if (code === 'KeyB') partida.loadoutAberto = !partida.loadoutAberto;
         else if (partida.loadoutAberto) usada = hud.teclaLoadout(code);
@@ -531,14 +658,20 @@ function montar(raiz, ctx) {
         mapa: MAPA, primariaJogador: cfg.primaria, dificuldade: cfg.dificuldade, rng: criarRng(Date.now()),
         modo: cfg.modo,
       });
+      const regrasIniciais = treino ? criarTreino() : criarPartida({ freeze: ECONOMIA.freezeCompra });
+      if (!treino) {
+        iniciarEconomia(mundo);
+        comprasDosBots(mundo, regrasIniciais);
+      }
       posicionarParaRound(mundo, 'A');
+      if (!treino) mundo.bomba = criarBomba(mundo, 'laranja');
       const grafo = criarGrafo(MAPA.waypoints, MAPA.arestas);
       const rngBots = criarRng(Date.now() ^ 0x5bd1e995);
       recriarCerebros(mundo, grafo, rngBots);
       const render = criarRender(canvas, MAPA);
       partida = {
-        mundo, render, entrada, grafo, rngBots, partida: treino ? criarTreino() : criarPartida(), treino,
-        loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0,
+        mundo, render, entrada, grafo, rngBots, partida: regrasIniciais, treino,
+        loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
         idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock, pausado: false,
         desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),
       };

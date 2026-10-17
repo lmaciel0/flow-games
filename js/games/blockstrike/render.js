@@ -7,6 +7,7 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { olho } from './fisica.js';
 import { ARMAS } from './config.js';
 import { SAQUE } from './armas.js';
+import { criarRng } from './rng.js';
 
 const FOV_PADRAO = 75;
 const PITCH_CAM = Math.PI / 2 - 0.01; // pitch + recuo nunca passa da vertical
@@ -27,10 +28,12 @@ const MODELOS_ARMA = {
   rifle: {
     caixas: [[0.07, 0.09, 0.5, 0, 0, -0.1], [0.03, 0.03, 0.25, 0, 0.01, -0.5], [0.06, 0.16, 0.06, 0, -0.12, 0.02, 1], [0.07, 0.1, 0.2, 0, -0.02, 0.28, 1]],
     boca: -0.68,
+    pente: 2,
   },
   smg: {
     caixas: [[0.07, 0.09, 0.32, 0, 0, -0.05], [0.03, 0.03, 0.14, 0, 0.01, -0.32], [0.05, 0.2, 0.05, 0, -0.14, 0.04]],
     boca: -0.45,
+    pente: 2,
   },
   sniper: {
     caixas: [[0.06, 0.08, 0.7, 0, 0, -0.2], [0.03, 0.03, 0.4, 0, 0.01, -0.75], [0.05, 0.06, 0.2, 0, 0.08, -0.15], [0.07, 0.1, 0.25, 0, -0.02, 0.3, 1]],
@@ -43,6 +46,7 @@ const MODELOS_ARMA = {
   pistola: {
     caixas: [[0.05, 0.07, 0.2, 0, 0, -0.05], [0.05, 0.12, 0.06, 0, -0.09, 0.04, 1]],
     boca: -0.2,
+    pente: 1,
   },
   faca: {
     caixas: [[0.02, 0.05, 0.28, 0, 0.02, -0.2], [0.04, 0.04, 0.1, 0, -0.01, 0.02, 1]],
@@ -96,6 +100,7 @@ function geometriaDoMapa(caixas) {
 }
 
 export function criarRender(canvas, mapa) {
+  const aleatorio = criarRng(Date.now()); // efeitos visuais: sangue, destroços, faíscas e tremor
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   const scene = new THREE.Scene();
@@ -113,6 +118,48 @@ export function criarRender(canvas, mapa) {
   const matMapa = new THREE.MeshLambertMaterial({ vertexColors: true });
   scene.add(new THREE.Mesh(geoMapa, matMapa));
 
+  // Bombsites: retângulo amarelo translúcido no chão com a letra grande (textura de canvas, uma por site).
+  const marcasSite = [];
+  for (const [nome, s] of Object.entries(mapa.bombsites ?? {})) {
+    const larg = s.max.x - s.min.x;
+    const prof = s.max.z - s.min.z;
+    const tela = document.createElement('canvas');
+    tela.width = 256;
+    tela.height = Math.round(256 * (prof / larg));
+    const c2 = tela.getContext('2d');
+    c2.fillStyle = 'rgba(250, 204, 21, 0.18)';
+    c2.fillRect(0, 0, tela.width, tela.height);
+    c2.strokeStyle = 'rgba(250, 204, 21, 0.9)';
+    c2.lineWidth = 6;
+    c2.strokeRect(3, 3, tela.width - 6, tela.height - 6);
+    c2.fillStyle = 'rgba(250, 204, 21, 0.85)';
+    c2.font = `bold ${Math.round(tela.height * 0.7)}px sans-serif`;
+    c2.textAlign = 'center';
+    c2.textBaseline = 'middle';
+    c2.fillText(nome, tela.width / 2, tela.height / 2 + 4);
+    const textura = new THREE.CanvasTexture(tela);
+    const marca = new THREE.Mesh(
+      new THREE.PlaneGeometry(larg, prof).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: textura, transparent: true, depthWrite: false }));
+    marca.position.set(s.centro.x, 0.02, s.centro.z);
+    scene.add(marca);
+    marcasSite.push(marca);
+  }
+
+  // C4 no chão: caixa escura com LED. Aparece solta ou plantada; o LED pisca vermelho (verde se desarmada).
+  const matC4 = new THREE.MeshLambertMaterial({ color: 0x2b2e35 });
+  const matLed = new THREE.MeshBasicMaterial({ color: 0xff2020 });
+  const geoC4 = new THREE.BoxGeometry(0.4, 0.16, 0.28);
+  const geoLed = new THREE.BoxGeometry(0.06, 0.03, 0.06);
+  const c4 = new THREE.Group();
+  const c4Corpo = new THREE.Mesh(geoC4, matC4);
+  c4Corpo.position.y = 0.08;
+  const c4Led = new THREE.Mesh(geoLed, matLed);
+  c4Led.position.set(0.12, 0.175, 0);
+  c4.add(c4Corpo, c4Led);
+  c4.visible = false;
+  scene.add(c4);
+
   // Avatares estilo Roblox: caixas compartilhadas, criados na primeira vez que a entidade aparece.
   const topo = (w, h, d) => new THREE.BoxGeometry(w, h, d).translate(0, -h / 2, 0); // pivô no topo
   const geo = {
@@ -122,11 +169,13 @@ export function criarRender(canvas, mapa) {
     braco: topo(0.18, 0.6, 0.18),
     perna: topo(0.22, 0.8, 0.22),
     armaAvatar: new THREE.BoxGeometry(0.08, 0.1, 0.55),
+    sombra: new THREE.CircleGeometry(0.42, 16).rotateX(-Math.PI / 2),
   };
   const mat = {
     cabeca: new THREE.MeshLambertMaterial({ color: COR_CABECA }),
     armaAvatar: new THREE.MeshLambertMaterial({ color: 0x2a2c31 }),
     olho: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+    sombra: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }),
   };
   for (const [time, hex] of Object.entries(COR_TIME)) {
     mat[time] = new THREE.MeshLambertMaterial({ color: hex });
@@ -153,6 +202,7 @@ export function criarRender(canvas, mapa) {
     const pernaD = parte(geo.perna, escuro, 0.12, 0.8);
     const arma = parte(geo.armaAvatar, mat.armaAvatar, 0.22, 1.18);
     arma.position.z = -0.32;
+    parte(geo.sombra, mat.sombra, 0, 0.03); // sombra de blob: ancora o boneco no chão sem sombra dinâmica
     scene.add(g);
     return { g, bracoE, bracoD, pernaE, pernaD, dist: ent.distAndada, amp: 0 };
   }
@@ -204,6 +254,13 @@ export function criarRender(canvas, mapa) {
     proxImpacto = 0;
     for (const r of rastros) { r.vida = 0; r.linha.visible = false; }
     for (const gt of gotas) { gt.vida = 0; gt.m.visible = false; }
+    for (const p of pecas) { p.vida = 0; p.m.visible = false; }
+    fogoT = 0;
+    fogo.visible = false;
+    brilhoT = 0;
+    brilho.visible = false;
+    tremor = 0;
+    for (const f of faiscas) { f.vida = 0; f.m.visible = false; }
   }
 
   // Rastros de bala: segmentos de linha reaproveitados, visíveis por um instante.
@@ -253,13 +310,203 @@ export function criarRender(canvas, mapa) {
       const gt = gotas[proxGota % MAX_GOTAS];
       proxGota += 1;
       gt.m.position.set(ponto.x, ponto.y, ponto.z);
-      gt.v.set((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3);
+      gt.v.set((aleatorio() - 0.5) * 3, aleatorio() * 2.5, (aleatorio() - 0.5) * 3);
       gt.m.visible = true;
       gt.vida = VIDA_GOTA;
     }
   }
 
+  // Desmanche ao morrer: os 6 blocos do boneco saem voando, quicam e ficam no chão por um tempo.
+  // [geometria, material, x, y (centro do bloco), alturaDoBloco]; braços e pernas têm pivô no topo.
+  const PECAS = [
+    ['tronco', 'time', 0, 0.8, 0.3], ['cabeca', 'cabeca', 0, 1.4, 0.2],
+    ['braco', 'escuro', -0.34, 1.4, 0.09], ['braco', 'escuro', 0.34, 1.4, 0.09],
+    ['perna', 'escuro', -0.12, 0.8, 0.11], ['perna', 'escuro', 0.12, 0.8, 0.11],
+  ];
+  const MAX_PECAS = 72;
+  const VIDA_PECA = 6;
+  const pecas = [];
+  let proxPeca = 0;
+
+  function desmanchar(ent, vel = 2.5) {
+    const cos = Math.cos(ent.yaw);
+    const sen = Math.sin(ent.yaw);
+    for (const [chave, material, ox, oy, piso] of PECAS) {
+      if (pecas.length < MAX_PECAS) {
+        const m = new THREE.Mesh(geo.tronco, mat.cabeca);
+        m.visible = false;
+        scene.add(m);
+        pecas.push({ m, v: new THREE.Vector3(), giro: new THREE.Vector3(), vida: 0, piso: 0 });
+      }
+      const p = pecas[proxPeca % MAX_PECAS];
+      proxPeca += 1;
+      p.m.geometry = geo[chave];
+      p.m.material = material === 'time' ? mat[ent.time] : material === 'escuro' ? mat[`${ent.time}Escuro`] : mat.cabeca;
+      p.m.position.set(ent.pos.x + ox * cos, ent.pos.y + oy, ent.pos.z - ox * sen);
+      p.m.rotation.set(0, ent.yaw, 0);
+      p.v.set((aleatorio() - 0.5) * vel, 2 + aleatorio() * 2.5, (aleatorio() - 0.5) * vel);
+      p.giro.set((aleatorio() - 0.5) * 12, (aleatorio() - 0.5) * 8, (aleatorio() - 0.5) * 12);
+      p.piso = ent.pos.y + piso;
+      p.m.visible = true;
+      p.vida = VIDA_PECA;
+    }
+  }
+
+  function animarPecas(dt) {
+    for (const p of pecas) {
+      if (p.vida <= 0) continue;
+      p.vida -= dt;
+      if (p.vida <= 0) { p.m.visible = false; continue; }
+      p.v.y -= 16 * dt;
+      p.m.position.addScaledVector(p.v, dt);
+      p.m.rotation.x += p.giro.x * dt;
+      p.m.rotation.y += p.giro.y * dt;
+      p.m.rotation.z += p.giro.z * dt;
+      if (p.m.position.y < p.piso) {
+        p.m.position.y = p.piso;
+        p.v.y = Math.abs(p.v.y) > 1.2 ? -p.v.y * 0.35 : 0;
+        p.v.x *= 0.6;
+        p.v.z *= 0.6;
+        p.giro.multiplyScalar(0.5);
+      }
+    }
+  }
+
+  // Explosão da C4: bola de fogo que cresce e some, faíscas com gravidade e tremor da câmera por perto.
+  const matFogo = new THREE.MeshBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0, depthWrite: false });
+  const geoFogo = new THREE.BoxGeometry(1, 1, 1);
+  const fogo = new THREE.Mesh(geoFogo, matFogo);
+  fogo.visible = false;
+  scene.add(fogo);
+  const matFaisca = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+  const geoFaisca = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+  const faiscas = [];
+  let vidaFogo = 0.9;
+  let escalaFogo = 20;
+  let fogoT = 0;
+  let tremor = 0;
+  let tremorDe = null;
+
+  // `pequena`: granada HE (bola menor, rápida e com tremor fraco); senão, a C4.
+  function explosao(ponto, pequena = false) {
+    fogo.position.set(ponto.x, ponto.y + (pequena ? 0.6 : 1), ponto.z);
+    vidaFogo = pequena ? 0.45 : 0.9;
+    escalaFogo = pequena ? 7 : 20;
+    fogoT = vidaFogo;
+    fogo.visible = true;
+    tremor = pequena ? 0.45 : 1;
+    tremorDe = ponto;
+    for (let i = 0; i < (pequena ? 12 : 28); i++) {
+      if (faiscas.length < 28) {
+        const m = new THREE.Mesh(geoFaisca, matFaisca);
+        m.visible = false;
+        scene.add(m);
+        faiscas.push({ m, vida: 0, v: new THREE.Vector3() });
+      }
+      const f = faiscas[i];
+      f.m.position.set(ponto.x, ponto.y + 0.5, ponto.z);
+      f.v.set((aleatorio() - 0.5) * 18, 4 + aleatorio() * 12, (aleatorio() - 0.5) * 18);
+      f.m.visible = true;
+      f.vida = 1.4;
+    }
+    // Quem estava perto vira blocos pelo evento de morte; aqui só o ambiente.
+  }
+
+  function animarExplosao(dt) {
+    if (fogoT > 0) {
+      fogoT -= dt;
+      const k = 1 - Math.max(0, fogoT) / vidaFogo;
+      fogo.scale.setScalar(1 + k * escalaFogo);
+      matFogo.opacity = Math.max(0, 0.85 * (1 - k * k));
+      if (fogoT <= 0) fogo.visible = false;
+    }
+    for (const f of faiscas) {
+      if (f.vida <= 0) continue;
+      f.vida -= dt;
+      f.v.y -= 18 * dt;
+      f.m.position.addScaledVector(f.v, dt);
+      if (f.m.position.y < 0.1) { f.m.position.y = 0.1; f.v.multiplyScalar(0.3); }
+      if (f.vida <= 0) f.m.visible = false;
+    }
+    tremor = Math.max(0, tremor - dt * 1.1);
+  }
+
+  // Granadas no ar: um cubo por granada, da cor do tipo, girando.
+  const matsGranada = {
+    flash: new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }),
+    smoke: new THREE.MeshLambertMaterial({ color: 0x8b95a1 }),
+    he: new THREE.MeshLambertMaterial({ color: 0x2f5d2f }),
+  };
+  const geoGranada = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+  const cubosGranada = [];
+  function desenharGranadas(mundo, dt) {
+    const lista = mundo.granadas ?? [];
+    while (cubosGranada.length < Math.min(lista.length, 16)) {
+      const m = new THREE.Mesh(geoGranada, matsGranada.he);
+      m.visible = false;
+      scene.add(m);
+      cubosGranada.push(m);
+    }
+    cubosGranada.forEach((m, i) => {
+      const g = lista[i];
+      m.visible = Boolean(g);
+      if (!g) return;
+      m.material = matsGranada[g.tipo];
+      m.position.set(g.pos.x, g.pos.y, g.pos.z);
+      m.rotation.x += dt * 9;
+      m.rotation.z += dt * 6;
+    });
+  }
+
+  // Smoke: uma InstancedMesh (1 draw call) com os blocos vivos de todas as nuvens. Nascem do centro,
+  // somem nos buracos de tiro/HE e encolhem nos últimos 2 s.
+  const MAX_CUBOS_FUMACA = 900;
+  const matFumaca = new THREE.MeshLambertMaterial({ color: 0xdde1e6, transparent: true, opacity: 0.9, depthWrite: false });
+  const geoFumaca = new THREE.BoxGeometry(1, 1, 1);
+  const fumaca = new THREE.InstancedMesh(geoFumaca, matFumaca, MAX_CUBOS_FUMACA);
+  fumaca.frustumCulled = false;
+  fumaca.count = 0;
+  fumaca.renderOrder = 2;
+  scene.add(fumaca);
+  const m4 = new THREE.Matrix4();
+  function desenharFumaca(mundo) {
+    let n = 0;
+    for (const f of mundo.fumacas ?? []) {
+      const idade = mundo.tempo - f.nasceEm;
+      const encolhe = Math.min(1, Math.max(0, f.fim - mundo.tempo) / 2);
+      for (const c of f.cubos) {
+        if (!c.vivo || idade < c.atraso || n >= MAX_CUBOS_FUMACA) continue;
+        const k = f.cubo * 1.15 * Math.min(1, (idade - c.atraso) / 0.25) * encolhe;
+        m4.makeScale(k, k, k).setPosition(c.x, c.y, c.z);
+        fumaca.setMatrixAt(n++, m4);
+      }
+    }
+    fumaca.count = n;
+    fumaca.instanceMatrix.needsUpdate = true;
+  }
+
+  // Estouro da flash: bloco branco que cresce e some rápido.
+  const matBrilho = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+  const brilho = new THREE.Mesh(geoFogo, matBrilho);
+  brilho.visible = false;
+  scene.add(brilho);
+  let brilhoT = 0;
+  const clarearFlash = (ponto) => {
+    brilho.position.set(ponto.x, ponto.y, ponto.z);
+    brilhoT = 0.3;
+    brilho.visible = true;
+  };
+
   function animarEfeitos(dt) {
+    animarPecas(dt);
+    animarExplosao(dt);
+    if (brilhoT > 0) {
+      brilhoT -= dt;
+      const k = 1 - Math.max(0, brilhoT) / 0.3;
+      brilho.scale.setScalar(0.5 + k * 5);
+      matBrilho.opacity = Math.max(0, 1 - k);
+      if (brilhoT <= 0) brilho.visible = false;
+    }
     for (const r of rastros) {
       if (r.vida <= 0) continue;
       r.vida -= dt;
@@ -291,13 +538,15 @@ export function criarRender(canvas, mapa) {
   function criarViewmodel(tipo) {
     const modelo = MODELOS_ARMA[tipo] ?? MODELOS_ARMA.rifle;
     const g = new THREE.Group();
-    for (const [w, h, d, x, y, z, claro] of modelo.caixas) {
+    let pente = null;
+    for (const [i, [w, h, d, x, y, z, claro]] of modelo.caixas.entries()) {
       const chave = `${w},${h},${d}`;
       if (!geoArma.has(chave)) geoArma.set(chave, new THREE.BoxGeometry(w, h, d));
       const mat = tipo === 'faca' ? (claro ? matArmaClara : matFaca) : claro ? matArmaClara : matArma;
       const m = new THREE.Mesh(geoArma.get(chave), mat);
       m.position.set(x, y, z);
       g.add(m);
+      if (i === modelo.pente) pente = { m, y };
     }
     const boca = new THREE.Mesh(geoClarao, matClarao);
     boca.position.set(0, modelo.caixas[0][4], modelo.boca);
@@ -306,7 +555,7 @@ export function criarRender(canvas, mapa) {
     g.position.set(POS_VIEW.x, POS_VIEW.y, POS_VIEW.z);
     g.visible = false;
     camera.add(g);
-    return { g, boca };
+    return { g, boca, pente };
   }
 
   function viewmodelDe(tipo) {
@@ -314,7 +563,10 @@ export function criarRender(canvas, mapa) {
     return viewmodels.get(tipo);
   }
 
-  const flash = () => { clarao = DURACAO_CLARAO; };
+  const flash = () => {
+    clarao = DURACAO_CLARAO;
+    inspecao = 0; // atirar interrompe a inspeção
+  };
   // Animações da arma na mão (tempos em s): saque ao trocar, golpe da faca.
   let saque = 0;
   let saqueDur = 0.3;
@@ -323,12 +575,18 @@ export function criarRender(canvas, mapa) {
   let golpeLado = 1;
   const golpe = (forte) => {
     golpeForte = forte;
+    inspecao = 0;
     golpeT = forte ? 0.45 : 0.3;
     golpeLado = -golpeLado; // golpes leves alternam o lado, como no CS
   };
   let balanco = 0; // amplitude do balanço ao andar (0..1)
   let yawAntes = null;
   let ginga = 0; // a arma atrasa um pouco quando a mira gira
+  let pitchAntes = null;
+  let gingaV = 0; // e sobe/desce um pouco quando a mira sobe ou desce
+  const DUR_INSPECAO = 1.7;
+  let inspecao = 0; // F: gira a arma na frente da câmera para admirá-la
+  const inspecionar = () => { if (saque <= 0 && golpeT <= 0) inspecao = DUR_INSPECAO; };
   let olhoY = null;
   let vistaAntes = null;
   const recuoVisual = () => {
@@ -369,17 +627,47 @@ export function criarRender(canvas, mapa) {
       ginga += (Math.max(-0.08, Math.min(0.08, giro * 2)) - ginga) * Math.min(1, dt * 12);
     }
     yawAntes = vista.yaw;
+    if (pitchAntes !== null) {
+      gingaV += (Math.max(-0.06, Math.min(0.06, (vista.pitch - pitchAntes) * -2)) - gingaV) * Math.min(1, dt * 12);
+    }
+    pitchAntes = vista.pitch;
     ry += ginga;
     x -= ginga * 0.3;
+    y += gingaV * 0.4;
+    rx += gingaV;
     if (!vista.noChao) y += 0.02; // no ar a arma sobe um pouco
     // Recarga: abaixa e gira a arma; volta no fim (curva em seno do progresso).
     if (arma.recarregandoAte > 0) {
+      inspecao = 0;
       const def = ARMAS[arma.tipo];
       const p = 1 - Math.max(0, arma.recarregandoAte - mundo.tempo) / def.recarga;
       const k = Math.sin(Math.min(1, Math.max(0, p)) * Math.PI);
       y -= 0.12 * k;
       rx -= 0.5 * k;
       rz += 0.6 * k;
+    }
+    const pente = viewAtual.pente;
+    if (pente) {
+      let dy = 0;
+      let visivel = true;
+      if (arma.recarregandoAte > 0) {
+        const p = 1 - Math.max(0, arma.recarregandoAte - mundo.tempo) / ARMAS[arma.tipo].recarga;
+        if (p < 0.3) dy = -(p / 0.3) * 0.28; // pente solta e desce
+        else if (p < 0.55) visivel = false; // fora da arma
+        else if (p < 0.8) dy = -(1 - (p - 0.55) / 0.25) * 0.28; // pente novo sobe
+      }
+      pente.m.visible = visivel;
+      pente.m.position.y = pente.y + dy;
+    }
+    if (inspecao > 0) {
+      const k = Math.sin(Math.min(1, (DUR_INSPECAO - inspecao) / DUR_INSPECAO) * Math.PI);
+      const u = (DUR_INSPECAO - inspecao) / DUR_INSPECAO;
+      x -= 0.2 * k;
+      y += 0.17 * k;
+      z -= 0.05 * k;
+      ry += (Math.sin(u * Math.PI * 2) * 0.9 + u * 0.8) * k;
+      rx += Math.sin(u * Math.PI * 3) * 0.35 * k;
+      rz += 0.5 * k;
     }
     if (saque > 0) {
       const k = saque / saqueDur;
@@ -423,7 +711,22 @@ export function criarRender(canvas, mapa) {
     if (vistaAntes !== idVista || olhoY === null) olhoY = altura;
     else olhoY += (altura - olhoY) * Math.min(1, dt * VEL_OLHO);
     vistaAntes = idVista;
-    camera.position.set(o.x, vista.pos.y + olhoY, o.z);
+    // Tremor da explosão: some com a distância e com o tempo.
+    let tx = 0;
+    let ty = 0;
+    if (tremor > 0 && tremorDe) {
+      const forca = Math.max(0, 1 - Math.hypot(o.x - tremorDe.x, o.z - tremorDe.z) / 45) * tremor * 0.18;
+      tx = (aleatorio() - 0.5) * forca;
+      ty = (aleatorio() - 0.5) * forca;
+    }
+    camera.position.set(o.x + tx, vista.pos.y + olhoY + ty, o.z);
+    // C4 no chão: visível solta ou plantada; LED pisca vermelho (verde depois de desarmada).
+    const bomba = mundo.bomba;
+    c4.visible = Boolean(bomba && bomba.pos);
+    if (c4.visible) {
+      c4.position.set(bomba.pos.x, bomba.pos.y, bomba.pos.z);
+      matLed.color.setHex(bomba.desarmada ? 0x22dd55 : Math.floor(agora / (bomba.plantada ? 250 : 700)) % 2 ? 0xff2020 : 0x550808);
+    }
     const subida = vista.vivo && vista.armas ? vista.armas[vista.slot].recuoAcum : 0; // a mira acompanha o spray
     const inclina = vista.pitch + subida + recuo;
     camera.rotation.set(Math.max(-PITCH_CAM, Math.min(PITCH_CAM, inclina)), vista.yaw, 0);
@@ -439,6 +742,7 @@ export function criarRender(canvas, mapa) {
         saqueDur = SAQUE[ARMAS[tipoAtivo].slot] ?? 0.3;
         saque = saqueDur;
         golpeT = 0;
+        inspecao = 0;
       }
       viewAtual = alvoView;
       if (viewAtual) viewAtual.g.visible = true;
@@ -447,8 +751,11 @@ export function criarRender(canvas, mapa) {
     clarao = Math.max(0, clarao - dt);
     recuoArma = Math.max(0, recuoArma - dt * 0.6);
     saque = Math.max(0, saque - dt);
+    inspecao = Math.max(0, inspecao - dt);
     golpeT = Math.max(0, golpeT - dt);
     animarEfeitos(dt);
+    desenharGranadas(mundo, dt);
+    desenharFumaca(mundo);
     if (viewAtual) posarArma(vista, mundo, dt);
     luzTiro.intensity = clarao > 0 ? 2 : 0;
     luzTiro.position.copy(camera.position);
@@ -464,6 +771,11 @@ export function criarRender(canvas, mapa) {
     geoArma.forEach((g) => g.dispose());
     [matArma, matArmaClara, matFaca, matClarao].forEach((m) => m.dispose());
     geoClarao.dispose();
+    for (const m of marcasSite) { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); }
+    [geoC4, geoLed, geoFogo, geoFaisca].forEach((g) => g.dispose());
+    [matC4, matLed, matFogo, matFaisca, matFumaca, matBrilho, ...Object.values(matsGranada)].forEach((m) => m.dispose());
+    [geoGranada, geoFumaca].forEach((g) => g.dispose());
+    fumaca.dispose();
     for (const r of rastros) r.linha.geometry.dispose();
     matRastro.dispose();
     geoGota.dispose();
@@ -475,6 +787,7 @@ export function criarRender(canvas, mapa) {
   }
 
   return {
-    desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, destruir,
+    desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, desmanchar,
+    explosao, clarao: clarearFlash, inspecionar, destruir,
   };
 }
