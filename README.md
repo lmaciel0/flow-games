@@ -18,7 +18,7 @@ Sete jogos em **HTML, CSS e JavaScript puros**: sem build e sem framework, e a �
 | **Campo Minado** | Primeiro clique sempre seguro, três dificuldades, modo bandeira para toque e melhor tempo salvo por dificuldade. |
 | **Tetris Neon** | Os 7 tetraminós, peça fantasma, próxima peça, hard drop, níveis e recorde salvo. |
 | **Termo** | Palavras de 5 letras em 6 tentativas, dicionário pt-BR com cerca de 10 mil palavras, teclado com cores e estatísticas salvas. |
-| **Block Strike** | FPS 5x5 contra bots em 3D (Three.js), com 3 dificuldades, rounds MR12 com troca de lados, loadout a cada round, 4 armas primárias, faca corpo a corpo, velocidade que depende da arma, bots com rotas e mira humana, radar, placar, modo espectador e treino livre sozinho no mapa. Tamanho Normal/Grande e tela cheia. Só para computador. |
+| **Block Strike** | FPS 5x5 contra bots em 3D (Three.js), com 3 dificuldades e rounds MR12 com troca de lados. Modo desarme: bombsites A e B, C4 que se planta e se desarma, terroristas e CTs que trocam no intervalo. Economia com menu de compra (armas, colete, kit, granadas), granadas flash, HE e smoke de blocos, faca, bots com rotas, mira humana, ouvido para passos e reação a flash e fumaça, radar, placar, espectador e treino livre. Tamanho Normal/Grande e tela cheia. Só para computador. |
 
 ## Destaques técnicos
 
@@ -41,10 +41,16 @@ Sete jogos em **HTML, CSS e JavaScript puros**: sem build e sem framework, e a �
 | Faca | botão esquerdo = golpe leve (40, 90 pelas costas) / botão direito = estocada (65, 180 pelas costas) |
 | Pular / agachar / andar em silêncio | `Espaço` / `C` / `Shift` |
 | Recarregar | `R` (o pente vazio recarrega sozinho) |
-| Armas | `1` primária, `2` pistola, `3` faca, `Q` última arma, roda do mouse (no início do round, `1`–`4` escolhem a primária) |
+| Armas | `1` primária, `2` pistola, `3` faca, `Q` última arma, roda do mouse |
+| Comprar (só no início do round) | `1`–`9` e `0` compram os itens do menu (rifle, SMG, sniper, escopeta, colete, colete + capacete, kit, smoke, flash, HE) |
+| Plantar / desarmar a C4 | segure `E` parado no bombsite (3,2 s) ou ao lado da C4 (10 s, 5 s com kit) |
+| Granadas | `Z` flash, `X` smoke, `V` HE |
+| Inspecionar a arma | `F` |
 | Trocar a primária no treino | `B` e depois `1`–`4` |
 | Placar | segure `Tab` |
 | Espectador | clique do mouse para trocar de aliado depois de morrer |
+
+**Partida:** começa com $800 e só a pistola. Cada abate paga conforme a arma (rifle e pistola $300, SMG $600, sniper $100, escopeta e faca $900); vencer o round dá $3250 e perder dá $1400, subindo $500 a cada derrota seguida até $3400. Quem sobrevive mantém o equipamento; morrer perde tudo. No round 13 os lados trocam e o dinheiro volta a $800. Os terroristas (laranja até o round 12, depois azul) plantam a C4 em A ou B; os CTs desarmam. Sem plantar, o tempo esgotado dá o round aos CTs; plantada, a C4 explode em 40 s. Quem anda correndo faz barulho que os bots ouvem a até 15 m; `Shift` e agachado são silenciosos.
 
 Com a faca o boneco corre mais (6,2 m/s); pistola 5,8, SMG 5,6, escopeta 5,3, rifle 5,1 e sniper 4,8 (mais lenta ainda com a luneta). Trocar de arma leva um instante para sacar.
 
