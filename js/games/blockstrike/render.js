@@ -255,6 +255,8 @@ export function criarRender(canvas, mapa) {
     for (const p of pecas) { p.vida = 0; p.m.visible = false; }
     fogoT = 0;
     fogo.visible = false;
+    brilhoT = 0;
+    brilho.visible = false;
     tremor = 0;
     for (const f of faiscas) { f.vida = 0; f.m.visible = false; }
   }
@@ -377,18 +379,22 @@ export function criarRender(canvas, mapa) {
   const matFaisca = new THREE.MeshBasicMaterial({ color: 0xffd23f });
   const geoFaisca = new THREE.BoxGeometry(0.18, 0.18, 0.18);
   const faiscas = [];
-  const VIDA_FOGO = 0.9;
+  let vidaFogo = 0.9;
+  let escalaFogo = 20;
   let fogoT = 0;
   let tremor = 0;
   let tremorDe = null;
 
-  function explosao(ponto) {
-    fogo.position.set(ponto.x, ponto.y + 1, ponto.z);
-    fogoT = VIDA_FOGO;
+  // `pequena`: granada HE (bola menor, rápida e com tremor fraco); senão, a C4.
+  function explosao(ponto, pequena = false) {
+    fogo.position.set(ponto.x, ponto.y + (pequena ? 0.6 : 1), ponto.z);
+    vidaFogo = pequena ? 0.45 : 0.9;
+    escalaFogo = pequena ? 7 : 20;
+    fogoT = vidaFogo;
     fogo.visible = true;
-    tremor = 1;
+    tremor = pequena ? 0.45 : 1;
     tremorDe = ponto;
-    for (let i = 0; i < 28; i++) {
+    for (let i = 0; i < (pequena ? 12 : 28); i++) {
       if (faiscas.length < 28) {
         const m = new THREE.Mesh(geoFaisca, matFaisca);
         m.visible = false;
@@ -407,8 +413,8 @@ export function criarRender(canvas, mapa) {
   function animarExplosao(dt) {
     if (fogoT > 0) {
       fogoT -= dt;
-      const k = 1 - Math.max(0, fogoT) / VIDA_FOGO;
-      fogo.scale.setScalar(1 + k * 20);
+      const k = 1 - Math.max(0, fogoT) / vidaFogo;
+      fogo.scale.setScalar(1 + k * escalaFogo);
       matFogo.opacity = Math.max(0, 0.85 * (1 - k * k));
       if (fogoT <= 0) fogo.visible = false;
     }
@@ -423,9 +429,82 @@ export function criarRender(canvas, mapa) {
     tremor = Math.max(0, tremor - dt * 1.1);
   }
 
+  // Granadas no ar: um cubo por granada, da cor do tipo, girando.
+  const matsGranada = {
+    flash: new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }),
+    smoke: new THREE.MeshLambertMaterial({ color: 0x8b95a1 }),
+    he: new THREE.MeshLambertMaterial({ color: 0x2f5d2f }),
+  };
+  const geoGranada = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+  const cubosGranada = [];
+  function desenharGranadas(mundo, dt) {
+    const lista = mundo.granadas ?? [];
+    while (cubosGranada.length < Math.min(lista.length, 16)) {
+      const m = new THREE.Mesh(geoGranada, matsGranada.he);
+      m.visible = false;
+      scene.add(m);
+      cubosGranada.push(m);
+    }
+    cubosGranada.forEach((m, i) => {
+      const g = lista[i];
+      m.visible = Boolean(g);
+      if (!g) return;
+      m.material = matsGranada[g.tipo];
+      m.position.set(g.pos.x, g.pos.y, g.pos.z);
+      m.rotation.x += dt * 9;
+      m.rotation.z += dt * 6;
+    });
+  }
+
+  // Smoke: uma InstancedMesh (1 draw call) com os blocos vivos de todas as nuvens. Nascem do centro,
+  // somem nos buracos de tiro/HE e encolhem nos últimos 2 s.
+  const MAX_CUBOS_FUMACA = 900;
+  const matFumaca = new THREE.MeshLambertMaterial({ color: 0xdde1e6, transparent: true, opacity: 0.9, depthWrite: false });
+  const geoFumaca = new THREE.BoxGeometry(1, 1, 1);
+  const fumaca = new THREE.InstancedMesh(geoFumaca, matFumaca, MAX_CUBOS_FUMACA);
+  fumaca.frustumCulled = false;
+  fumaca.count = 0;
+  fumaca.renderOrder = 2;
+  scene.add(fumaca);
+  const m4 = new THREE.Matrix4();
+  function desenharFumaca(mundo) {
+    let n = 0;
+    for (const f of mundo.fumacas ?? []) {
+      const idade = mundo.tempo - f.nasceEm;
+      const encolhe = Math.min(1, Math.max(0, f.fim - mundo.tempo) / 2);
+      for (const c of f.cubos) {
+        if (!c.vivo || idade < c.atraso || n >= MAX_CUBOS_FUMACA) continue;
+        const k = f.cubo * 1.15 * Math.min(1, (idade - c.atraso) / 0.25) * encolhe;
+        m4.makeScale(k, k, k).setPosition(c.x, c.y, c.z);
+        fumaca.setMatrixAt(n++, m4);
+      }
+    }
+    fumaca.count = n;
+    fumaca.instanceMatrix.needsUpdate = true;
+  }
+
+  // Estouro da flash: bloco branco que cresce e some rápido.
+  const matBrilho = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+  const brilho = new THREE.Mesh(geoFogo, matBrilho);
+  brilho.visible = false;
+  scene.add(brilho);
+  let brilhoT = 0;
+  const clarearFlash = (ponto) => {
+    brilho.position.set(ponto.x, ponto.y, ponto.z);
+    brilhoT = 0.3;
+    brilho.visible = true;
+  };
+
   function animarEfeitos(dt) {
     animarPecas(dt);
     animarExplosao(dt);
+    if (brilhoT > 0) {
+      brilhoT -= dt;
+      const k = 1 - Math.max(0, brilhoT) / 0.3;
+      brilho.scale.setScalar(0.5 + k * 5);
+      matBrilho.opacity = Math.max(0, 1 - k);
+      if (brilhoT <= 0) brilho.visible = false;
+    }
     for (const r of rastros) {
       if (r.vida <= 0) continue;
       r.vida -= dt;
@@ -673,6 +752,8 @@ export function criarRender(canvas, mapa) {
     inspecao = Math.max(0, inspecao - dt);
     golpeT = Math.max(0, golpeT - dt);
     animarEfeitos(dt);
+    desenharGranadas(mundo, dt);
+    desenharFumaca(mundo);
     if (viewAtual) posarArma(vista, mundo, dt);
     luzTiro.intensity = clarao > 0 ? 2 : 0;
     luzTiro.position.copy(camera.position);
@@ -690,7 +771,9 @@ export function criarRender(canvas, mapa) {
     geoClarao.dispose();
     for (const m of marcasSite) { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); }
     [geoC4, geoLed, geoFogo, geoFaisca].forEach((g) => g.dispose());
-    [matC4, matLed, matFogo, matFaisca].forEach((m) => m.dispose());
+    [matC4, matLed, matFogo, matFaisca, matFumaca, matBrilho, ...Object.values(matsGranada)].forEach((m) => m.dispose());
+    [geoGranada, geoFumaca].forEach((g) => g.dispose());
+    fumaca.dispose();
     for (const r of rastros) r.linha.geometry.dispose();
     matRastro.dispose();
     geoGota.dispose();
@@ -703,6 +786,6 @@ export function criarRender(canvas, mapa) {
 
   return {
     desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, desmanchar,
-    explosao, inspecionar, destruir,
+    explosao, clarao: clarearFlash, inspecionar, destruir,
   };
 }

@@ -113,8 +113,9 @@ export const MAPA = {
   ],
   // Bombsites do modo desarme (retângulos no chão, em z perto de 0, entre as rotas).
   bombsites: {
-    A: { ...SITES.A, waypoint: 2 * N + 3 },
-    B: { ...SITES.B, waypoint: 2 * N + 4 },
+    // `espera`: waypoint onde os CTs seguram o site antes da plantada ([metade z>0, metade z<0]), a ~10 m do site.
+    A: { ...SITES.A, waypoint: 2 * N + 3, espera: [9, 9 + N] },
+    B: { ...SITES.B, waypoint: 2 * N + 4, espera: [17, 17 + N] },
   },
   ceu: 0x87ceeb,
   neblina: [30, 90],

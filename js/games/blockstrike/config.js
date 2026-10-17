@@ -35,6 +35,16 @@ export const BOMBA = {
   raioExplosao: 14, // todo mundo a menos disto morre
 };
 
+// Granadas: tempos em segundos, distâncias em metros. O arremesso sai do olho na direção da mira.
+export const GRANADA = {
+  velocidade: 18, subida: 4, gravidade: 20, raio: 0.12,
+  fusivel: { flash: 1.5, he: 1.6, smoke: 1.8 },
+  intervalo: 0.7, // entre arremessos do mesmo jogador
+  he: { raio: 9, dano: 75 },
+  flash: { alcance: 40, duracao: 3.5 },
+  fumaca: { raio: 3.2, cubo: 0.8, duracao: 18, buraco: 2, abrir: 0.9, max: 3, raioTiro: 0.55, raioHE: 3.6 },
+};
+
 // Economia (só na partida): preços, recompensas e colete. Valores em dólares.
 export const ECONOMIA = {
   inicial: 800, maximo: 16000, vitoria: 3250,

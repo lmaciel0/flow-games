@@ -11,6 +11,7 @@ import {
 import { escolherPrimaria } from './bots.js';
 import { acaoPossivel, tickBomba } from './bomba.js';
 import { armasDoEquip, danoComColete, perderEquip, premiarKill } from './economia.js';
+import { abrirBuracos, atualizarGranadas, lancar, limparGranadas } from './granadas.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 1.8;
@@ -41,7 +42,7 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [] };
 }
 
 // Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
@@ -57,6 +58,7 @@ function registrarRuidos(mundo, eventos) {
 }
 
 export function posicionarParaRound(mundo, ladoAzul) {
+  limparGranadas(mundo);
   const ladoLaranja = ladoAzul === 'A' ? 'B' : 'A';
   mundo.entidades.forEach((e, i) => {
     const lado = e.time === 'azul' ? ladoAzul : ladoLaranja;
@@ -91,7 +93,7 @@ export function posicionarParaRound(mundo, ladoAzul) {
 
 const idle = (e) => ({
   frente: 0, lado: 0, pular: false, agachar: false, devagar: false, atirar: false,
-  zoom: false, recarregar: false, usar: false, slot: null, yaw: e.yaw, pitch: e.pitch,
+  zoom: false, recarregar: false, usar: false, granada: null, slot: null, yaw: e.yaw, pitch: e.pitch,
 });
 
 // Só levanta se o corpo em pé couber (sem teto em cima).
@@ -206,6 +208,7 @@ function atirarRaio(mundo, e, tipo, desvio, eventos) {
   } else {
     ate = { x: o.x + dir.x * ALCANCE_RASTRO, y: o.y + dir.y * ALCANCE_RASTRO, z: o.z + dir.z * ALCANCE_RASTRO };
   }
+  if (mundo.fumacas?.length) abrirBuracos(mundo, o, ate); // o tiro atravessa a fumaça e abre um buraco
   eventos.push({ tipo: 'raio', atirador: e.id, de: o, ate });
 }
 
@@ -292,12 +295,18 @@ export function passo(mundo, dt, comandos, { congelado = false, comBomba = true 
     const acao = comBomba && !congelado && cmd.usar ? acaoPossivel(mundo, e) : null;
     if (acao) {
       agindo.set(e.id, acao);
-      cmd = { ...cmd, frente: 0, lado: 0, pular: false, atirar: false, recarregar: false, slot: null };
+      cmd = { ...cmd, frente: 0, lado: 0, pular: false, atirar: false, recarregar: false, granada: null, slot: null };
     }
     moverEntidade(e, cmd, dt, mundo.mapa.caixas, congelado, eventos);
     if (!congelado) combate(mundo, e, cmd, dt, eventos);
+    if (comBomba && !congelado && cmd.granada) lancar(mundo, e, cmd.granada, eventos, cmd.granadaAlvo ?? null);
   }
-  if (comBomba && !congelado) tickBomba(mundo, dt, agindo, eventos);
+  if (comBomba && !congelado) {
+    tickBomba(mundo, dt, agindo, eventos);
+    atualizarGranadas(mundo, dt, eventos, (dono, alvo, dano, tipo, evs) => aplicarDano(mundo, dono, tipo, {
+      ent: alvo, parte: 'tronco', ponto: { x: alvo.pos.x, y: alvo.pos.y + 0.9, z: alvo.pos.z },
+    }, evs, dano));
+  }
   // Trocas no mesmo passo valem para os dois lados: as mortes só têm efeito depois de todos agirem.
   for (const e of mundo.entidades) {
     if (!e.vivo || e.hp > 0) continue;

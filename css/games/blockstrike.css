@@ -345,6 +345,7 @@
   border-radius: var(--radius-sm);
 }
 
+.bs-cegueira { position: absolute; inset: 0; pointer-events: none; background: #fff; z-index: 3; }
 /* Dinheiro e menu de compra */
 .bs-dinheiro {
   position: absolute; left: 0.75rem; bottom: 4.4rem; font-weight: 800; font-size: 0.95rem; color: #86efac;

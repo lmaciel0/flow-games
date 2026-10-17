@@ -11,7 +11,8 @@ import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
 import { ARMAS, DIFICULDADE, ECONOMIA } from './config.js';
-import { olho, direcao, temVisada } from './fisica.js';
+import { olho, direcao } from './fisica.js';
+import { visadaLivre } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
 import { criarGrafo } from './navegacao.js';
@@ -298,10 +299,31 @@ function montar(raiz, ctx) {
         if (ev.id === eu.id) sons.pulo();
       } else if (ev.tipo === 'pouso') {
         sons.pouso(distDe(ev.id), panDe(ev.id));
+      } else if (ev.tipo === 'arremesso' || ev.tipo === 'granada-quique' || ev.tipo === 'explosao-he' ||
+        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca') {
+        reagirGranada(p, ev, { eu, ouvido });
       } else {
         reagirBomba(p, ev, { eu, ouvido });
       }
     }
+  }
+
+  // Eventos das granadas: sons com distância e pan, clarões e o zumbido de quem foi cegado.
+  function reagirGranada(p, ev, { eu, ouvido }) {
+    const { render } = p;
+    const pt = ev.ponto;
+    const dist = pt ? distancia(ouvido, pt) : 0;
+    const pan = pt ? Math.sin((anguloDe(eu, { pos: pt }) * Math.PI) / 180) : 0;
+    if (ev.tipo === 'arremesso') sons.arremesso(ev.atirador === eu.id ? 0 : dist, ev.atirador === eu.id ? 0 : pan);
+    else if (ev.tipo === 'granada-quique') sons.quiqueGranada(dist, pan);
+    else if (ev.tipo === 'explosao-he') {
+      sons.he(dist, pan);
+      render.explosao(pt, true);
+    } else if (ev.tipo === 'flash') {
+      sons.flash(dist, pan);
+      render.clarao(pt);
+    } else if (ev.tipo === 'fumaca') sons.fumaca(dist, pan);
+    else if (ev.tipo === 'cegueira' && ev.id === eu.id) sons.zumbido(ev.dur);
   }
 
   // Eventos da C4: sons, avisos na tela e o efeito da explosão.
@@ -350,7 +372,7 @@ function montar(raiz, ctx) {
       if (!e.vivo || e.time === eu.time) continue;
       if (mundo.tempo - (p.ultimoTiro.get(e.id) ?? -Infinity) < 1.5) { vistos.add(e.id); continue; }
       const alvo = olho(e);
-      if (aliados.some((a) => distancia(olho(a), alvo) < ALCANCE_AVISTAR && temVisada(olho(a), alvo, mundo.mapa.caixas))) {
+      if (aliados.some((a) => distancia(olho(a), alvo) < ALCANCE_AVISTAR && visadaLivre(mundo, olho(a), alvo))) {
         vistos.add(e.id);
       }
     }
@@ -439,7 +461,10 @@ function montar(raiz, ctx) {
       compra: eu.vivo && p.mundo.economia && regras.fase === 'freeze'
         ? estadoCompra(eu, eu.time === regras.terroristas ? 'T' : 'CT') : null,
       dinheiro: p.mundo.economia ? eu.dinheiro : null,
-      equip: p.mundo.economia ? { colete: eu.equip.colete, capacete: eu.equip.capacete, kit: eu.equip.kit } : null,
+      equip: p.mundo.economia
+        ? { colete: eu.equip.colete, capacete: eu.equip.capacete, kit: eu.equip.kit, granadas: { ...eu.equip.granadas } } : null,
+      cegueira: eu.vivo && mundo.tempo < (eu.cegoAte ?? 0)
+        ? Math.min(1, (eu.cegoAte - mundo.tempo) / Math.max(0.2, eu.cegoDur * 0.5)) : 0,
       fase: regras.fase, round: regras.round, tempo: regras.tempo, placar: regras.placar,
       hp: alvo.hp, vivo: eu.vivo, arma: arma && { ...arma, pente: def.pente }, spread, progressoRecarga,
       luneta: eu.vivo && Boolean(cmd.zoom && def?.zoomFov),
@@ -459,7 +484,7 @@ function montar(raiz, ctx) {
     // Só se atira com o round em jogo; fora disso (inclusive em fim-partida) o mundo segue sem tiros.
     // No freeze as teclas 1–4 escolhem a primária (hud.teclaLoadout): o slot do comando é ignorado.
     const atira = regras.fase === 'jogo';
-    const cmdJogador = atira ? cmd : { ...cmd, atirar: false, usar: false, slot: regras.fase === 'freeze' ? null : cmd.slot };
+    const cmdJogador = atira ? cmd : { ...cmd, atirar: false, usar: false, granada: null, slot: regras.fase === 'freeze' ? null : cmd.slot };
     // Painel de armas aberto no treino: 1–4 escolhem a primária, não trocam de slot.
     if (p.treino && p.loadoutAberto) cmdJogador.slot = null;
     const armaMao = jogador.vivo && jogador.armas[jogador.slot];

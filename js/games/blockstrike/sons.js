@@ -201,6 +201,54 @@ export function criarSons(audio) {
       chiado(v, v.t0, { tipo: 'lowpass', freq: 600, freqFim: 100, dur: 0.5, ganho: 0.3 });
     },
 
+    // Arremesso: sopro do braço e o pino saindo.
+    arremesso(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.5 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'bandpass', freq: 500, freqFim: 1800, q: 1, dur: 0.16, ganho: 0.25, ataque: 0.05 });
+      clique(v, v.t0 + 0.02, 2000, 0.25);
+    },
+
+    quiqueGranada(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.45 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'triangle', freq: varia(1300, 0.15), freqFim: 700, dur: 0.07, ganho: 0.25 });
+      chiado(v, v.t0, { tipo: 'bandpass', freq: 2500, q: 3, dur: 0.03, ganho: 0.25 });
+    },
+
+    // HE: estrondo mais curto que o da C4.
+    he(distancia = 0, pan = 0) {
+      const v = voz({ distancia: distancia * 0.6, pan, ganho: 0.95 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 2200, dur: 0.1, ganho: 0.7 });
+      chiado(v, v.t0, { tipo: 'lowpass', freq: 1400, freqFim: 100, dur: 0.9, ganho: 0.85, ataque: 0.004 });
+      tom(v, v.t0, { freq: 120, freqFim: 35, dur: 0.6, ganho: 0.9 });
+    },
+
+    // Flash: estalo agudo seco.
+    flash(distancia = 0, pan = 0) {
+      const v = voz({ distancia: distancia * 0.7, pan, ganho: 0.8 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 3500, dur: 0.12, ganho: 0.8 });
+      tom(v, v.t0, { freq: 220, freqFim: 60, dur: 0.1, ganho: 0.6 });
+    },
+
+    // Zumbido de quem foi cegado: seno agudo que decai por `dur` segundos.
+    zumbido(dur = 3) {
+      const v = voz({ ganho: 0.35 });
+      if (!v) return;
+      tom(v, v.t0, { onda: 'sine', freq: 3500, dur, ganho: 0.3, ataque: 0.02 });
+      tom(v, v.t0, { onda: 'sine', freq: 3720, dur: dur * 0.8, ganho: 0.12, ataque: 0.02 });
+    },
+
+    // Smoke estourando: chiado longo.
+    fumaca(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.6 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'bandpass', freq: 3500, freqFim: 1800, q: 0.7, dur: 1.4, ganho: 0.3, ataque: 0.05 });
+      tom(v, v.t0, { freq: 140, freqFim: 70, dur: 0.15, ganho: 0.4 });
+    },
+
     // Compra aceita: caixa registradora curtinha.
     compra() {
       const v = voz({ ganho: 0.5 });

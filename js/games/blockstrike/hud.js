@@ -16,7 +16,7 @@ const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ci
 const CONTROLES = [
   ['WASD', 'andar'], ['Mouse', 'mirar'], ['Clique', 'atirar'], ['Botão direito', 'luneta / estocada'],
   ['R', 'recarregar'], ['Espaço', 'pular'], ['C', 'agachar'], ['Shift', 'andar em silêncio'],
-  ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
+  ['E (segurar)', 'plantar / desarmar C4'], ['Z X V', 'flash / smoke / HE'], ['1 2 3 / roda', 'armas'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
 const RADAR_ESCALA = 2.6; // px por metro
 const RADAR_LADO = 132; // px
@@ -260,7 +260,7 @@ export function criarHud(raiz, handlers) {
   const luneta = el('div', { class: 'bs-luneta', id: 'bs-luneta', hidden: true });
   const vinheta = el('div', { class: 'bs-vinheta', id: 'bs-vinheta' });
   const dicaTreino = el('div', { class: 'bs-dica-treino', id: 'bs-dica-treino', hidden: true,
-    texto: 'Treino · B troca a arma · Esc pausa' });
+    texto: 'Treino · B troca a arma · Z X V granadas · Esc pausa' });
   const radar = el('canvas', { class: 'bs-radar', id: 'bs-radar', width: RADAR_LADO, height: RADAR_LADO });
   // C4: aviso do bombsite, barra de plantar/desarmar, dica de tecla, anúncio central e clarão da explosão.
   const bombaInfo = el('div', { class: 'bs-bomba-info', id: 'bs-bomba-info', hidden: true });
@@ -269,12 +269,13 @@ export function criarHud(raiz, handlers) {
   const dicaC4 = el('div', { class: 'bs-dica-c4', id: 'bs-dica-c4', hidden: true });
   const anuncio = el('div', { class: 'bs-anuncio', id: 'bs-anuncio', hidden: true });
   const clarao = el('div', { class: 'bs-explosao', id: 'bs-explosao', hidden: true });
+  const cegueira = el('div', { class: 'bs-cegueira', id: 'bs-cegueira', hidden: true });
   const hudEl = el('div', { class: 'bs-hud', id: 'bs-hud', hidden: true },
     luneta, vinheta,
     el('div', { class: 'bs-topo' },
       el('div', { class: 'bs-placar' }, vivosAzul, placarAzul, timerEl, placarLaranja, vivosLaranja), roundEl),
     radar, killfeed, mira, hitmarker, danoArco, espectando, fimRound, dicaTrava, dicaTreino, recarga, avisoMunicao,
-    bombaInfo, acaoBarra, dicaC4, anuncio, clarao,
+    bombaInfo, acaoBarra, dicaC4, anuncio, clarao, cegueira,
     el('div', { class: 'bs-base' }, el('div', { class: 'bs-vida' }, el('small', { texto: 'VIDA' }), hpEl),
       el('div', { class: 'bs-arma' }, armaEl, municaoEl)));
   palco.append(hudEl);
@@ -635,12 +636,17 @@ export function criarHud(raiz, handlers) {
     mostrar(espectando, !v.vivo && Boolean(v.espectando));
     if (v.espectando) escrever(espectando, `Assistindo: ${v.espectando}`);
     mostrar(loadout, !v.compra && (v.fase === 'freeze' || v.loadout) && v.vivo);
+    // Flash: tela branca que some aos poucos (a intensidade vem pronta, de 0 a 1).
+    mostrar(cegueira, v.cegueira > 0);
+    if (v.cegueira > 0) cegueira.style.opacity = String(v.cegueira.toFixed(2));
     mostrar(compra, Boolean(v.compra));
     if (v.compra) renderCompra(v);
     mostrar(dinheiroEl, v.dinheiro !== null && v.dinheiro !== undefined);
     if (v.dinheiro !== null && v.dinheiro !== undefined) {
       const eq = v.equip;
-      escrever(dinheiroEl, [dolar(v.dinheiro), eq.colete > 0 ? `${eq.capacete ? 'colete+capacete' : 'colete'} ${eq.colete}` : '', eq.kit ? 'kit' : '']
+      const g = eq.granadas;
+      escrever(dinheiroEl, [dolar(v.dinheiro), eq.colete > 0 ? `${eq.capacete ? 'colete+capacete' : 'colete'} ${eq.colete}` : '',
+        eq.kit ? 'kit' : '', g.flash ? `Z flash ${g.flash}` : '', g.smoke ? `X smoke ${g.smoke}` : '', g.he ? `V HE ${g.he}` : '']
         .filter(Boolean).join(' · '));
     }
     // vencedorRound/motivo persistem no freeze seguinte: só valem em fim-round.
