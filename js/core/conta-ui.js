@@ -162,9 +162,16 @@ export function iniciarContaUI({ conta, audio }) {
     seqFoto++;
     limparPrevia();
     m.senha.value = '';
-    const volta = abridor?.isConnected && !abridor.closest('[hidden]') ? abridor : slot.querySelector('button');
+    // Sem o abridor (ex.: o convite do placar sumiu com o login), o foco só volta ao slot se o
+    // drawer estiver aberto; fechado, ele fica fora da tela mas ainda focável. Aí o foco vai
+    // para o <body>, onde os jogos já recebem o teclado.
+    const drawer = slot.closest('#sidebar-drawer');
+    const slotVisivel = !drawer || drawer.classList.contains('open');
+    const volta = abridor?.isConnected && !abridor.closest('[hidden]') ? abridor
+      : slotVisivel ? slot.querySelector('button') : null;
     abridor = null;
-    volta?.focus();
+    if (volta) volta.focus();
+    else document.activeElement?.blur();
   }
 
   m.fechar.addEventListener('click', fechar);
