@@ -37,7 +37,7 @@ Também quer que o progresso siga a pessoa entre aparelhos. O público são amig
 ## Dados
 
 - `profiles`: `user_id` (chave, referencia `auth.users`), `username` (único, case-insensitive), `avatar` (id de ícone pronto, ou caminho no Storage), `created_at`.
-- `placar`: chave `(user_id, jogo)`, com `jogo` em `termo` | `2048`; `valor` (Termo: total de vitórias; 2048: maior pontuação); `extra` jsonb (Termo: `{ "streak": n }`); `updated_at`.
+- `placar`: chave `(user_id, jogo)`, com `jogo` em `termo` | `game2048` (ids do registro); `valor` (Termo: total de vitórias; 2048: maior pontuação); `extra` jsonb (Termo: `{ "streak": n }`); `updated_at`.
 - Storage: bucket público `avatars`, caminho `<user_id>/avatar`. A foto é redimensionada no navegador para 128×128 e comprimida antes do envio, limite de ~200 KB, só imagem.
 - **RLS:** leitura pública de `profiles` e `placar`; nenhuma escrita direta nas tabelas. Toda escrita de pontos passa por funções RPC `security definer` que usam `auth.uid()`: registrar vitória do Termo (+1 e streak), registrar derrota (zera streak), registrar pontuação do 2048 (guarda o maior; rejeita valores absurdos, por exemplo acima de 4.000.000). **[minha escolha]** Rodar os advisors de segurança do Supabase depois do DDL.
 
