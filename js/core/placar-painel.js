@@ -74,9 +74,10 @@ export function criarPlacarPainel({ conta, jogo, limite = 5, rotulo }) {
 
   repetir.addEventListener('click', () => { atualizar(); });
   convite.addEventListener('click', abrirEntrar);
-  // Teclas dentro do painel não chegam aos atalhos globais do jogo (o Termo
-  // engoliria o Enter de um botão ou link focado aqui). Esc segue livre.
-  raiz.addEventListener('keydown', (e) => { if (e.key !== 'Escape') e.stopPropagation(); });
+  // Enter e Espaço acionam o botão ou link focado aqui: não chegam aos atalhos
+  // globais do jogo (o Termo enviaria a linha). As outras teclas (letras, setas,
+  // Backspace, Esc) seguem para o jogo, mesmo com o foco no painel.
+  raiz.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); });
 
   let seq = 0;
   let destruido = false;
