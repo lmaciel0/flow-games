@@ -55,14 +55,15 @@
 ```js
 conta.estado()                       // { pronto: boolean, logado: boolean, usuario: { id, username, avatar } | null }
 conta.assinar(fn)                    // fn({ tipo: 'sessao' | 'progresso' }); devolve função de cancelar
-conta.criarConta(usuario, senha, avatar)  // Promise<{ ok: true } | { ok: false, erro: string }>
+conta.criarConta(usuario, senha, avatar)  // avatar = { icone: string } | { arquivo: File }; Promise<{ ok: true } | { ok: false, erro: string }>; o serviço redimensiona a foto (a UI só usa redimensionarFoto para pré-visualizar)
 conta.entrar(usuario, senha)         // idem
 conta.sair()                         // Promise<void>; apaga progresso local de termo e game2048
 conta.trocarAvatar(avatar)           // avatar = { icone: string } | { arquivo: File }; Promise<{ ok, erro? }>
 conta.registrar(jogo, evento)        // evento = { tipo:'vitoria' } | { tipo:'derrota' } | { tipo:'pontos', valor:number }; nunca lança
 conta.lerPlacar(jogo, limite = 50)   // Promise<null | { linhas: Linha[], eu: Linha | null }>
-// Linha = { posicao:number, username:string, avatar:string, valor:number, eu:boolean }
-conta.avatarVisual(avatar)           // { emoji: string } | { url: string }
+// Linha = { posicao:number, userId:string, username:string, avatar:string, valor:number, eu:boolean }; `eu` fica fora do `limite` quando a pessoa logada está abaixo do corte (posição real preservada)
+conta.avatarVisual(avatar, userId)   // { emoji: string } | { url: string }
+conta.emitir(evento)                 // dispara os assinantes; usado pelo serviço e por testes
 ```
 
 Evento `'progresso'` dispara depois que o login/logout reescreveu `arcade:termo:stats` e `arcade:game2048:recorde`; os jogos recarregam a memória a partir do storage.
@@ -87,7 +88,8 @@ Dependências entre tarefas: 1 e 2 são independentes; 3 e 4 dependem de 2 (4 ta
   - RPC `sincronizar_progresso(p_termo_wins int, p_termo_streak int, p_2048 int) returns jsonb`: faz o merge e devolve `{ "termo": { "wins": n, "streak": n }, "game2048": n }`. Regra: `game2048 = greatest(servidor, p_2048)`; Termo fica com o lado de mais vitórias (empate: maior streak), wins e streak sempre do mesmo lado.
   - RPC `registrar_vitoria_termo() returns void` (+1 vitória, +1 streak), `registrar_derrota_termo() returns void` (streak = 0), `registrar_pontos_2048(p_pontos int) returns void` (guarda o maior; ignora ≤ 0; erro se > 4000000).
   - Bucket público `avatars`: leitura pública; cada pessoa só grava/atualiza em `<auth.uid()>/avatar`; limite 204800 bytes; mime `image/jpeg`, `image/png`, `image/webp`.
-  - View ou RPC `ler_placar(p_jogo text, p_limite int) returns table(posicao int, user_id uuid, username text, avatar text, valor int)` com `valor > 0`, ordenado por `valor desc, updated_at asc`; RLS ligado em ambas as tabelas, `anon` e `authenticated` só leem.
+  - RPC `ler_placar(p_jogo text, p_limite int) returns table(posicao int, user_id uuid, username text, avatar text, valor int)` com `valor > 0`, ordenado por `valor desc, updated_at asc`; RLS ligado em ambas as tabelas, `anon` e `authenticated` só leem.
+  - RPC `minha_posicao(p_jogo text) returns table(posicao int, user_id uuid, username text, avatar text, valor int)`: a linha da pessoa logada com a posição real no mesmo critério de ordenação (vazio se `valor` = 0).
 
 - [ ] **Step 1: Escrever `~/arcade-tools/conta/backend.mjs`** que, usando `fetch` na REST do projeto com a chave publishable, afirma: (a) `insert` direto em `placar` é recusado para `anon`; (b) `rpc/ler_placar` com `p_jogo='termo'` responde 200 e lista ordenada.
 - [ ] **Step 2: Rodar e ver falhar** — `node ~/arcade-tools/conta/backend.mjs` → falha (tabelas/RPC inexistentes).
@@ -113,7 +115,7 @@ git commit -m "feat(conta): schema Supabase com RLS, RPCs de placar e bucket de 
 - Produces:
   - `config.js`: `export const SUPABASE_URL: string`, `SUPABASE_CHAVE: string` (publishable, obtida com `get_publishable_keys`), `DOMINIO_EMAIL: string` (o aceito na Task 1).
   - `validar.js`: `validarUsuario(texto: string): string | null` (devolve mensagem de erro em pt-BR ou `null`), `validarSenha(texto: string): string | null`, `emailSintetico(usuario: string): string` (minúsculas + `@` + `DOMINIO_EMAIL`).
-  - `avatar.js`: `ICONES: string[]` (8 emojis, `🦊` primeiro), `codificarIcone(emoji: string): string` → `'icone:🦊'`, `codificarFoto(): string` → `'foto'`, `decodificarAvatar(valor: string): { tipo: 'icone', emoji: string } | { tipo: 'foto' }` (valor desconhecido cai em `ICONES[0]`), `redimensionarFoto(arquivo: File): Promise<Blob>` (canvas 128×128, `image/webp` com fallback `image/jpeg`, rejeita se `arquivo.type` não começa com `image/` ou `arquivo.size > 5_000_000`, e rejeita se o resultado passar de 204800 bytes).
+  - `avatar.js`: `ICONES: string[]` (8 emojis, `🦊` primeiro), `codificarIcone(emoji: string): string` → `'icone:🦊'`, `codificarFoto(versao: number = Date.now()): string` → `'foto:<versao>'`, `decodificarAvatar(valor: string): { tipo: 'icone', emoji: string } | { tipo: 'foto', versao: number }` (valor desconhecido cai em `ICONES[0]`), `redimensionarFoto(arquivo: File): Promise<Blob>` (canvas 128×128, `image/webp` com fallback `image/jpeg`, rejeita se `arquivo.type` não começa com `image/` ou `arquivo.size > 5_000_000`, e rejeita se o resultado passar de 204800 bytes).
 
 - [ ] **Step 1: Escrever os testes** — `validar.test.mjs`: `validarUsuario('ab')` e `validarUsuario('a'.repeat(17))` devolvem string; `validarUsuario('João')`, `validarUsuario('a b')` devolvem string; `validarUsuario('Lucas_1')` devolve `null`; `validarSenha('12345')` devolve string, `validarSenha('123456')` devolve `null`; `emailSintetico('Lucas_1')` começa com `lucas_1@`. `avatar.test.mjs`: `decodificarAvatar('icone:🐼')` → `{tipo:'icone', emoji:'🐼'}`; `decodificarAvatar('lixo')` → ícone `ICONES[0]`; `ICONES.length === 8`.
 - [ ] **Step 2: Rodar e ver falhar** — `cd ~/arcade-tools && node --test conta/validar.test.mjs conta/avatar.test.mjs` → FAIL (módulos inexistentes).
@@ -142,7 +144,7 @@ git commit -m "feat(conta): config, supabase-js vendorizado e validações puras
   - `Cliente.cadastrar(usuario, senha, avatar)`: `signUp` com e-mail sintético, depois `criar_perfil`. Usuário já existente → erro "Esse nome de usuário já existe".
   - `Cliente.entrar(usuario, senha)`: `signInWithPassword`; qualquer falha de credencial → o mesmo erro "Usuário ou senha incorretos".
   - `Cliente.sair()`, `Cliente.sessaoAtual()` (→ `{ id } | null`), `Cliente.aoMudarSessao(fn)`.
-  - `Cliente.perfil(id)` → `{ username, avatar }`; `Cliente.enviarFoto(id, blob)` → grava `<id>/avatar` com `upsert`; `Cliente.urlFoto(id)` → URL pública com parâmetro de versão para furar cache; `Cliente.trocarAvatar(codigo)`.
+  - `Cliente.perfil(id)` → `{ username, avatar }`; `Cliente.enviarFoto(id, blob)` → grava `<id>/avatar` com `upsert`; `Cliente.urlFoto(id, versao)` → URL pública com `?v=<versao>` para furar cache; `Cliente.minhaPosicao(jogo)` → `dados` com a linha de `minha_posicao` ou `null`; `Cliente.trocarAvatar(codigo)`.
   - `Cliente.sincronizar({ termo: {wins, streak}, game2048 })` → `dados` com o JSON da RPC; `Cliente.registrar(jogo, evento)`; `Cliente.lerPlacar(jogo, limite)` → `dados.linhas`.
 
 - [ ] **Step 1: Escrever `cliente.test.mjs`** com uma fábrica falsa de `supabase-js` (objeto com `auth`, `rpc`, `storage`, `from` gravando chamadas). Testes: `entrar` com erro `Invalid login credentials` devolve `{ok:false, erro:'Usuário ou senha incorretos'}`; `entrar` com a fábrica lançando exceção de rede devolve `{ok:false}` sem lançar; `cadastrar('Lucas_1','segredo',…)` chama `signUp` com e-mail em minúsculas e depois `rpc('criar_perfil', {p_username:'Lucas_1', p_avatar:'icone:🦊'})`; `sincronizar` chama `rpc('sincronizar_progresso', {p_termo_wins, p_termo_streak, p_2048})`.
@@ -168,6 +170,7 @@ git commit -m "feat(conta): cliente Supabase com erros traduzidos e sem exceçõ
 - Consumes: `cliente.js` (Task 3), `validar.js`, `avatar.js` (Task 2), `get`/`set` de `js/core/storage.js` (chaves globais `termo:stats` = `{wins, streak}` e `game2048:recorde` = número).
 - Produces: o contrato do serviço descrito na seção "Contrato do serviço `conta`" deste plano, via `export function criarConta({ cliente, storage }): Conta` (injeção para teste) e `export const conta = criarConta({ cliente, storage })` (instância real, usada em `main.js`).
 - Regras:
+  - `lerPlacar(jogo, limite)` chama `cliente.lerPlacar`; se há login e a pessoa não está nas linhas, chama `cliente.minhaPosicao` e devolve esse registro em `eu`; marca `eu: true` na linha própria; cada Linha leva `userId`. `avatarVisual(avatar, userId)` usa `decodificarAvatar` e, para foto, `cliente.urlFoto(userId, versao)`. `criarConta`/`trocarAvatar` com `{ arquivo }` chamam `redimensionarFoto`, depois `cliente.enviarFoto` e gravam o avatar com `codificarFoto()`.
   - `criarConta`/`entrar` validam com `validarUsuario`/`validarSenha` **antes** de qualquer chamada ao cliente.
   - Após sessão válida: ler o local, chamar `cliente.sincronizar`, gravar o resultado em `termo:stats` e `game2048:recorde`, atualizar `estado()`, emitir `'sessao'` e depois `'progresso'`. Se `sincronizar` falhar, manter o local intacto, ficar logado e emitir só `'sessao'`.
   - `sair()`: `cliente.sair()`, gravar `{wins:0, streak:0}` e `0` nas duas chaves, limpar o estado, emitir `'sessao'` e `'progresso'`. Se `cliente.sair()` falhar, o local ainda é apagado.
