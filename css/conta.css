@@ -1,0 +1,363 @@
+/* ==========================================================================
+   Conta — área no topo do drawer e modal Entrar / Criar conta / Trocar avatar
+   ========================================================================== */
+.conta-slot [hidden],
+.conta-fundo[hidden],
+.conta-modal [hidden] {
+  display: none !important;
+}
+
+.conta-slot {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.conta-entrar,
+.conta-enviar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+  color: #060914;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(0, 242, 254, 0.25);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.conta-entrar:hover,
+.conta-enviar:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(0, 242, 254, 0.4);
+}
+
+.conta-enviar:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.conta-slot-dica,
+.conta-aviso {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  padding: 0 0.25rem;
+}
+
+.conta-aviso {
+  color: var(--color-gold);
+}
+
+.conta-perfil {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.45rem 0.8rem 0.45rem 0.5rem;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--surface-glass-border);
+  color: var(--text-primary);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.conta-perfil:hover,
+.conta-perfil[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 242, 254, 0.35);
+}
+
+.conta-av {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 1.15rem;
+  background: var(--cell-active-bg);
+}
+
+.conta-av img,
+.conta-foto-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.conta-nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.conta-seta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  transition: transform var(--transition-fast);
+}
+
+.conta-perfil[aria-expanded="true"] .conta-seta {
+  transform: rotate(180deg);
+}
+
+.conta-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.conta-menu-item {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.conta-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+/* --- Modal --- */
+.conta-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgba(4, 6, 14, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.conta-modal {
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  padding: 1.25rem;
+  background: rgba(14, 17, 34, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), 0 0 40px rgba(0, 242, 254, 0.08);
+  animation: conta-surgir var(--transition-normal);
+}
+
+@keyframes conta-surgir {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.conta-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.conta-titulo {
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.conta-fechar {
+  width: 44px;
+  height: 44px;
+  margin-right: -0.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.conta-fechar:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.conta-abas {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.conta-aba {
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid var(--surface-glass-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.conta-aba[aria-selected="true"] {
+  color: var(--color-x);
+  border-color: var(--color-x);
+  background: rgba(0, 242, 254, 0.08);
+}
+
+.conta-form,
+.conta-credenciais {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.conta-campo label,
+.conta-legenda {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.conta-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--surface-glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--cell-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1rem; /* 16px: sem zoom automático no iOS */
+  user-select: text;
+  -webkit-user-select: text;
+  transition: border-color var(--transition-fast);
+}
+
+.conta-input:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.conta-avatares-caixa {
+  border: none;
+  min-width: 0;
+}
+
+.conta-avatares {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.conta-av-opcao {
+  width: 100%;
+  max-width: 54px;
+  min-width: 44px;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: var(--cell-active-bg);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.conta-av-opcao:hover {
+  transform: scale(1.06);
+}
+
+.conta-av-opcao[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--color-x), 0 0 12px var(--color-x-glow);
+}
+
+.conta-foto-btn {
+  border: 1px dashed var(--text-secondary);
+  font-size: 1.2rem;
+}
+
+.conta-dica {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.conta-erro {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--color-o);
+}
+
+.conta-erro:empty {
+  display: none;
+}
+
+.conta-enviar {
+  min-height: 48px;
+  font-size: 1rem;
+}
+
+/* --- Foco e movimento --- */
+.conta-slot button:focus-visible,
+.conta-modal button:focus-visible,
+.conta-input:focus-visible {
+  outline: 2px solid var(--color-x);
+  outline-offset: 2px;
+}
+
+.conta-input:focus-visible {
+  outline-offset: 1px;
+  border-color: var(--color-x);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conta-modal { animation: none; }
+
+  .conta-slot *,
+  .conta-modal * {
+    transition: none !important;
+  }
+
+  .conta-entrar:hover,
+  .conta-enviar:hover:not(:disabled),
+  .conta-av-opcao:hover {
+    transform: none;
+  }
+}

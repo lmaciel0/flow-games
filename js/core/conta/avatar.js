@@ -60,9 +60,16 @@ export async function redimensionarFoto(arquivo) {
   canvas.width = LADO_FOTO;
   canvas.height = LADO_FOTO;
   const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    bitmap.close?.();
+    throw new Error('Não foi possível processar a imagem neste navegador.');
+  }
   const lado = Math.min(bitmap.width, bitmap.height);
   const sx = (bitmap.width - lado) / 2;
   const sy = (bitmap.height - lado) / 2;
+  // Fundo branco: sem ele, PNG/GIF transparente fica preto no caminho JPEG.
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, LADO_FOTO, LADO_FOTO);
   ctx.drawImage(bitmap, sx, sy, lado, lado, 0, 0, LADO_FOTO, LADO_FOTO);
   bitmap.close?.();
 

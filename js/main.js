@@ -8,6 +8,7 @@ import { initConfetti, triggerConfetti } from './core/confetti.js';
 import { registrar } from './core/registry.js';
 import { iniciarNav } from './core/nav.js';
 import { conta } from './core/conta/index.js';
+import { iniciarContaUI } from './core/conta-ui.js';
 
 import tictactoe from './games/tictactoe.js';
 import game2048 from './games/game2048.js';
@@ -35,6 +36,8 @@ iniciarNav({
   escopo,
   conta
 });
+
+iniciarContaUI({ conta, audio });
 
 // Restaura a sessão em segundo plano: falha de rede ou backend nunca trava o arcade.
 conta.iniciar().catch(() => {});
