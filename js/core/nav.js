@@ -33,7 +33,7 @@ function itemDrawer({ href, icone, iconeClasse = '', titulo, subtitulo, badge })
   return a;
 }
 
-export function iniciarNav({ app, audio, confetti, escopo }) {
+export function iniciarNav({ app, audio, confetti, escopo, conta }) {
   const drawer = document.getElementById('sidebar-drawer');
   const backdrop = document.getElementById('drawer-backdrop');
   const menuBtn = document.getElementById('menu-toggle-btn');
@@ -139,7 +139,7 @@ export function iniciarNav({ app, audio, confetti, escopo }) {
     raiz.className = 'game-view';
     app.append(raiz);
     montados.set(jogo.id, raiz);
-    jogo.mount(raiz, { audio, confetti, storage: escopo(jogo.id) });
+    jogo.mount(raiz, { audio, confetti, storage: escopo(jogo.id), conta });
     return raiz;
   }
 

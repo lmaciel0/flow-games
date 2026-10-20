@@ -80,7 +80,7 @@ const HTML = `
       </div>
 `;
 
-function montar(raiz, { audio, confetti, storage }) {
+function montar(raiz, { audio, confetti, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
 
 
@@ -318,6 +318,7 @@ function montar(raiz, { audio, confetti, storage }) {
         playSound('win');
       } else if (isGameOver()) {
         state.gameOver = true;
+        enviarRecorde();
         showGameOverOverlay();
         playSound('gameover');
       }
@@ -372,6 +373,28 @@ function montar(raiz, { audio, confetti, storage }) {
   }
 
   // --- Placar e Armazenamento Local ---
+  // Recorde novo vai para o placar da conta com debounce: uma chamada por rajada de jogadas, não por movimento.
+  const DEBOUNCE_RECORDE_MS = 1500;
+  let recordePendente = 0;
+  let timerRecorde = null;
+
+  function agendarRecorde(valor) {
+    if (!conta) return;
+    recordePendente = Math.max(recordePendente, valor);
+    clearTimeout(timerRecorde);
+    timerRecorde = setTimeout(enviarRecorde, DEBOUNCE_RECORDE_MS);
+  }
+
+  // Fim de partida não espera o debounce: envia o pendente na hora.
+  function enviarRecorde() {
+    clearTimeout(timerRecorde);
+    timerRecorde = null;
+    if (recordePendente <= 0) return;
+    const valor = recordePendente;
+    recordePendente = 0;
+    conta?.registrar('game2048', { tipo: 'pontos', valor });
+  }
+
   function updateScoreUI(gained = 0) {
     currentScoreEl.textContent = state.score;
 
@@ -387,6 +410,7 @@ function montar(raiz, { audio, confetti, storage }) {
       state.bestScore = state.score;
       bestScoreEl.textContent = state.bestScore;
       storage.set('recorde', state.bestScore);
+      agendarRecorde(state.bestScore);
     }
   }
 
@@ -396,6 +420,7 @@ function montar(raiz, { audio, confetti, storage }) {
   }
 
   function newGame() {
+    enviarRecorde();
     initGrid();
     state.score = 0;
     state.previousState = null;
@@ -499,6 +524,11 @@ function montar(raiz, { audio, confetti, storage }) {
     if (view2048 && view2048.classList.contains('active')) {
       renderTiles();
     }
+  });
+
+  // Login/logout reescreve o recorde no storage: relê para a tela mostrar o da conta.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') loadBestScore();
   });
 
   loadBestScore();

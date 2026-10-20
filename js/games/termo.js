@@ -60,7 +60,7 @@ const HTML = `
       </div>
 `;
 
-function montar(raiz, { audio, confetti, storage }) {
+function montar(raiz, { audio, confetti, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
 
 
@@ -282,6 +282,7 @@ function montar(raiz, { audio, confetti, storage }) {
         stats.wins++;
         stats.streak++;
         saveStats();
+        conta?.registrar('termo', { tipo: 'vitoria' });
         showToast('🎉 Parabéns, você acertou a palavra!');
         audio.playSound('win');
         confetti();
@@ -289,6 +290,7 @@ function montar(raiz, { audio, confetti, storage }) {
         isGameOver = true;
         stats.streak = 0;
         saveStats();
+        conta?.registrar('termo', { tipo: 'derrota' });
         showToast(`A palavra correta era: ${secretWord}`);
         audio.playSound('defeat');
       } else {
@@ -393,6 +395,11 @@ function montar(raiz, { audio, confetti, storage }) {
       newGame();
     });
   }
+
+  // Login/logout reescreve as estatísticas no storage: relê para a tela mostrar o progresso da conta.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') loadStats();
+  });
 
   loadStats();
   newGame();
