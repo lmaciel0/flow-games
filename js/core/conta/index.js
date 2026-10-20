@@ -15,6 +15,8 @@ import {
 
 const CHAVE_TERMO = 'termo:stats';
 const CHAVE_2048 = 'game2048:recorde';
+// id da conta dona do progresso local ('' = progresso anônimo).
+const CHAVE_DONO = 'conta:dono';
 
 const ERRO_GENERICO = 'Algo deu errado. Tente novamente em instantes.';
 const ERRO_NAO_LOGADO = 'Entre na sua conta para continuar.';
@@ -101,6 +103,7 @@ export function criarConta({ cliente, storage, redimensionar = redimensionarFoto
     geracao++;
     usuario = null;
     gravarLocal(null);
+    storage.set(CHAVE_DONO, '');
   }
 
   function sairLocal() {
@@ -120,9 +123,14 @@ export function criarConta({ cliente, storage, redimensionar = redimensionarFoto
       username: dados?.username ?? reserva.username,
       avatar: dados?.avatar ?? reserva.avatar ?? codificarIcone(ICONES[0]),
     };
+    // Progresso de outra conta (ex.: restauração que falhou sem `sair`): zera antes do sync.
+    const dono = storage.get(CHAVE_DONO, '');
+    const zerou = dono !== '' && dono !== id;
+    if (zerou) gravarLocal(null);
+    storage.set(CHAVE_DONO, id);
     const s = await cliente.sincronizar(lerLocal());
     if (minha !== geracao) return null;
-    if (!s?.ok || !s.dados) return ['sessao'];
+    if (!s?.ok || !s.dados) return zerou ? ['sessao', 'progresso'] : ['sessao'];
     gravarLocal(s.dados);
     return ['sessao', 'progresso'];
   }
