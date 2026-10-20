@@ -2,7 +2,11 @@
  * Jogo 2048 — motor lógico, animações e controles touch/teclado.
  */
 
+import { criarPlacarPainel } from '../core/placar-painel.js';
+
 const HTML = `
+    <div class="jogo-com-placar">
+      <div class="jogo-com-placar-jogo">
       <header class="app-header">
         <div class="header-badge g2048-badge">
           <span class="badge-dot g2048-dot"></span>
@@ -78,6 +82,9 @@ const HTML = `
           Utilize as <strong>Setas do Teclado (↑ ↓ ← →)</strong> ou <strong>W, A, S, D</strong> para mover os blocos. Quando blocos iguais se colidem, <strong>eles se unem somando seus valores</strong>!
         </p>
       </div>
+      </div>
+      <aside class="placar-lateral" aria-label="Placar"></aside>
+    </div>
 `;
 
 function montar(raiz, { audio, confetti, storage, conta }) {
@@ -538,6 +545,7 @@ function montar(raiz, { audio, confetti, storage, conta }) {
 }
 
 let instancia = null;
+let painel = null;
 
 export default {
   id: 'game2048',
@@ -549,9 +557,14 @@ export default {
   mount(raiz, ctx) {
     raiz.innerHTML = HTML;
     instancia = montar(raiz, ctx);
+    if (ctx.conta) {
+      painel = criarPlacarPainel({ conta: ctx.conta, jogo: 'game2048', limite: 5, rotulo: 'Maior pontuação' });
+      raiz.querySelector('.placar-lateral').append(painel.el);
+    }
   },
   pause() {},
   resume() {
+    painel?.atualizar();
     // As peças são posicionadas por medida: reposiciona depois que a seção fica visível.
     setTimeout(() => instancia && instancia.render(), 50);
   },
