@@ -50,7 +50,7 @@ function campo(id, rotulo, tipo, autocomplete) {
 function montarModal() {
   const fundo = el('div', 'conta-fundo', undefined, { hidden: '' });
   const modal = el('div', 'conta-modal', undefined, {
-    role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'conta-modal-titulo',
+    role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'conta-modal-titulo', tabindex: '-1',
   });
   const topo = el('div', 'conta-topo');
   const titulo = el('h2', 'conta-titulo', undefined, { id: 'conta-modal-titulo' });
@@ -87,7 +87,7 @@ function montarModal() {
   const arquivo = el('input', 'conta-arquivo', undefined, {
     type: 'file', accept: 'image/*', hidden: '', tabindex: '-1', 'aria-hidden': 'true',
   });
-  const erro = el('p', 'conta-erro', undefined, { role: 'alert' });
+  const erro = el('p', 'conta-erro', undefined, { role: 'alert', tabindex: '-1' });
   const enviar = el('button', 'conta-enviar', undefined, { type: 'submit' });
   form.append(credenciais, avatares, arquivo, erro, enviar);
   modal.append(topo, abas, form);
@@ -171,8 +171,10 @@ export function iniciarContaUI({ conta, audio }) {
   let pressionouFundo = false;
   m.fundo.addEventListener('pointerdown', (e) => { pressionouFundo = e.target === m.fundo; });
   m.fundo.addEventListener('click', (e) => { if (pressionouFundo && e.target === m.fundo) fechar(); });
-  // Teclas do modal não chegam aos jogos nem ao drawer (Esc fecha só o modal).
-  m.fundo.addEventListener('keydown', (e) => {
+  // Com o modal aberto, nenhuma tecla chega aos jogos nem ao drawer (Esc fecha só o modal),
+  // mesmo se o foco cair no <body>: captura na janela, antes de qualquer outro ouvinte.
+  window.addEventListener('keydown', (e) => {
+    if (m.fundo.hidden) return;
     e.stopPropagation();
     if (e.key === 'Escape') { e.preventDefault(); fechar(); return; }
     if (e.target.matches('.conta-aba') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
@@ -189,7 +191,7 @@ export function iniciarContaUI({ conta, audio }) {
       e.preventDefault();
       (e.shiftKey ? ultimo : primeiro)?.focus();
     }
-  });
+  }, true);
   document.addEventListener('focusin', (e) => {
     if (!m.fundo.hidden && !m.modal.contains(e.target)) visiveis()[0]?.focus();
   });
@@ -234,6 +236,7 @@ export function iniciarContaUI({ conta, audio }) {
     if (enviando) return;
     if (modo === 'avatar' && !escolha) { fechar(); return; }
     enviando = true;
+    if (m.enviar === document.activeElement) m.modal.focus(); // botão desabilitado perderia o foco
     m.enviar.disabled = true;
     m.enviar.textContent = 'Aguarde…';
     mostrarErro('');
@@ -250,7 +253,12 @@ export function iniciarContaUI({ conta, audio }) {
       m.enviar.disabled = false;
       m.enviar.textContent = TEXTOS[modo].botao;
     }
-    if (!r?.ok) { mostrarErro(r?.erro || 'Algo deu errado. Tente novamente em instantes.'); return; }
+    if (!r?.ok) {
+      mostrarErro(r?.erro || 'Algo deu errado. Tente novamente em instantes.');
+      const ativo = document.activeElement;
+      if (!m.fundo.hidden && (ativo === m.modal || !m.modal.contains(ativo))) m.erro.focus();
+      return;
+    }
     fechar();
     aviso = r.aviso || '';
     render();

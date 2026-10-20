@@ -335,6 +335,12 @@
 }
 
 /* --- Foco e movimento --- */
+/* Contêineres que só recebem foco por script (clique em área neutra, envio em curso). */
+.conta-modal:focus,
+.conta-erro:focus {
+  outline: none;
+}
+
 .conta-slot button:focus-visible,
 .conta-modal button:focus-visible,
 .conta-input:focus-visible {
