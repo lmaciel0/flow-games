@@ -16,7 +16,7 @@ const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ci
 const CONTROLES = [
   ['WASD', 'andar'], ['Mouse', 'mirar'], ['Clique', 'atirar'], ['Botão direito', 'luneta / estocada'],
   ['R', 'recarregar'], ['Espaço', 'pular'], ['C', 'agachar'], ['Shift', 'andar em silêncio'],
-  ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['4', 'granada (4 troca o tipo · clique longe · direito curto · os dois médio)'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
+  ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['4', 'granada · 4 troca · esq. longe · dir. curto · ambos médio'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
 // Nome do tipo de granada na mão, no lugar da munição.
 const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke' };
