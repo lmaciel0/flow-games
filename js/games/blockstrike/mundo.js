@@ -337,6 +337,11 @@ export function passo(mundo, dt, comandos, { congelado = false, comBomba = true 
       agindo.set(e.id, acao);
       cmd = { ...cmd, frente: 0, lado: 0, pular: false, atirar: false, recarregar: false, granada: null, slot: null };
     }
+    // Plantar/desarmar, fim do round e congelamento cancelam o pino puxado: nada é lançado.
+    if (e.slot === 'granada' && (acao || congelado || !comBomba)) {
+      e.armas.granada.pino = null;
+      cmd = { ...cmd, atirar: false, zoom: false };
+    }
     moverEntidade(e, cmd, dt, mundo.mapa.caixas, congelado, eventos);
     if (!congelado) combate(mundo, e, cmd, dt, eventos);
     if (comBomba && !congelado && cmd.granada) lancar(mundo, e, cmd.granada, eventos, cmd.granadaAlvo ?? null);
