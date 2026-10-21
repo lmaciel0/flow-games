@@ -558,7 +558,7 @@ export function criarRender(canvas, mapa) {
     return { g, boca, pente };
   }
 
-  // Granada na mão: um cubo de 0,09 m da cor do tipo selecionado (o mesmo material da granada no ar).
+  // Granada na mão: um cubo de 0,05 m da cor do tipo selecionado (o mesmo material da granada no ar).
   const geoGranadaMao = new THREE.BoxGeometry(0.05, 0.05, 0.05);
   function criarViewmodelGranada(sel) {
     const g = new THREE.Group();
