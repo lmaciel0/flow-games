@@ -37,7 +37,9 @@ export const BOMBA = {
 
 // Granadas: tempos em segundos, distâncias em metros. O arremesso sai do olho na direção da mira.
 export const GRANADA = {
-  velocidade: 18, subida: 4, gravidade: 20, raio: 0.12,
+  // Força do arremesso: longe (botão esquerdo), médio (os dois) e curto (direito).
+  forcas: { longe: { velocidade: 18, subida: 4 }, medio: { velocidade: 12, subida: 3 }, curto: { velocidade: 7, subida: 2 } },
+  gravidade: 20, raio: 0.12,
   fusivel: { flash: 1.5, he: 1.6, smoke: 1.8 },
   intervalo: 0.7, // entre arremessos do mesmo jogador
   he: { raio: 9, dano: 75 },
@@ -66,6 +68,8 @@ export const ITENS = {
   flash: { nome: 'Flash', preco: 200, grupo: 'granada' },
   he: { nome: 'Granada HE', preco: 300, grupo: 'granada' },
 };
+// Ordem do ciclo das granadas na mão (tecla 4).
+export const ORDEM_GRANADAS = ['he', 'flash', 'smoke'];
 export const MAX_GRANADAS = { smoke: 1, flash: 2, he: 1 };
 
 // Colete: o corpo leva `corpo` do dano; o capacete protege a cabeça (`cabeca`). O resto do dano gasta o colete.
@@ -111,6 +115,11 @@ export const ARMAS = {
       leve: { dano: 40, costas: 90, intervalo: 0.4, alcance: 2 },
       forte: { dano: 65, costas: 180, intervalo: 1.0, alcance: 1.6 },
     },
+  },
+  // Granada na mão (tecla 4): sem munição; o tipo e a força vêm de granadas.js.
+  granada: {
+    nome: 'Granada', slot: 'granada', vel: 6.2, dano: 0, rpm: 0, pente: 0, reserva: 0, recarga: 0,
+    auto: false, spreadBase: 0, spreadMov: 0, recuo: 0,
   },
 };
 

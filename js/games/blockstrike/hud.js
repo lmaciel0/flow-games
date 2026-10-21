@@ -16,8 +16,10 @@ const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ci
 const CONTROLES = [
   ['WASD', 'andar'], ['Mouse', 'mirar'], ['Clique', 'atirar'], ['Botão direito', 'luneta / estocada'],
   ['R', 'recarregar'], ['Espaço', 'pular'], ['C', 'agachar'], ['Shift', 'andar em silêncio'],
-  ['E (segurar)', 'plantar / desarmar C4'], ['Z X V', 'flash / smoke / HE'], ['1 2 3 / roda', 'armas'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
+  ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['4', 'granada · 4 troca · esq. longe · dir. curto · ambos médio'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
+// Nome do tipo de granada na mão, no lugar da munição.
+const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke' };
 const RADAR_ESCALA = 2.6; // px por metro
 const RADAR_LADO = 132; // px
 const MAX_LINHAS_FEED = 5;
@@ -260,7 +262,7 @@ export function criarHud(raiz, handlers) {
   const luneta = el('div', { class: 'bs-luneta', id: 'bs-luneta', hidden: true });
   const vinheta = el('div', { class: 'bs-vinheta', id: 'bs-vinheta' });
   const dicaTreino = el('div', { class: 'bs-dica-treino', id: 'bs-dica-treino', hidden: true,
-    texto: 'Treino · B troca a arma · Z X V granadas · Esc pausa' });
+    texto: 'Treino · B troca a arma · 4 granada · Esc pausa' });
   const radar = el('canvas', { class: 'bs-radar', id: 'bs-radar', width: RADAR_LADO, height: RADAR_LADO });
   // C4: aviso do bombsite, barra de plantar/desarmar, dica de tecla, anúncio central e clarão da explosão.
   const bombaInfo = el('div', { class: 'bs-bomba-info', id: 'bs-bomba-info', hidden: true });
@@ -446,7 +448,7 @@ export function criarHud(raiz, handlers) {
   }
   const compra = el('div', { class: 'bs-loadout bs-compra', id: 'bs-compra', hidden: true },
     compraTitulo, compraColunas,
-    el('small', { class: 'bs-loadout-dica', texto: 'Compre com as teclas ou clicando. O que sobreviver continua com você.' }));
+    el('small', { class: 'bs-loadout-dica', texto: 'Compre com as teclas ou aperte B e clique. O que sobreviver continua com você.' }));
   palco.append(compra);
   let chaveCompra = '';
   const renderCompra = (v) => {
@@ -607,8 +609,10 @@ export function criarHud(raiz, handlers) {
     marcarVivos(vivosLaranja, v.entidades, 'laranja');
     escrever(hpEl, String(Math.max(0, Math.ceil(v.hp))));
     hpEl.classList.toggle('baixo', v.hp <= 30);
+    const granada = v.arma?.tipo === 'granada';
     const faca = !v.arma || !Number.isFinite(v.arma.pente);
-    escrever(municaoEl, faca ? '—' : `${v.arma.municao} / ${treino ? '∞' : v.arma.reserva}`);
+    if (granada) escrever(municaoEl, `${NOMES_GRANADA[v.arma.sel] ?? ''} ${treino ? '∞' : v.arma.n}`.trim());
+    else escrever(municaoEl, faca ? '—' : `${v.arma.municao} / ${treino ? '∞' : v.arma.reserva}`);
     const recarregando = Boolean(v.arma && v.arma.recarregandoAte > 0);
     mostrar(recarga, recarregando && v.vivo);
     if (recarregando) {
@@ -618,7 +622,7 @@ export function criarHud(raiz, handlers) {
         recarga.querySelector('i').style.width = `${p}%`;
       }
     }
-    const pouca = !faca && !recarregando && v.arma.municao <= Math.ceil(v.arma.pente * 0.25);
+    const pouca = !faca && !granada && !recarregando && v.arma.municao <= Math.ceil(v.arma.pente * 0.25);
     municaoEl.classList.toggle('baixo', pouca);
     const semNada = pouca && v.arma.municao === 0 && v.arma.reserva === 0;
     mostrar(avisoMunicao, pouca && v.vivo && v.fase !== 'freeze');
@@ -646,7 +650,7 @@ export function criarHud(raiz, handlers) {
       const eq = v.equip;
       const g = eq.granadas;
       escrever(dinheiroEl, [dolar(v.dinheiro), eq.colete > 0 ? `${eq.capacete ? 'colete+capacete' : 'colete'} ${eq.colete}` : '',
-        eq.kit ? 'kit' : '', g.flash ? `Z flash ${g.flash}` : '', g.smoke ? `X smoke ${g.smoke}` : '', g.he ? `V HE ${g.he}` : '']
+        eq.kit ? 'kit' : '', g.flash ? `flash ${g.flash}` : '', g.smoke ? `smoke ${g.smoke}` : '', g.he ? `HE ${g.he}` : '']
         .filter(Boolean).join(' · '));
     }
     // vencedorRound/motivo persistem no freeze seguinte: só valem em fim-round.

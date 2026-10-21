@@ -12,7 +12,7 @@ import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
 import { ARMAS, DIFICULDADE, ECONOMIA } from './config.js';
 import { olho, direcao } from './fisica.js';
-import { visadaLivre } from './granadas.js';
+import { visadaLivre, granadasDe } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
 import { criarGrafo } from './navegacao.js';
@@ -467,7 +467,9 @@ function montar(raiz, ctx) {
       cegueira: eu.vivo && mundo.tempo < (eu.cegoAte ?? 0)
         ? Math.min(1, (eu.cegoAte - mundo.tempo) / Math.max(0.2, eu.cegoDur * 0.5)) : 0,
       fase: regras.fase, round: regras.round, tempo: regras.tempo, placar: regras.placar,
-      hp: alvo.hp, vivo: eu.vivo, arma: arma && { ...arma, pente: def.pente }, spread, progressoRecarga,
+      hp: alvo.hp, vivo: eu.vivo, arma: arma && (arma.tipo === 'granada'
+        ? { tipo: 'granada', sel: arma.sel, n: arma.sel ? granadasDe(mundo, alvo)[arma.sel] : 0 }
+        : { ...arma, pente: def.pente }), spread, progressoRecarga,
       luneta: eu.vivo && Boolean(cmd.zoom && def?.zoomFov),
       loadout: p.treino && p.loadoutAberto, modo: p.treino ? 'treino' : 'partida',
       vencedorRound: regras.vencedorRound, motivo: regras.motivo,
@@ -489,7 +491,7 @@ function montar(raiz, ctx) {
     // Painel de armas aberto no treino: 1–4 escolhem a primária, não trocam de slot.
     if (p.treino && p.loadoutAberto) cmdJogador.slot = null;
     const armaMao = jogador.vivo && jogador.armas[jogador.slot];
-    if (atira && cmd.atirar && !p.cliqueAntes && armaMao && armaMao.municao === 0 && armaMao.reserva === 0) sons.vazio();
+    if (atira && cmd.atirar && !p.cliqueAntes && armaMao && armaMao.tipo !== 'granada' && armaMao.municao === 0 && armaMao.reserva === 0) sons.vazio();
     const comandos = new Map([[jogador.id, cmdJogador]]);
     // No freeze os bots não pensam (mundo.passo usa o comando parado): senão o desencalhe
     // pularia waypoints da rota enquanto eles esperam o fim do freeze.
@@ -527,8 +529,10 @@ function montar(raiz, ctx) {
       caixas: MAPA.caixas, eu: vista, entidades: mundo.entidades, avistados: p.avistados,
       sites: p.treino ? null : MAPA.bombsites, bomba: mundo.bomba,
     });
-    // Dica só enquanto o mouse nunca prendeu: depois de uma trava, perder a trava abre a pausa.
-    hud.mostrarDica(!p.lock.travou && (regras.fase === 'freeze' || regras.fase === 'jogo'));
+    // Freeze acabou com o mouse solto pelo B: devolve ao clique de sempre (retrava sem atirar).
+    if (regras.fase !== 'freeze' && p.entrada.cursorSolto()) p.entrada.liberarClique();
+    // Dica enquanto o mouse não está preso e não foi solto de propósito: perder uma trava presa abre a pausa.
+    hud.mostrarDica(!p.entrada.travado() && !p.entrada.cursorSolto() && (regras.fase === 'freeze' || regras.fase === 'jogo'));
     p.raf = requestAnimationFrame(quadro);
   }
 
@@ -636,13 +640,18 @@ function montar(raiz, ctx) {
       const eu = partida.mundo.entidades[partida.mundo.jogadorId];
       if (code === 'KeyF' && eu.vivo && partida.partida.fase !== 'fim-partida') partida.render.inspecionar();
       let usada = false;
+      if (partida.partida.fase === 'freeze' && partida.mundo.economia && code === 'KeyB') {
+        // CS2: B solta o mouse para clicar na compra e trava de novo, sem abrir a pausa.
+        if (partida.entrada.cursorSolto()) partida.entrada.travar(); else partida.entrada.soltarCursor();
+        return true;
+      }
       if (partida.partida.fase === 'freeze') usada = partida.mundo.economia ? hud.teclaCompra(code) : hud.teclaLoadout(code);
       else if (partida.treino) {
         if (code === 'KeyB') partida.loadoutAberto = !partida.loadoutAberto;
         else if (partida.loadoutAberto) usada = hud.teclaLoadout(code);
       }
       // Sem trava nunca houve pointerlockchange para abrir a pausa: o Esc abre direto.
-      if (code === 'Escape' && !partida.lock.travou) pausarPartida(false, true);
+      if (code === 'Escape' && !partida.entrada.travado()) pausarPartida(false, true);
       return usada;
     });
     entrada.travar(); // precisa estar dentro do gesto de clique

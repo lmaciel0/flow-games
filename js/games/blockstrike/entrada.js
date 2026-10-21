@@ -6,8 +6,7 @@
 const SENS_MIN = 0.2;
 const SENS_MAX = 3;
 const RAD_POR_PIXEL = 0.002;
-const SLOTS = { Digit1: 'primaria', Digit2: 'pistola', Digit3: 'faca', KeyQ: 'anterior' }; // Q: última arma
-const GRANADAS = { KeyZ: 'flash', KeyX: 'smoke', KeyV: 'he' }; // arremesso rápido
+const SLOTS = { Digit1: 'primaria', Digit2: 'pistola', Digit3: 'faca', Digit4: 'granada', KeyQ: 'anterior' }; // Q: última arma
 const BLOQUEADAS = new Set(['Tab', 'Space']);
 
 export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
@@ -19,8 +18,8 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   let dPitch = 0;
   let slotPendente = null;
   let recarregarPendente = false;
-  let granadaPendente = null;
   let ativa = true; // pausado/em outra tela: não captura teclas do resto do hub
+  let cursorLivre = false; // soltou o mouse de propósito (B na compra): perder a trava não pausa nem retrava
   let aoPerder = () => {};
   let aoTabFn = () => {};
   let aoTeclaFn = () => {};
@@ -39,7 +38,6 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     teclas.add(e.code);
     if (SLOTS[e.code]) slotPendente = SLOTS[e.code];
     if (e.code === 'KeyR') recarregarPendente = true;
-    if (GRANADAS[e.code]) granadaPendente = GRANADAS[e.code];
     if (e.code === 'Tab') aoTabFn(true);
     if (aoTeclaFn(e.code) === true) slotPendente = null; // tecla usada pelo jogo (painel de armas)
   }
@@ -58,6 +56,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   }
 
   function travar() {
+    cursorLivre = false;
     try {
       const p = canvas.requestPointerLock();
       if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -66,9 +65,16 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     }
   }
 
+  // Solta o mouse sem abrir a pausa, para clicar no menu de compra.
+  function soltarCursor() {
+    cursorLivre = true;
+    limpar();
+    doc.exitPointerLock();
+  }
+
   function onMouseDown(e) {
     if (doc.pointerLockElement === canvas) botoes.add(e.button);
-    else if (ativa && e.target === canvas) travar(); // retrava com um clique no jogo
+    else if (ativa && !cursorLivre && e.target === canvas) travar(); // retrava com um clique no jogo
   }
 
   function onMouseUp(e) {
@@ -85,7 +91,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   function onLockChange() {
     if (doc.pointerLockElement === canvas) return;
     limpar();
-    aoPerder();
+    if (!cursorLivre) aoPerder();
   }
 
   // Chrome recusa a trava logo após um Esc: volta ao menu de pausa em vez de ficar sem mira.
@@ -126,17 +132,20 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
         zoom: botoes.has(2),
         recarregar: recarregarPendente,
         usar: teclas.has('KeyE'), // segurar: plantar ou desarmar a C4
-        granada: granadaPendente,
+        granada: null, // o jogador arremessa pela mão (clique); o campo fica para os bots
         slot: slotPendente,
         yaw,
         pitch,
       };
       recarregarPendente = false;
-      granadaPendente = null;
       slotPendente = null;
       return cmd;
     },
     travar,
+    soltarCursor,
+    // Fim do cursor solto sem prender: o próximo clique no canvas retrava e não vira tiro.
+    liberarClique() { cursorLivre = false; },
+    cursorSolto: () => cursorLivre,
     travado: () => doc.pointerLockElement === canvas,
     aoPerderTrava(fn) { aoPerder = fn; },
     aoTab(fn) { aoTabFn = fn; },

@@ -558,9 +558,26 @@ export function criarRender(canvas, mapa) {
     return { g, boca, pente };
   }
 
-  function viewmodelDe(tipo) {
-    if (!viewmodels.has(tipo)) viewmodels.set(tipo, criarViewmodel(tipo));
-    return viewmodels.get(tipo);
+  // Granada na mão: um cubo de 0,05 m da cor do tipo selecionado (o mesmo material da granada no ar).
+  const geoGranadaMao = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+  function criarViewmodelGranada(sel) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(geoGranadaMao, matsGranada[sel] ?? matsGranada.he));
+    const boca = new THREE.Mesh(geoClarao, matClarao);
+    boca.visible = false;
+    g.add(boca);
+    g.position.set(POS_VIEW.x, POS_VIEW.y, POS_VIEW.z);
+    g.visible = false;
+    camera.add(g);
+    return { g, boca, pente: null };
+  }
+
+  // `chave` é o tipo da arma; a granada ganha um modelo por tipo selecionado (`granada-he`, ...).
+  function viewmodelDe(chave) {
+    if (!viewmodels.has(chave)) {
+      viewmodels.set(chave, chave.startsWith('granada-') ? criarViewmodelGranada(chave.slice(8)) : criarViewmodel(chave));
+    }
+    return viewmodels.get(chave);
   }
 
   const flash = () => {
@@ -733,12 +750,14 @@ export function criarRender(canvas, mapa) {
     recuo = Math.max(0, recuo - dt * 0.3);
 
     // Arma na mão: some com o zoom da sniper (mira de luneta) e sai do campo de visão ao morrer.
-    const tipoAtivo = vista.vivo && vista.armas ? vista.armas[vista.slot].tipo : null;
-    const alvoView = tipoAtivo && zoomFov === undefined ? viewmodelDe(tipoAtivo) : null;
+    const armaAtiva = vista.vivo && vista.armas ? vista.armas[vista.slot] : null;
+    const tipoAtivo = armaAtiva ? armaAtiva.tipo : null;
+    const chaveView = tipoAtivo === 'granada' ? `granada-${armaAtiva.sel ?? 'he'}` : tipoAtivo;
+    const alvoView = chaveView && zoomFov === undefined ? viewmodelDe(chaveView) : null;
     if (alvoView !== viewAtual) {
       if (viewAtual) viewAtual.g.visible = false;
       // Arma nova (não a mesma voltando do zoom): sobe de baixo da tela durante o saque.
-      if (alvoView && tipoAtivo !== tipoAntes) {
+      if (alvoView && chaveView !== tipoAntes) {
         saqueDur = SAQUE[ARMAS[tipoAtivo].slot] ?? 0.3;
         saque = saqueDur;
         golpeT = 0;
@@ -747,7 +766,7 @@ export function criarRender(canvas, mapa) {
       viewAtual = alvoView;
       if (viewAtual) viewAtual.g.visible = true;
     }
-    if (tipoAtivo) tipoAntes = tipoAtivo;
+    if (chaveView) tipoAntes = chaveView;
     clarao = Math.max(0, clarao - dt);
     recuoArma = Math.max(0, recuoArma - dt * 0.6);
     saque = Math.max(0, saque - dt);
@@ -774,7 +793,7 @@ export function criarRender(canvas, mapa) {
     for (const m of marcasSite) { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); }
     [geoC4, geoLed, geoFogo, geoFaisca].forEach((g) => g.dispose());
     [matC4, matLed, matFogo, matFaisca, matFumaca, matBrilho, ...Object.values(matsGranada)].forEach((m) => m.dispose());
-    [geoGranada, geoFumaca].forEach((g) => g.dispose());
+    [geoGranada, geoGranadaMao, geoFumaca].forEach((g) => g.dispose());
     fumaca.dispose();
     for (const r of rastros) r.linha.geometry.dispose();
     matRastro.dispose();

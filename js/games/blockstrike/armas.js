@@ -27,7 +27,7 @@ export function velocidadeDe(tipo, { agachado = false, devagar = false, zoom = f
 }
 
 // Tempo (s) para sacar a arma depois da troca: só então ela atira.
-export const SAQUE = { primaria: 0.5, pistola: 0.3, faca: 0.15 };
+export const SAQUE = { primaria: 0.5, pistola: 0.3, faca: 0.15, granada: 0.3 };
 
 export function danoDe(tipo, parte) {
   return Math.round(ARMAS[tipo].dano * MULT_PARTE[parte]);

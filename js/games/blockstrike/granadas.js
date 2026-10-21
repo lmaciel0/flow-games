@@ -5,7 +5,8 @@
  * quando um tiro ou uma HE passa e voltam depois de alguns segundos).
  */
 
-import { GRANADA } from './config.js';
+import { GRANADA, ORDEM_GRANADAS } from './config.js';
+import { criarArma } from './armas.js';
 import { moverComColisao, olho, direcao, temVisada } from './fisica.js';
 
 const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -17,8 +18,9 @@ export function granadasDe(mundo, e) {
 }
 
 // Lança a granada `tipo` de `e`. Sem `alvo`, segue a mira (com um arco para cima);
-// com `alvo` (bots), calcula o arco que cai nele em ~0,9 s.
-export function lancar(mundo, e, tipo, eventos, alvo = null) {
+// com `alvo` (bots), calcula o arco que cai nele em ~0,9 s (e ignora `forca`).
+// `forca`: 'longe', 'medio' ou 'curto' (o curto sai 0,3 m mais baixo).
+export function lancar(mundo, e, tipo, eventos, alvo = null, forca = 'longe') {
   const estoque = granadasDe(mundo, e);
   if (!e.vivo || !(estoque[tipo] > 0) || mundo.tempo < (e.proxGranada ?? 0)) return false;
   if (mundo.modo !== 'treino') estoque[tipo] -= 1;
@@ -33,17 +35,49 @@ export function lancar(mundo, e, tipo, eventos, alvo = null) {
     };
   } else {
     const d = direcao(e.yaw, e.pitch);
-    vel = { x: d.x * GRANADA.velocidade, y: d.y * GRANADA.velocidade + GRANADA.subida, z: d.z * GRANADA.velocidade };
+    const { velocidade, subida } = GRANADA.forcas[forca];
+    vel = { x: d.x * velocidade, y: d.y * velocidade + subida, z: d.z * velocidade };
   }
   const d0 = direcao(e.yaw, e.pitch);
   const g = {
     tipo, dono: e.id, time: e.time, nasceEm: mundo.tempo, fusivel: GRANADA.fusivel[tipo],
-    pos: { x: o.x + d0.x * 0.4, y: o.y + d0.y * 0.4 - 0.15, z: o.z + d0.z * 0.4 },
+    pos: { x: o.x + d0.x * 0.4, y: o.y + d0.y * 0.4 - 0.15 - (!alvo && forca === 'curto' ? 0.3 : 0), z: o.z + d0.z * 0.4 },
     vel, quiques: 0,
   };
   (mundo.granadas ??= []).push(g);
   eventos.push({ tipo: 'arremesso', atirador: e.id, granada: tipo, ponto: { ...g.pos } });
   return true;
+}
+
+// Próximo tipo de ORDEM_GRANADAS depois de `atual` (circular) com estoque; null se não houver.
+export function proximaGranada(estoque, atual) {
+  const i = ORDEM_GRANADAS.indexOf(atual);
+  for (let k = 1; k <= ORDEM_GRANADAS.length; k++) {
+    const t = ORDEM_GRANADAS[(i + k + ORDEM_GRANADAS.length) % ORDEM_GRANADAS.length];
+    if (estoque[t] > 0) return t;
+  }
+  return null;
+}
+
+// Estado da granada na mão: tipo escolhido (`sel`) e pino ({ esq, dir } enquanto segura, senão null).
+export function criarMao() {
+  return { ...criarArma('granada'), sel: null, pino: null };
+}
+
+// Um passo com a granada na mão: botão puxa o pino, soltar os dois arremessa.
+// Esquerdo = longe, direito = curto, os dois juntos = médio.
+export function atualizarMao(mundo, e, cmd, eventos) {
+  const mao = e.armas.granada;
+  if (!mao.pino) {
+    if (!cmd.atirar && !cmd.zoom) return false;
+    mao.pino = { esq: false, dir: false };
+  }
+  mao.pino.esq ||= !!cmd.atirar;
+  mao.pino.dir ||= !!cmd.zoom;
+  if (cmd.atirar || cmd.zoom) return false;
+  const { esq, dir } = mao.pino;
+  mao.pino = null;
+  return lancar(mundo, e, mao.sel, eventos, null, esq && dir ? 'medio' : esq ? 'longe' : 'curto');
 }
 
 // Move um eixo por vez para saber em qual parede bateu e quicar (parede 55%, chão 40% com atrito).
