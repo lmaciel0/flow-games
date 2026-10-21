@@ -2,7 +2,11 @@
  * Snake Neon — jogo da cobrinha retrô em canvas.
  */
 
+import { criarPlacarPainel } from '../core/placar-painel.js';
+
 const HTML = `
+    <div class="jogo-com-placar">
+      <div class="jogo-com-placar-jogo">
       <header class="app-header">
         <div class="header-badge snake-badge">
           <span class="badge-dot snake-dot"></span>
@@ -68,9 +72,12 @@ const HTML = `
         </div>
         <p>Use as <strong>Setas do Teclado (↑ ↓ ← →)</strong> ou <strong>W, A, S, D</strong> (ou os botões direcionais na tela). Frutas douradas especiais concedem pontuação extra por tempo limitado!</p>
       </div>
+      </div>
+      <aside class="placar-lateral" aria-label="Placar"></aside>
+    </div>
 `;
 
-function montar(raiz, { audio, storage }) {
+function montar(raiz, { audio, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
   let controle;
 
@@ -322,6 +329,8 @@ function montar(raiz, { audio, storage }) {
     overlayScore.textContent = `Pontuação: ${score}`;
     overlay.classList.add('active');
     audio.playSound('defeat');
+    // O servidor guarda só o maior: fim de partida basta, sem chamada por fruta.
+    if (score > 0) conta?.registrar('snake', { tipo: 'pontos', valor: score });
   }
 
   function togglePause() {
@@ -397,6 +406,11 @@ function montar(raiz, { audio, storage }) {
     }
   };
 
+  // Login/logout reescreve o recorde no storage: relê para a tela mostrar o da conta.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') loadBestScore();
+  });
+
   loadBestScore();
   resetGame();
   isPaused = true; // Começa pausado até o usuário abrir a aba
@@ -406,6 +420,7 @@ function montar(raiz, { audio, storage }) {
 }
 
 let instancia = null;
+let painel = null;
 
 export default {
   id: 'snake',
@@ -417,11 +432,16 @@ export default {
   mount(raiz, ctx) {
     raiz.innerHTML = HTML;
     instancia = montar(raiz, ctx);
+    if (ctx.conta) {
+      painel = criarPlacarPainel({ conta: ctx.conta, jogo: 'snake', limite: 5, rotulo: 'Maior pontuação' });
+      raiz.querySelector('.placar-lateral').append(painel.el);
+    }
   },
   pause() {
     if (instancia) instancia.pause();
   },
   resume() {
+    painel?.atualizar();
     if (instancia) instancia.resume();
   },
   recorde(storage) {

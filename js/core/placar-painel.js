@@ -1,7 +1,8 @@
 /**
  * Painel de placar: top N de um jogo com medalhas, avatar, nome e valor, a linha
  * da própria pessoa sempre visível e os estados carregando / vazio / erro.
- * Usado ao lado do Termo e do 2048 (limite 5) e na página #/placar (limite 50).
+ * Usado ao lado dos jogos (limite 5) e na página #/placar (limite 50).
+ * `formato` 'tempo' mostra o valor em segundos como m:ss.
  * Texto vindo do servidor só entra por textContent/setAttribute.
  * `conta.lerPlacar` é lido na hora de cada chamada (testes trocam por espiões).
  */
@@ -36,12 +37,18 @@ function criarAvatar(conta, linha) {
   return av;
 }
 
-function formatar(valor) {
+// 'tempo': segundos como m:ss (Campo Minado); o resto é número com separador de milhar.
+function formatar(valor, formato) {
   const n = Number(valor);
-  return Number.isFinite(n) ? n.toLocaleString('pt-BR') : '0';
+  if (!Number.isFinite(n)) return formato === 'tempo' ? '0:00' : '0';
+  if (formato === 'tempo') {
+    const s = Math.max(0, Math.trunc(n));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+  return n.toLocaleString('pt-BR');
 }
 
-function criarLinha(conta, linha, indice) {
+function criarLinha(conta, linha, indice, formato) {
   const posicao = Number.isInteger(linha.posicao) && linha.posicao > 0 ? linha.posicao : indice + 1;
   const li = el('li', linha.eu ? 'placar-linha eu' : 'placar-linha');
   const pos = el('span', 'placar-pos', MEDALHAS[posicao - 1] ?? String(posicao));
@@ -50,7 +57,7 @@ function criarLinha(conta, linha, indice) {
   const usuario = typeof linha.username === 'string' ? linha.username : '';
   nome.append(el('span', 'placar-usuario', usuario, { title: usuario }));
   if (linha.eu) nome.append(el('span', 'placar-voce', ' (você)'));
-  li.append(pos, criarAvatar(conta, linha), nome, el('span', 'placar-valor', formatar(linha.valor)));
+  li.append(pos, criarAvatar(conta, linha), nome, el('span', 'placar-valor', formatar(linha.valor, formato)));
   return li;
 }
 
@@ -59,7 +66,7 @@ function abrirEntrar() {
   document.querySelector('#conta-slot .conta-entrar')?.click();
 }
 
-export function criarPlacarPainel({ conta, jogo, limite = 5, rotulo }) {
+export function criarPlacarPainel({ conta, jogo, limite = 5, rotulo, formato = 'numero' }) {
   const compacto = limite <= 10;
   const raiz = el('section', `placar-painel glass-card${compacto ? ' compacto' : ''}`);
   const topo = el('header', 'placar-topo');
@@ -105,10 +112,10 @@ export function criarPlacarPainel({ conta, jogo, limite = 5, rotulo }) {
     const todas = Array.isArray(dados.linhas) ? dados.linhas : [];
     const visiveis = todas.slice(0, limite);
     const eu = dados.eu ?? null;
-    const itens = visiveis.map((l, i) => criarLinha(conta, l, i));
+    const itens = visiveis.map((l, i) => criarLinha(conta, l, i, formato));
     const euVisivel = eu && visiveis.some((l) => l.eu || (eu.userId && l.userId === eu.userId));
     if (eu && !euVisivel) {
-      itens.push(el('li', 'placar-sep', '⋯', { 'aria-hidden': 'true' }), criarLinha(conta, { ...eu, eu: true }, visiveis.length));
+      itens.push(el('li', 'placar-sep', '⋯', { 'aria-hidden': 'true' }), criarLinha(conta, { ...eu, eu: true }, visiveis.length, formato));
     }
     temDados = true;
     lista.replaceChildren(...itens);

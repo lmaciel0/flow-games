@@ -1,5 +1,5 @@
 /**
- * Página #/placar — placar completo (top 50) com abas Termo / 2048.
+ * Página #/placar — placar completo (top 50) com uma aba por ranking.
  * Fica no registro como os jogos, mas com `pagina: true`: não conta como jogo.
  */
 import { criarPlacarPainel } from '../core/placar-painel.js';
@@ -8,6 +8,13 @@ const LIMITE = 50;
 const ABAS = [
   { jogo: 'termo', titulo: 'Termo', rotulo: 'Palavras acertadas' },
   { jogo: 'game2048', titulo: '2048', rotulo: 'Maior pontuação' },
+  { jogo: 'snake', titulo: 'Snake', rotulo: 'Maior pontuação' },
+  { jogo: 'tetris', titulo: 'Tetris', rotulo: 'Maior pontuação' },
+  { jogo: 'minas_facil', titulo: 'Minas fácil', rotulo: 'Menor tempo', formato: 'tempo' },
+  { jogo: 'minas_medio', titulo: 'Minas médio', rotulo: 'Menor tempo', formato: 'tempo' },
+  { jogo: 'minas_dificil', titulo: 'Minas difícil', rotulo: 'Menor tempo', formato: 'tempo' },
+  { jogo: 'velha', titulo: 'Velha', rotulo: 'Vitórias contra a IA' },
+  { jogo: 'blockstrike', titulo: 'Block Strike', rotulo: 'Vitórias em partida' },
 ];
 
 const HTML = `
@@ -17,7 +24,7 @@ const HTML = `
           <span class="badge-text">PLACAR COMPARTILHADO</span>
         </div>
         <h1 class="app-title"><span class="gradient-text-placar">Placar</span></h1>
-        <p class="app-subtitle">Quem joga melhor no Termo e no 2048.</p>
+        <p class="app-subtitle">Quem joga melhor em cada jogo do arcade.</p>
       </header>
       <div class="placar-pagina">
         <div class="placar-abas" role="tablist" aria-label="Escolha o jogo"></div>
@@ -63,8 +70,8 @@ function montar(raiz, conta) {
   function painel(i) {
     let p = paineis.get(i);
     if (!p) {
-      const { jogo, rotulo } = ABAS[i];
-      p = criarPlacarPainel({ conta, jogo, limite: LIMITE, rotulo });
+      const { jogo, rotulo, formato } = ABAS[i];
+      p = criarPlacarPainel({ conta, jogo, limite: LIMITE, rotulo, formato });
       p.el.id = `placar-painel-${jogo}`;
       p.el.setAttribute('role', 'tabpanel');
       p.el.setAttribute('aria-labelledby', `placar-aba-${jogo}`);

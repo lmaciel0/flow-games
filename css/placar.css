@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Placar — painel ao lado do Termo e do 2048 e a página #/placar
+   Placar — painel ao lado dos jogos e a página #/placar
    ========================================================================== */
 .placar-painel[hidden],
 .placar-painel [hidden] { display: none !important; }
@@ -190,11 +190,11 @@
 
 .placar-pagina .placar-titulo { display: none; }
 
-.placar-abas { display: flex; gap: 0.5rem; }
+.placar-abas { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 .placar-aba {
   min-height: 40px;
-  padding: 0.45rem 1.1rem;
+  padding: 0.45rem 0.9rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--surface-glass-border);
   background: var(--surface-glass);

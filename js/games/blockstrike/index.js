@@ -407,6 +407,7 @@ function montar(raiz, ctx) {
     }
     const kd = eu.kills / Math.max(1, eu.mortes);
     if (kd > (Number(st.get('melhorKD', 0)) || 0)) st.set('melhorKD', kd);
+    ctx.conta?.registrar('blockstrike', { tipo: 'partida', venceu: regras.resultado === 'azul', kd });
   }
 
   function aplicarEventosPartida(p, eventos) {

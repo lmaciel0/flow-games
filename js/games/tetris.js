@@ -2,7 +2,11 @@
  * Tetris Neon — clássico quebra-cabeça arcade em canvas, com recorde salvo.
  */
 
+import { criarPlacarPainel } from '../core/placar-painel.js';
+
 const HTML = `
+    <div class="jogo-com-placar">
+      <div class="jogo-com-placar-jogo">
       <header class="app-header">
         <div class="header-badge tetris-badge">
           <span class="badge-dot tetris-dot"></span>
@@ -78,9 +82,12 @@ const HTML = `
         </div>
         <p><strong>← →</strong>: Move lateralmente | <strong>↑ ou W</strong>: Gira a peça | <strong>↓ ou S</strong>: Acelera queda | <strong>Espaço</strong>: Queda instantânea (Hard Drop).</p>
       </div>
+      </div>
+      <aside class="placar-lateral" aria-label="Placar"></aside>
+    </div>
 `;
 
-function montar(raiz, { audio, confetti, storage }) {
+function montar(raiz, { audio, confetti, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
   let controle;
 
@@ -470,6 +477,8 @@ function montar(raiz, { audio, confetti, storage }) {
       overlayRecord.textContent = '';
     }
     audio.playSound('defeat');
+    // O servidor guarda só o maior: fim de partida basta.
+    if (score > 0) conta?.registrar('tetris', { tipo: 'pontos', valor: score });
   }
 
   // Teclado
@@ -514,6 +523,11 @@ function montar(raiz, { audio, confetti, storage }) {
     }
   };
 
+  // Login/logout reescreve o recorde no storage: relê para a tela mostrar o da conta.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') bestEl.textContent = storage.get('recorde', 0);
+  });
+
   bestEl.textContent = storage.get('recorde', 0);
   resetGame();
   isPaused = true;
@@ -524,6 +538,7 @@ function montar(raiz, { audio, confetti, storage }) {
 }
 
 let instancia = null;
+let painel = null;
 
 export default {
   id: 'tetris',
@@ -535,11 +550,16 @@ export default {
   mount(raiz, ctx) {
     raiz.innerHTML = HTML;
     instancia = montar(raiz, ctx);
+    if (ctx.conta) {
+      painel = criarPlacarPainel({ conta: ctx.conta, jogo: 'tetris', limite: 5, rotulo: 'Maior pontuação' });
+      raiz.querySelector('.placar-lateral').append(painel.el);
+    }
   },
   pause() {
     if (instancia) instancia.pause();
   },
   resume() {
+    painel?.atualizar();
     if (instancia) instancia.resume();
   },
   recorde(storage) {
