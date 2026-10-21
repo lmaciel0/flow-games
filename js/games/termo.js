@@ -350,8 +350,17 @@ function montar(raiz, { audio, confetti, storage, conta }) {
   }
 
   function newGame() {
+    // Sorteia só entre as palavras ainda não vistas; esgotou a lista, recomeça o ciclo.
     const secretList = getSecretWordsList();
-    secretWord = secretList[Math.floor(Math.random() * secretList.length)];
+    let usadas = new Set(storage.get('usadas', []));
+    let restantes = secretList.filter(w => !usadas.has(w));
+    if (restantes.length === 0) {
+      usadas = new Set();
+      restantes = secretList;
+    }
+    secretWord = restantes[Math.floor(Math.random() * restantes.length)];
+    usadas.add(secretWord);
+    storage.set('usadas', [...usadas]);
     currentRow = 0;
     currentCol = 0;
     isGameOver = false;
