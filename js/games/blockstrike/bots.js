@@ -91,7 +91,9 @@ function objetivo(ent, grafo, rng, faixaPedida = null) {
 export function criarCerebro(ent, grafo, rng, caixas = [], mundo = null) {
   const indice = ent.id % 5;
   const ordem = [1, 2, 0]; // meio, túnel, corredor
-  const bomba = mundo ? destinoBomba(ent, mundo) : null;
+  const casaZ = ent.pos.z >= 0 ? 0 : 1; // metade do mapa onde nasceu
+  // `ent.cerebro` ainda é o do round anterior (outra metade depois da troca de lados): passa a casa nova.
+  const bomba = mundo ? destinoBomba(ent, mundo, casaZ) : null;
   const destino = bomba ? bomba.waypoint : objetivo(ent, grafo, rng, ordem[indice % 3]);
   return {
     estado: 'rota', rota: rotaAte(ent, grafo, caixas, destino), alvoId: null, vistoHa: 0,
@@ -100,7 +102,7 @@ export function criarCerebro(ent, grafo, rng, caixas = [], mundo = null) {
     erro: { yaw: 0, pitch: 0 }, erroAte: 0, cabeca: false, municaoVista: null,
     gatilho: false, emRajada: false, preso: 0, queriaAndar: false, recuou: false,
     ouvidoEm: -Infinity, ouvidoAte: 0, ouvidoPos: null, chaveBomba: bomba ? bomba.chave : null,
-    proxGranada: 0, cegoVisto: 0, casaZ: ent.pos.z >= 0 ? 0 : 1, // metade do mapa onde nasceu
+    proxGranada: 0, cegoVisto: 0, casaZ,
     desvioMira: sortear(rng, [-DESVIO_MIRA, DESVIO_MIRA]),
   };
 }
@@ -144,7 +146,8 @@ export function ouvir(ent, mundo, c) {
 
 // Para onde o bot vai por causa da C4: { chave, waypoint? , ponto? } ou null (sem bomba em jogo).
 // A chave muda quando o objetivo muda (C4 plantada, caiu, outro bombsite): aí o bot refaz a rota.
-function destinoBomba(ent, mundo) {
+// `casaZ`: metade onde o bot nasceu neste round (índice do `espera`).
+function destinoBomba(ent, mundo, casaZ = ent.cerebro?.casaZ ?? (ent.pos.z >= 0 ? 0 : 1)) {
   const b = mundo.bomba;
   if (!b || b.explodiu || b.desarmada) return null;
   const sites = mundo.mapa.bombsites;
@@ -166,7 +169,7 @@ function destinoBomba(ent, mundo) {
   if (b.plantada) return { chave: `site:${b.site}`, waypoint: sites[b.site]?.waypoint };
   // Antes da plantada, o CT segura o site de um pouco atrás, do lado da própria base (mira o corredor de entrada).
   const site = ent.id % 2 === 0 ? 'A' : 'B';
-  return { chave: `espera:${site}`, waypoint: sites[site].espera[ent.cerebro?.casaZ ?? (ent.pos.z >= 0 ? 0 : 1)] };
+  return { chave: `espera:${site}`, waypoint: sites[site].espera[casaZ] };
 }
 
 // Visada limpa na altura da cintura entre o bot e um ponto do chão.
