@@ -11,7 +11,9 @@ import {
 import { escolherPrimaria } from './bots.js';
 import { acaoPossivel, tickBomba } from './bomba.js';
 import { armasDoEquip, danoComColete, perderEquip, premiarKill } from './economia.js';
-import { abrirBuracos, atualizarGranadas, lancar, limparGranadas } from './granadas.js';
+import {
+  abrirBuracos, atualizarGranadas, atualizarMao, criarMao, granadasDe, lancar, limparGranadas, proximaGranada,
+} from './granadas.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 1.8;
@@ -76,6 +78,7 @@ export function posicionarParaRound(mundo, ladoAzul) {
     if (mundo.economia) {
       // Com economia vale o que foi comprado (e sobreviveu): sem primária, começa com a pistola na mão.
       e.armas = armasDoEquip(e);
+      e.armas.granada = criarMao();
       e.slot = e.armas.primaria ? 'primaria' : 'pistola';
       e.slotAnterior = e.armas.primaria ? 'pistola' : 'faca';
       e.kit = e.equip.kit;
@@ -86,6 +89,7 @@ export function posicionarParaRound(mundo, ladoAzul) {
         primaria: criarArma(e.primariaEscolhida),
         pistola: criarArma('pistola'),
         faca: criarArma('faca'),
+        granada: criarMao(),
       };
     }
   });
@@ -237,33 +241,69 @@ function golpearFaca(mundo, e, cmd, arma, eventos) {
   if (noCorpo) aplicarDano(mundo, e, 'faca', alvo, eventos, costas ? g.costas : g.dano);
 }
 
-const ORDEM_SLOTS = ['primaria', 'pistola', 'faca'];
+const ORDEM_SLOTS = ['primaria', 'pistola', 'faca', 'granada'];
+
+// O slot existe e dá para sacar? A granada só entra com estoque; sem primária comprada, esse slot some.
+function slotDisponivel(mundo, e, slot) {
+  if (slot === 'granada') return proximaGranada(granadasDe(mundo, e), null) !== null;
+  return Boolean(e.armas[slot]);
+}
 
 // `slot` do comando: um slot, 'anterior' (Q, a última arma) ou 'roda+'/'roda-' (roda do mouse).
-function slotPedido(e, slot) {
+function slotPedido(mundo, e, slot) {
   if (slot === 'anterior') return e.slotAnterior;
   if (slot === 'roda+' || slot === 'roda-') {
-    const ordem = ORDEM_SLOTS.filter((s) => e.armas[s]); // sem primária comprada, a roda pula esse slot
+    const ordem = ORDEM_SLOTS.filter((s) => s === e.slot || slotDisponivel(mundo, e, s));
     const i = ordem.indexOf(e.slot);
     return ordem[(i + (slot === 'roda+' ? 1 : ordem.length - 1)) % ordem.length];
   }
   return slot;
 }
 
+// Troca a arma em mãos: cancela recarga e pino, guarda a anterior e saca a nova.
+function trocarSlot(mundo, e, pedido, eventos) {
+  e.armas[e.slot].recarregandoAte = 0; // trocar de arma cancela a recarga
+  e.armas[e.slot].recuoAcum = 0; // e só a arma em mãos perde o recuo: sem isso a mira pularia ao voltar
+  if (e.slot === 'granada') e.armas.granada.pino = null; // sair da granada com o pino puxado cancela o arremesso
+  e.slotAnterior = e.slot;
+  e.slot = pedido;
+  const nova = e.armas[e.slot];
+  if (pedido === 'granada') {
+    const estoque = granadasDe(mundo, e);
+    if (!(estoque[nova.sel] > 0)) nova.sel = proximaGranada(estoque, null); // lembra o último tipo se ainda houver
+  }
+  nova.prontaEm = Math.max(nova.prontaEm, mundo.tempo + SAQUE[e.slot]); // sacar leva um instante
+  eventos.push({ tipo: 'saque', id: e.id, arma: nova.tipo });
+}
+
+// Granada na mão: o 4 de novo cicla o tipo; jogar (ou ficar sem estoque) volta para a arma anterior.
+function combateGranada(mundo, e, cmd, eventos) {
+  const mao = e.armas.granada;
+  const estoque = granadasDe(mundo, e);
+  if (!mao.pino && !(estoque[mao.sel] > 0)) mao.sel = proximaGranada(estoque, mao.sel);
+  const jogou = mao.sel !== null && atualizarMao(mundo, e, cmd, eventos);
+  if (jogou || (!mao.pino && mao.sel === null)) {
+    const volta = e.slotAnterior !== 'granada' && slotDisponivel(mundo, e, e.slotAnterior) ? e.slotAnterior : 'faca';
+    trocarSlot(mundo, e, volta, eventos);
+    e.slotAnterior = 'granada';
+  }
+}
+
 function combate(mundo, e, cmd, dt, eventos) {
   if (!e.armas) return;
-  const pedido = slotPedido(e, cmd.slot);
-  if (pedido && pedido !== e.slot && e.armas[pedido]) {
-    e.armas[e.slot].recarregandoAte = 0; // trocar de arma cancela a recarga
-    e.armas[e.slot].recuoAcum = 0; // e só a arma em mãos perde o recuo: sem isso a mira pularia ao voltar
-    e.slotAnterior = e.slot;
-    e.slot = pedido;
-    const nova = e.armas[e.slot];
-    nova.prontaEm = Math.max(nova.prontaEm, mundo.tempo + SAQUE[e.slot]); // sacar leva um instante
-    eventos.push({ tipo: 'saque', id: e.id, arma: nova.tipo });
+  const pedido = slotPedido(mundo, e, cmd.slot);
+  if (pedido === 'granada' && e.slot === 'granada') {
+    const mao = e.armas.granada;
+    if (!mao.pino) mao.sel = proximaGranada(granadasDe(mundo, e), mao.sel);
+  } else if (pedido && pedido !== e.slot && slotDisponivel(mundo, e, pedido)) {
+    trocarSlot(mundo, e, pedido, eventos);
   }
   const arma = e.armas[e.slot];
   const agora = mundo.tempo;
+  if (e.slot === 'granada') {
+    combateGranada(mundo, e, cmd, eventos); // a pseudo-arma não tem munição: nunca chega ao tiro nem à recarga
+    return;
+  }
   if (mundo.modo === 'treino') arma.reserva = ARMAS[arma.tipo].reserva; // treino: reserva nunca acaba
   if (arma.tipo === 'faca') {
     golpearFaca(mundo, e, cmd, arma, eventos);
