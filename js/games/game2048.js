@@ -534,8 +534,13 @@ function montar(raiz, { audio, confetti, storage, conta }) {
   });
 
   // Login/logout reescreve o recorde no storage: relê para a tela mostrar o da conta.
+  // O recorde pendente era da conta anterior: descarta, para não enviá-lo à nova.
   conta?.assinar((evento) => {
-    if (evento?.tipo === 'progresso') loadBestScore();
+    if (evento?.tipo !== 'progresso') return;
+    clearTimeout(timerRecorde);
+    timerRecorde = null;
+    recordePendente = 0;
+    loadBestScore();
   });
 
   loadBestScore();

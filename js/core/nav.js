@@ -185,6 +185,11 @@ export function iniciarNav({ app, audio, confetti, escopo, conta }) {
     fecharDrawer();
   }
 
+  // Login/logout reescreve os recordes no storage: os cards da home releem sem precisar navegar.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') atualizarRecordes();
+  });
+
   window.addEventListener('hashchange', () => rotear(false));
   rotear(true);
 }
