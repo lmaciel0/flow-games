@@ -15,13 +15,13 @@ Também quer que o progresso siga a pessoa entre aparelhos. O público são amig
 
 - Conta com **nome de usuário e senha**, sem e-mail. **[decidido]**
 - Avatar por conta: **ícone pronto ou foto enviada**. **[decidido]**
-- **Placar compartilhado** público (Termo e 2048) e **progresso entre aparelhos**. **[decidido]**
+- **Placar compartilhado** público (Termo e 2048; estendido a todos os jogos em 2026-10-21) e **progresso entre aparelhos**. **[decidido]**
 - **Login opcional**: quem não tem conta joga normalmente, com o progresso só no aparelho. **[decidido]**
 - Visual igual ao do site (escuro, neon). Os mockups aprovados mostraram: botão "Entrar" que vira avatar + nome, modal Entrar/Criar conta com seletor de avatar (8 ícones + câmera para foto), placar com abas Termo/2048, medalhas nos 3 primeiros e a linha da própria pessoa destacada. **[decidido]**
 
 ## Não-objetivos e anti-objetivos
 
-- Não integrar os outros jogos (Snake, Tetris, Campo Minado, Jogo da Velha, Block Strike) ao placar.
+- ~~Não integrar os outros jogos ao placar.~~ **Revogado em 2026-10-21:** Snake, Tetris, Campo Minado, Jogo da Velha e Block Strike entraram na mesma branch. Ver `docs/superpowers/plans/2026-10-21-placar-todos-jogos.md`.
 - Sem "esqueci minha senha", troca de nome de usuário nem exclusão de conta nesta versão. **[minha escolha]**
 - Sem anti-fraude forte. O jogo roda no navegador, então um usuário determinado consegue forjar números. Para um grupo de amigos isso é aceito. **[decidido: o dono aceitou o risco]**
 - Anti-objetivo: o site quebrar ou ficar lento se o Supabase estiver fora do ar. Sem conexão, tudo continua funcionando como hoje.

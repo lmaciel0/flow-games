@@ -27,8 +27,16 @@ Além dos sete jogos, o menu tem a página **Placar** (`#/placar`), que não con
 O login é **opcional**: dá para jogar tudo sem conta. Quem cria uma conta (só **nome de usuário e senha**, sem e-mail) ganha:
 
 - **Avatar** escolhido entre 8 ícones ou uma **foto** própria (reduzida para 128×128 no navegador antes do envio)
-- **Progresso entre aparelhos** no Termo (vitórias e sequência) e no 2048 (recorde): ao entrar, o progresso do aparelho e o da conta se juntam e vale o maior
-- **Placar compartilhado** do Termo (palavras acertadas) e do 2048 (maior pontuação), na página `#/placar` e num painel ao lado de cada um dos dois jogos, com a sua posição sempre visível
+- **Progresso entre aparelhos** em todos os jogos (vitórias e sequência do Termo, recordes de pontos, melhores tempos do Campo Minado, vitórias do Jogo da Velha e do Block Strike): ao entrar, o progresso do aparelho e o da conta se juntam e vale o melhor
+- **Placar compartilhado** de todos os jogos, na página `#/placar` (uma aba por ranking) e num painel ao lado de cada jogo (menos o Block Strike, que é tela cheia), com a sua posição sempre visível:
+
+  | Jogo | Ranking |
+  |---|---|
+  | Termo | palavras acertadas |
+  | 2048, Snake, Tetris | maior pontuação |
+  | Campo Minado | menor tempo, uma aba por nível (fácil, médio, difícil) |
+  | Jogo da Velha | vitórias contra a IA (2 jogadores não conta) |
+  | Block Strike | vitórias em partida |
 
 **Como criar uma conta:** abra o menu lateral, clique em **Entrar**, vá na aba **Criar conta**, escolha um nome (3 a 16 letras sem acento, números ou `_`), uma senha (pelo menos 6 caracteres) e o avatar.
 
@@ -100,7 +108,7 @@ js/
   core/               registry, nav, storage, audio, confetti
     conta/            serviço de conta: cliente Supabase, config pública, validação, avatar
     conta-ui.js       menu de conta no drawer e modal Entrar / Criar conta / Trocar avatar
-    placar-painel.js  painel de placar (ao lado do Termo e do 2048 e na página Placar)
+    placar-painel.js  painel de placar (ao lado dos jogos e na página Placar)
   games/              tictactoe, game2048, snake, minesweeper, tetris, termo, blockstrike
     placar.js         página #/placar (não é um jogo)
   vendor/             Three.js e supabase-js (módulos e licenças)
