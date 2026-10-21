@@ -241,6 +241,34 @@ function montar(raiz, ctx) {
   });
   hud.definirConfig(cfg);
 
+  // Fundo 3D do menu: o render carrega sob demanda, como na partida, e sai antes dela.
+  let fundo = null;
+  async function ligarFundo() {
+    if (fundo || partida) return;
+    const f = { render: null, raf: null };
+    fundo = f;
+    try {
+      const { criarRender } = await import('./render.js');
+      if (fundo !== f) return; // desligado enquanto carregava
+      f.render = criarRender(canvas, MAPA);
+      const quadro = () => {
+        f.render.desenharVitrine();
+        f.raf = requestAnimationFrame(quadro);
+      };
+      quadro();
+    } catch (erro) {
+      if (fundo === f) fundo = null;
+      console.error(erro);
+    }
+  }
+  function desligarFundo() {
+    if (!fundo) return;
+    if (fundo.raf !== null) cancelAnimationFrame(fundo.raf);
+    if (fundo.render) fundo.render.destruir();
+    fundo = null;
+  }
+  ligarFundo();
+
   // Liga os eventos do passo a som e efeitos visuais, do ponto de vista do jogador.
   // Sons de outros saem com pan estéreo (esquerda/direita) e abafados pela distância.
   function reagir(p, eventos) {
@@ -580,6 +608,7 @@ function montar(raiz, ctx) {
 
   // Volta à rota: só redesenha a cena pausada. Quem retoma a simulação é o botão Continuar.
   function reexibir() {
+    if (raiz.dataset.fase === 'menu') ligarFundo();
     if (partida && partida.pausado && partida.raf === null) partida.raf = requestAnimationFrame(quadroPausado);
   }
 
@@ -620,6 +649,7 @@ function montar(raiz, ctx) {
     hud.mostrarMenu();
     raiz.dataset.fase = 'menu';
     raiz.dataset.pausado = 'false';
+    ligarFundo();
   }
 
   async function iniciar() {
@@ -627,6 +657,7 @@ function montar(raiz, ctx) {
     iniciando = true;
     pausaPendente = false;
     destruirPartida();
+    desligarFundo();
     const minha = ++geracao;
     const entrada = criarEntrada(canvas, { sensibilidade: cfg.sensibilidade });
     // Os ouvintes de trava entram antes do travar(): uma trava que cai depois de ter funcionado abre a pausa.
@@ -719,11 +750,13 @@ function montar(raiz, ctx) {
     pause() {
       if (docTela() === palco) alternarTelaCheia(); // saiu da rota: não deixa a tela cheia presa
       pausarPartida(true);
+      desligarFundo();
     },
     resume: reexibir,
     destruir() {
       cancelarInicio();
       destruirPartida();
+      desligarFundo();
       document.removeEventListener('fullscreenchange', aoMudarTela);
       document.removeEventListener('webkitfullscreenchange', aoMudarTela);
       if (docTela() === palco) alternarTelaCheia();

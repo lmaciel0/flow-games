@@ -184,26 +184,39 @@ export function criarHud(raiz, handlers) {
   };
   const selsTamanho = [];
   const btnsTela = [];
-  const ajuda = el('details', { class: 'bs-ajuda' }, el('summary', { texto: 'Controles' }),
+  const ajuda = el('div', { class: 'bs-ajuda' },
     el('ul', {}, ...CONTROLES.map(([k, o]) => el('li', {}, el('kbd', { texto: k }), el('span', { texto: o })))));
   const menuTexto = el('p', { class: 'bs-menu-texto', id: 'bs-menu-texto', texto: 'FPS 5x5 contra bots' });
+  const campo = (rotulo, ...filhos) => el('label', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: rotulo }), ...filhos);
+  // Menu no estilo do CS2: abas na barra do topo, painel à esquerda e o Jogar fixo no canto.
+  const ABAS = [
+    ['jogar', 'Jogar', [gradeModos, campoDif]],
+    ['loadout', 'Loadout', [el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária (treino)' }), gradeMenu)]],
+    ['opcoes', 'Opções', [
+      campo('Sensibilidade', el('span', { class: 'bs-slider' }, rngSens, rotuloSens)),
+      campo('Volume', el('span', { class: 'bs-slider' }, rngVol, rotuloVol)),
+      campo('Mira', selMira),
+      criarControlesTela(''),
+    ]],
+    ['controles', 'Controles', [ajuda]],
+  ];
+  const abas = el('nav', { class: 'bs-menu-abas', id: 'bs-menu-abas' });
+  const paineis = [];
+  for (const [id, rotulo, conteudo] of ABAS) {
+    const b = el('button', { type: 'button', class: 'bs-menu-aba', 'data-aba': id, texto: rotulo });
+    b.addEventListener('click', () => abrirAba(id));
+    abas.append(b);
+    paineis.push(el('div', { class: 'bs-menu-painel', 'data-aba': id }, ...conteudo));
+  }
+  const abrirAba = (id) => {
+    for (const b of abas.children) b.classList.toggle('selecionada', b.dataset.aba === id);
+    for (const pn of paineis) mostrar(pn, pn.dataset.aba === id);
+  };
+  abrirAba('jogar');
   const menu = el('div', { class: 'bs-overlay bs-menu', id: 'bs-menu' },
-    el('h2', { class: 'bs-menu-titulo', texto: 'Block Strike' }),
-    menuTexto,
-    gradeModos,
-    el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária (treino)' }), gradeMenu),
-    el('div', { class: 'bs-linha' },
-      campoDif,
-      el('label', { class: 'bs-campo' },
-        el('span', { class: 'bs-rotulo', texto: 'Sensibilidade' }),
-        el('span', { class: 'bs-slider' }, rngSens, rotuloSens)),
-      el('label', { class: 'bs-campo' },
-        el('span', { class: 'bs-rotulo', texto: 'Volume' }),
-        el('span', { class: 'bs-slider' }, rngVol, rotuloVol)),
-      el('label', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Mira' }), selMira)),
-    criarControlesTela(''),
-    btnJogar,
-    ajuda);
+    el('header', { class: 'bs-menu-topo' }, el('h2', { class: 'bs-menu-titulo', texto: 'Block Strike' }), abas),
+    el('section', { class: 'bs-menu-lado' }, menuTexto, ...paineis),
+    btnJogar);
 
   // SECOES
   palco.append(menu);
