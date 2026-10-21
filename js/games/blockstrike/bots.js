@@ -23,6 +23,9 @@ const TROCA_ERRO = 0.15; // s entre sorteios do erro de mira
 const ERRO_PITCH = 0.2; // erro vertical = esta fração do horizontal (senão a mira no tronco vira cabeçada)
 const PRESO_TEMPO = 1;
 const ESPERA_COBERTURA = [1.5, 3];
+// Onde cada T fica no bombsite (m em volta do centro, pelo índice no time): espalhados, não empilhados.
+const ESPALHAR = [[0, 0], [-3.5, -2.5], [3.5, -2.5], [-3.5, 2.5], [3.5, 2.5]];
+const PERTO_DO_SITE = 8; // m do centro: a partir daqui o T vai para o seu ponto no site
 const ESPERA_RECUO = 5;
 const LIMITE_ROTA = 20; // |x| que separa corredor, meio e túnel
 const REFAZER_ROTA = 2; // s entre recálculos da rota até o alvo
@@ -88,6 +91,18 @@ function objetivo(ent, grafo, rng, faixaPedida = null) {
   return opcoes[Math.floor(rng() * opcoes.length)].id;
 }
 
+// Rota do começo do round. Os Ts indo ao bombsite se dividem como num time de CS: metade pela rota do
+// próprio site, metade pelo meio. Sem isso os cinco seguiam o mesmo caminho mais curto, em fila.
+function rotaDoRound(ent, grafo, caixas, destino, bomba, mundo, indice) {
+  if (!bomba?.chave.startsWith('site:') || ent.time !== mundo.bomba.terroristas || mundo.bomba.plantada) {
+    return rotaAte(ent, grafo, caixas, destino);
+  }
+  const passagem = mundo.mapa.bombsites[bomba.chave.slice(5)].rotas?.[indice % 2];
+  const ida = passagem === undefined ? [] : rotaAte(ent, grafo, caixas, passagem);
+  if (!ida.length) return rotaAte(ent, grafo, caixas, destino);
+  return [...ida, ...caminho(grafo, passagem, destino).slice(1)];
+}
+
 export function criarCerebro(ent, grafo, rng, caixas = [], mundo = null) {
   const indice = ent.id % 5;
   const ordem = [1, 2, 0]; // meio, túnel, corredor
@@ -96,7 +111,7 @@ export function criarCerebro(ent, grafo, rng, caixas = [], mundo = null) {
   const bomba = mundo ? destinoBomba(ent, mundo, casaZ) : null;
   const destino = bomba ? bomba.waypoint : objetivo(ent, grafo, rng, ordem[indice % 3]);
   return {
-    estado: 'rota', rota: rotaAte(ent, grafo, caixas, destino), alvoId: null, vistoHa: 0,
+    estado: 'rota', rota: rotaDoRound(ent, grafo, caixas, destino, bomba, mundo, indice), alvoId: null, vistoHa: 0,
     rajada: 0, pausaAte: 0, ultimoDanoDe: null,
     passoRota: 0, ultimaPos: null, perdidoHa: 0, esperaAte: 0, chegou: false,
     erro: { yaw: 0, pitch: 0 }, erroAte: 0, cabeca: false, municaoVista: null,
@@ -176,13 +191,23 @@ function destinoBomba(ent, mundo, casaZ = ent.cerebro?.casaZ ?? (ent.pos.z >= 0 
 const veDireto = (ent, mundo, p) => temVisada(
   { x: ent.pos.x, y: 0.9, z: ent.pos.z }, { x: p.x, y: 0.9, z: p.z }, mundo.mapa.caixas);
 
+// T que chegou perto do bombsite vai para o seu ponto em volta do centro e fica lá (ESPALHAR).
+function espalharNoSite(ent, mundo, site) {
+  const centro = mundo.mapa.bombsites[site]?.centro;
+  if (!centro || distXZ(ent.pos, centro) > PERTO_DO_SITE) return { segurar: true };
+  const [dx, dz] = ESPALHAR[ent.id % ESPALHAR.length];
+  const ponto = { x: centro.x + dx, z: centro.z + dz };
+  if (distXZ(ent.pos, ponto) < 0.6) return { parado: true, segurar: true };
+  return veDireto(ent, mundo, ponto) ? { direto: ponto, segurar: true } : { segurar: true };
+}
+
 // Ações da C4 enquanto o bot não tem inimigo à vista. Devolve { direto?, parado?, segurar? } ou null:
 // direto = anda reto até o ponto; parado = fica onde está (planta/desarma); segurar = rota acabou, espera.
 function tarefaBomba(ent, mundo, cmd) {
   const b = mundo.bomba;
   if (!b || b.explodiu || b.desarmada) return null;
   if (ent.time === b.terroristas) {
-    if (b.plantada) return { segurar: true };
+    if (b.plantada) return espalharNoSite(ent, mundo, b.site);
     if (b.portador === ent.id) {
       if (!siteEm(mundo.mapa, ent.pos)) return null;
       cmd.usar = true;
@@ -191,7 +216,7 @@ function tarefaBomba(ent, mundo, cmd) {
     if (b.portador === null && b.pos && distXZ(ent.pos, b.pos) < 8 && veDireto(ent, mundo, b.pos)) {
       return { direto: b.pos, segurar: true };
     }
-    return b.portador === null && b.pos ? null : { segurar: true };
+    return b.portador === null && b.pos ? null : espalharNoSite(ent, mundo, b.siteAlvo);
   }
   if (!b.plantada) return { segurar: true };
   const d = distXZ(ent.pos, b.pos);
