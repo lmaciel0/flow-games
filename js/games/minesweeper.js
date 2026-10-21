@@ -2,6 +2,8 @@
  * Campo Minado — primeiro clique seguro, três dificuldades e melhor tempo por nível.
  */
 
+import { criarPlacarPainel } from '../core/placar-painel.js';
+
 // Dificuldade da lógica -> chave do recorde salvo.
 const NIVEIS = { easy: 'facil', medium: 'medio', hard: 'dificil' };
 const NOMES_NIVEL = { facil: 'fácil', medio: 'médio', dificil: 'difícil' };
@@ -13,6 +15,8 @@ function formatar(segundos) {
 }
 
 const HTML = `
+    <div class="jogo-com-placar">
+      <div class="jogo-com-placar-jogo">
       <header class="app-header">
         <div class="header-badge mine-badge">
           <span class="badge-dot mine-dot"></span>
@@ -72,9 +76,12 @@ const HTML = `
         </div>
         <p><strong>Clique normal:</strong> abre a casa (o 1º clique é 100% livre de minas). <strong>Botão direito</strong> ou toque longo: fixa a bandeira 🚩.</p>
       </div>
+      </div>
+      <aside class="placar-lateral" aria-label="Placar"></aside>
+    </div>
 `;
 
-function montar(raiz, { audio, confetti, storage }) {
+function montar(raiz, { audio, confetti, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
   let controle;
 
@@ -107,12 +114,29 @@ function montar(raiz, { audio, confetti, storage }) {
   let flagsPlaced = 0;
   let isFlagMode = false; // Alternador para mobile
 
+  // Um placar por nível: o painel é refeito quando a dificuldade muda.
+  let painel = null;
+
+  function mostrarPainel() {
+    if (!conta) return;
+    painel?.destruir();
+    painel = criarPlacarPainel({
+      conta,
+      jogo: `minas_${NIVEIS[currentDiff]}`,
+      limite: 5,
+      rotulo: `Menor tempo · ${NOMES_NIVEL[NIVEIS[currentDiff]]}`,
+      formato: 'tempo',
+    });
+    raiz.querySelector('.placar-lateral').append(painel.el);
+  }
+
   function setDifficulty(diff) {
     currentDiff = diff;
     rows = CONFIGS[diff].rows;
     cols = CONFIGS[diff].cols;
     totalMines = CONFIGS[diff].mines;
     initGame();
+    mostrarPainel();
   }
 
   function tick() {
@@ -328,6 +352,7 @@ function montar(raiz, { audio, confetti, storage }) {
         recordes[nivel] = tempo;
         storage.set('recordes', recordes);
         mostrarMelhor();
+        conta?.registrar('minesweeper', { tipo: 'tempo', nivel, valor: tempo });
       }
       audio.playSound('win');
       confetti();
@@ -369,10 +394,16 @@ function montar(raiz, { audio, confetti, storage }) {
   if (difficultySelect) {
     difficultySelect.addEventListener('change', (e) => {
       setDifficulty(e.target.value);
+      painel?.atualizar();
     });
   }
 
   if (faceBtn) faceBtn.addEventListener('click', initGame);
+
+  // Login/logout reescreve os recordes no storage: relê para a tela mostrar os da conta.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') mostrarMelhor();
+  });
 
   // Chamado pelo nav: o cronômetro só corre enquanto a rota está aberta.
   controle = {
@@ -382,6 +413,7 @@ function montar(raiz, { audio, confetti, storage }) {
         clearInterval(timerInterval);
         timerInterval = setInterval(tick, 1000);
       }
+      painel?.atualizar();
     }
   };
 

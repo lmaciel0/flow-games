@@ -3,8 +3,11 @@
  * Dicionário em js/data/palavras.js; teclado físico com normalização ABNT2/acentos.
  */
 import { secretas, validas } from '../data/palavras.js';
+import { criarPlacarPainel } from '../core/placar-painel.js';
 
 const HTML = `
+    <div class="jogo-com-placar">
+      <div class="jogo-com-placar-jogo">
       <header class="app-header">
         <div class="header-badge termo-badge">
           <span class="badge-dot termo-dot"></span>
@@ -58,9 +61,12 @@ const HTML = `
           <span class="termo-legend gray">⬛ Cinza</span>: letra não faz parte da palavra.
         </p>
       </div>
+      </div>
+      <aside class="placar-lateral" aria-label="Placar"></aside>
+    </div>
 `;
 
-function montar(raiz, { audio, confetti, storage }) {
+function montar(raiz, { audio, confetti, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
 
 
@@ -282,6 +288,7 @@ function montar(raiz, { audio, confetti, storage }) {
         stats.wins++;
         stats.streak++;
         saveStats();
+        conta?.registrar('termo', { tipo: 'vitoria' });
         showToast('🎉 Parabéns, você acertou a palavra!');
         audio.playSound('win');
         confetti();
@@ -289,6 +296,7 @@ function montar(raiz, { audio, confetti, storage }) {
         isGameOver = true;
         stats.streak = 0;
         saveStats();
+        conta?.registrar('termo', { tipo: 'derrota' });
         showToast(`A palavra correta era: ${secretWord}`);
         audio.playSound('defeat');
       } else {
@@ -394,9 +402,16 @@ function montar(raiz, { audio, confetti, storage }) {
     });
   }
 
+  // Login/logout reescreve as estatísticas no storage: relê para a tela mostrar o progresso da conta.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') loadStats();
+  });
+
   loadStats();
   newGame();
 }
+
+let painel = null;
 
 export default {
   id: 'termo',
@@ -408,9 +423,15 @@ export default {
   mount(raiz, ctx) {
     raiz.innerHTML = HTML;
     montar(raiz, ctx);
+    if (ctx.conta) {
+      painel = criarPlacarPainel({ conta: ctx.conta, jogo: 'termo', limite: 5, rotulo: 'Palavras acertadas' });
+      raiz.querySelector('.placar-lateral').append(painel.el);
+    }
   },
   pause() {},
-  resume() {},
+  resume() {
+    painel?.atualizar();
+  },
   recorde(storage) {
     const n = Number(storage.get('stats', {}).wins) || 0;
     return n > 0 ? `${n} ${n === 1 ? 'vitória' : 'vitórias'}` : null;

@@ -19,6 +19,14 @@ function textoRecorde(jogo, escopo) {
   }
 }
 
+const NUMEROS = ['Um', 'Dois', 'Três', 'Quatro', 'Cinco', 'Seis', 'Sete', 'Oito', 'Nove', 'Dez'];
+
+// "Sete jogos" por extenso até dez; acima disso, o numeral.
+function quantosJogos(n) {
+  const palavra = NUMEROS[n - 1] ?? String(n);
+  return `${palavra} ${n === 1 ? 'jogo' : 'jogos'}`;
+}
+
 function itemDrawer({ href, icone, iconeClasse = '', titulo, subtitulo, badge }) {
   const a = document.createElement('a');
   a.className = 'nav-item';
@@ -33,19 +41,23 @@ function itemDrawer({ href, icone, iconeClasse = '', titulo, subtitulo, badge })
   return a;
 }
 
-export function iniciarNav({ app, audio, confetti, escopo }) {
+export function iniciarNav({ app, audio, confetti, escopo, conta }) {
   const drawer = document.getElementById('sidebar-drawer');
   const backdrop = document.getElementById('drawer-backdrop');
   const menuBtn = document.getElementById('menu-toggle-btn');
   const closeBtn = document.getElementById('drawer-close-btn');
   const somBtn = document.getElementById('drawer-sound-toggle');
   const nav = drawer.querySelector('.drawer-nav');
+  const creditos = drawer.querySelector('.drawer-credits');
 
   const jogos = listar();
+  // Itens com `pagina: true` (ex.: o Placar) aparecem no menu e na home, mas não contam como jogo.
+  const totalJogos = jogos.filter((j) => !j.pagina).length;
   const montados = new Map();
   let atual = null;
 
   // --- Drawer ---
+  if (creditos) creditos.textContent = `${totalJogos} ${totalJogos === 1 ? 'jogo' : 'jogos'} • feito em JS puro`;
   const itens = new Map();
   const inicio = itemDrawer({
     href: '#/', icone: '🏠', titulo: 'Início', subtitulo: 'Todos os jogos'
@@ -98,7 +110,7 @@ export function iniciarNav({ app, audio, confetti, escopo }) {
   home.innerHTML = `
     <header class="home-hero">
       <h1 class="app-title">Arcade <span class="gradient-text">Hub</span></h1>
-      <p class="app-subtitle">Sete jogos em JavaScript puro. Escolha um e jogue.</p>
+      <p class="app-subtitle">${quantosJogos(totalJogos)} em JavaScript puro. Escolha um e jogue.</p>
     </header>
     <div class="home-grid"></div>
     <footer class="home-footer">
@@ -139,7 +151,7 @@ export function iniciarNav({ app, audio, confetti, escopo }) {
     raiz.className = 'game-view';
     app.append(raiz);
     montados.set(jogo.id, raiz);
-    jogo.mount(raiz, { audio, confetti, storage: escopo(jogo.id) });
+    jogo.mount(raiz, { audio, confetti, storage: escopo(jogo.id), conta });
     return raiz;
   }
 
@@ -172,6 +184,11 @@ export function iniciarNav({ app, audio, confetti, escopo }) {
     if (!primeira) audio.playSound('click');
     fecharDrawer();
   }
+
+  // Login/logout reescreve os recordes no storage: os cards da home releem sem precisar navegar.
+  conta?.assinar((evento) => {
+    if (evento?.tipo === 'progresso') atualizarRecordes();
+  });
 
   window.addEventListener('hashchange', () => rotear(false));
   rotear(true);

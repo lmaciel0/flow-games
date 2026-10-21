@@ -1,6 +1,6 @@
 # Arcade Hub
 
-Sete jogos em **HTML, CSS e JavaScript puros**: sem build e sem framework, e a única dependência é o Three.js vendorizado, usado só no Block Strike.
+Sete jogos em **HTML, CSS e JavaScript puros**: sem build e sem framework. As únicas dependências são vendorizadas: o Three.js, usado só no Block Strike, e o `supabase-js`, usado só nas contas e no placar.
 
 **Demo:** <https://flow-games-tau.vercel.app>
 
@@ -20,9 +20,37 @@ Sete jogos em **HTML, CSS e JavaScript puros**: sem build e sem framework, e a �
 | **Termo** | Palavras de 5 letras em 6 tentativas, dicionário pt-BR com cerca de 10 mil palavras, teclado com cores e estatísticas salvas. |
 | **Block Strike** | FPS 5x5 contra bots em 3D (Three.js), com 3 dificuldades e rounds MR12 com troca de lados. Modo desarme: bombsites A e B, C4 que se planta e se desarma, terroristas e CTs que trocam no intervalo. Economia com menu de compra (armas, colete, kit, granadas), granadas flash, HE e smoke de blocos, faca, bots com rotas, mira humana, ouvido para passos e reação a flash e fumaça, radar, placar, espectador e treino livre. Tamanho Normal/Grande e tela cheia. Só para computador. |
 
+Além dos sete jogos, o menu tem a página **Placar** (`#/placar`), que não conta como jogo.
+
+## Contas e placar
+
+O login é **opcional**: dá para jogar tudo sem conta. Quem cria uma conta (só **nome de usuário e senha**, sem e-mail) ganha:
+
+- **Avatar** escolhido entre 8 ícones ou uma **foto** própria (reduzida para 128×128 no navegador antes do envio)
+- **Progresso entre aparelhos** em todos os jogos (vitórias e sequência do Termo, recordes de pontos, melhores tempos do Campo Minado, vitórias do Jogo da Velha e do Block Strike): ao entrar, o progresso do aparelho e o da conta se juntam e vale o melhor
+- **Placar compartilhado** de todos os jogos, na página `#/placar` (uma aba por ranking) e num painel ao lado de cada jogo (menos o Block Strike, que é tela cheia), com a sua posição sempre visível:
+
+  | Jogo | Ranking |
+  |---|---|
+  | Termo | palavras acertadas |
+  | 2048, Snake, Tetris | maior pontuação |
+  | Campo Minado | menor tempo, uma aba por nível (fácil, médio, difícil) |
+  | Jogo da Velha | vitórias contra a IA (2 jogadores não conta) |
+  | Block Strike | vitórias em partida |
+
+**Como criar uma conta:** abra o menu lateral, clique em **Entrar**, vá na aba **Criar conta**, escolha um nome (3 a 16 letras sem acento, números ou `_`), uma senha (pelo menos 6 caracteres) e o avatar.
+
+**Limitações:**
+
+- **Não há recuperação de senha.** A conta não tem e-mail; quem esquecer a senha precisa criar outra conta.
+- O placar é feito para jogar **entre amigos**: o servidor confia nos números que o navegador envia, então não há proteção forte contra trapaça.
+- **Sem conta, o progresso fica só neste aparelho.** Ao sair da conta, o progresso dela é apagado do aparelho (continua salvo na conta).
+
+**Como funciona:** [Supabase](https://supabase.com) Auth (o nome de usuário vira um e-mail sintético `<usuario>@example.com`), Postgres com RLS (a leitura pública se limita aos perfis — nome e avatar — e ao placar; toda escrita no banco passa por funções RPC que usam a sessão de quem chama) e Storage para as fotos (cada pessoa só grava a própria). O `supabase-js` é vendorizado em `js/vendor/` e carregado com `import()` em segundo plano (se falhar, os jogos seguem funcionando), e o SQL completo do backend está em `supabase/schema.sql`. A Project URL e a chave publishable em `js/core/conta/config.js` são **públicas por design**: vão para o navegador de qualquer jeito, e o acesso é limitado pelas policies RLS.
+
 ## Destaques técnicos
 
-- **JavaScript puro com ES modules**, zero dependências (exceto o Three.js vendorizado, usado só no Block Strike) e nenhuma etapa de build
+- **JavaScript puro com ES modules**, zero dependências (exceto o Three.js, usado só no Block Strike, e o `supabase-js`, usado só nas contas, ambos vendorizados) e nenhuma etapa de build
 - **Registro de jogos:** cada jogo é um módulo que exporta um contrato (`mount`, `pause`, `resume`, `recorde`); a navegação não conhece nenhum jogo
 - **Roteamento por hash** (`#/` e `#/<jogo>`) com deep link e botão voltar funcionando
 - **Áudio sintetizado** com Web Audio API, sem arquivos de som (no Block Strike: ruído filtrado, pan estéreo e abafamento pela distância)
@@ -78,9 +106,14 @@ fonts/                Outfit e JetBrains Mono (woff2, subset latin)
 js/
   main.js             boot: migração, registro dos jogos, navegação
   core/               registry, nav, storage, audio, confetti
+    conta/            serviço de conta: cliente Supabase, config pública, validação, avatar
+    conta-ui.js       menu de conta no drawer e modal Entrar / Criar conta / Trocar avatar
+    placar-painel.js  painel de placar (ao lado dos jogos e na página Placar)
   games/              tictactoe, game2048, snake, minesweeper, tetris, termo, blockstrike
-  vendor/             Three.js (módulo minificado e licença)
+    placar.js         página #/placar (não é um jogo)
+  vendor/             Three.js e supabase-js (módulos e licenças)
   data/palavras.js    dicionário do Termo
+supabase/schema.sql   tabelas, RLS, funções RPC e bucket de avatares do backend
 docs/                 specs, planos e capturas de tela
 ```
 
@@ -108,4 +141,4 @@ docs/                 specs, planos e capturas de tela
 
 ## Créditos e licença
 
-Código sob licença [MIT](LICENSE). As fontes **Outfit** e **JetBrains Mono** são distribuídas sob a [SIL Open Font License 1.1](https://openfontlicense.org). O dicionário do Termo vem da lista de palavras do LibreOffice VERO pt-BR. O [Three.js](https://threejs.org) em `js/vendor/` é distribuído sob a licença MIT; o aviso está em `js/vendor/three-LICENSE`.
+Código sob licença [MIT](LICENSE). As fontes **Outfit** e **JetBrains Mono** são distribuídas sob a [SIL Open Font License 1.1](https://openfontlicense.org). O dicionário do Termo vem da lista de palavras do LibreOffice VERO pt-BR. O [Three.js](https://threejs.org) em `js/vendor/` é distribuído sob a licença MIT; o aviso está em `js/vendor/three-LICENSE`. O [supabase-js](https://github.com/supabase/supabase-js) em `js/vendor/` é MIT, assim como quase tudo o que vem empacotado com ele (o tslib usa a licença 0BSD); os avisos estão em `js/vendor/supabase-LICENSE`.

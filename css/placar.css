@@ -1,0 +1,234 @@
+/* ==========================================================================
+   Placar — painel ao lado dos jogos e a página #/placar
+   ========================================================================== */
+.placar-painel[hidden],
+.placar-painel [hidden] { display: none !important; }
+
+/* --- Envelope do jogo: coluna única (painel embaixo) até 1100 px --- */
+.jogo-com-placar,
+.jogo-com-placar-jogo {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.placar-lateral { min-width: 0; }
+
+.placar-lateral:empty { display: none; }
+
+/* Telas largas: painel à direita. O .app-container continua com 520 px; só o
+   envelope fica mais largo (520 + gap + 300) e transborda centralizado, então a
+   coluna do jogo mantém exatamente a largura de antes. */
+@media (min-width: 1100px) {
+  .jogo-com-placar:has(> .placar-lateral:not(:empty)) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 1.5rem;
+    align-items: start;
+    align-self: center;
+    width: calc(520px + 1.5rem + 300px);
+    max-width: calc(100vw - 2rem);
+  }
+
+  .jogo-com-placar:has(> .placar-lateral:not(:empty)) > .placar-lateral {
+    position: sticky;
+    top: 1.5rem;
+  }
+}
+
+/* --- Painel --- */
+.placar-painel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+}
+
+.placar-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.placar-titulo { font-size: 1rem; font-weight: 800; letter-spacing: -0.01em; }
+
+.placar-rotulo { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; }
+
+.placar-lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.placar-linha {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+
+.placar-linha.eu { background: rgba(0, 242, 254, 0.1); border-color: rgba(0, 242, 254, 0.35); }
+
+.placar-pos {
+  flex-shrink: 0;
+  width: 1.6rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.placar-av {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 0.95rem;
+  background: var(--cell-active-bg);
+}
+
+.placar-av img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.placar-nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.placar-voce { color: var(--text-secondary); }
+
+.placar-valor { flex-shrink: 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.placar-sep {
+  text-align: center;
+  color: var(--text-muted);
+  line-height: 0.9;
+  letter-spacing: 0.2em;
+}
+
+.placar-estado {
+  padding: 0.85rem 0.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.placar-estado.erro { color: #fca5a5; }
+
+.placar-repetir,
+.placar-convite,
+.placar-aba {
+  font-family: inherit;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.placar-repetir {
+  align-self: center;
+  min-height: 36px;
+  padding: 0.45rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.placar-repetir:hover { border-color: rgba(0, 242, 254, 0.35); background: rgba(255, 255, 255, 0.1); }
+
+.placar-convite {
+  min-height: 36px;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.placar-convite:hover { color: var(--color-x); border-color: rgba(0, 242, 254, 0.35); }
+
+.placar-completo {
+  align-self: center;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-x);
+  text-decoration: none;
+}
+
+.placar-completo:hover { text-decoration: underline; }
+
+.placar-repetir:focus-visible,
+.placar-convite:focus-visible,
+.placar-completo:focus-visible,
+.placar-aba:focus-visible { outline: 2px solid var(--color-x); outline-offset: 2px; }
+
+/* --- Página #/placar --- */
+.placar-pagina { display: flex; flex-direction: column; gap: 0.85rem; }
+
+.placar-pagina .placar-titulo { display: none; }
+
+.placar-abas { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.placar-aba {
+  min-height: 40px;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-glass-border);
+  background: var(--surface-glass);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.placar-aba:hover { color: var(--text-primary); }
+
+.placar-aba[aria-selected="true"] {
+  color: var(--color-x);
+  border-color: var(--color-x);
+  box-shadow: 0 0 14px rgba(0, 242, 254, 0.15);
+}
+
+.header-badge.placar-badge { border-color: rgba(246, 211, 101, 0.3); background: rgba(246, 211, 101, 0.1); }
+
+.badge-dot.placar-dot { background-color: var(--color-gold); box-shadow: 0 0 8px var(--color-gold); }
+
+.gradient-text-placar {
+  background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Ícone do item no menu e no card da home. */
+.placar-icon { background: rgba(246, 211, 101, 0.15); border: 1px solid rgba(246, 211, 101, 0.25); }
+
+@media (prefers-reduced-motion: reduce) {
+  .placar-repetir,
+  .placar-convite,
+  .placar-aba {
+    transition: none;
+  }
+}

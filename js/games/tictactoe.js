@@ -2,7 +2,11 @@
  * Jogo da Velha — IA minimax com poda alfa-beta, 4 modos e escolha de símbolo.
  */
 
+import { criarPlacarPainel } from '../core/placar-painel.js';
+
 const HTML = `
+    <div class="jogo-com-placar">
+      <div class="jogo-com-placar-jogo">
       <header class="app-header">
         <div class="header-badge">
           <span class="badge-dot"></span>
@@ -131,9 +135,12 @@ const HTML = `
           No modo <strong>Força Máxima</strong>, a IA calcula a árvore completa de jogadas usando o algoritmo <strong>Minimax</strong> com busca em profundidade ótima. Matematicamente, é impossível derrotá-la — o melhor resultado possível contra ela é o empate!
         </p>
       </div>
+      </div>
+      <aside class="placar-lateral" aria-label="Placar"></aside>
+    </div>
 `;
 
-function montar(raiz, { audio, confetti, storage }) {
+function montar(raiz, { audio, confetti, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
   const playSound = audio.playSound;
   const triggerConfetti = confetti;
@@ -443,6 +450,9 @@ function montar(raiz, { audio, confetti, storage }) {
         statusText.innerHTML = `🏆 <strong>Incrível! Você venceu a IA!</strong>`;
         playSound('win');
         triggerConfetti();
+        // Só vitória contra a IA entra no placar da conta (o X×O acima conta os dois lados).
+        storage.set('vitorias', (Number(storage.get('vitorias', 0)) || 0) + 1);
+        conta?.registrar('tictactoe', { tipo: 'vitoria' });
       } else {
         statusText.innerHTML = `🤖 <strong>IA (${winner}) venceu!</strong> Tente novamente.`;
         playSound('defeat');
@@ -559,6 +569,8 @@ function montar(raiz, { audio, confetti, storage }) {
   audio.atualizarIcones();
 }
 
+let painel = null;
+
 export default {
   id: 'tictactoe',
   nome: 'Jogo da Velha',
@@ -569,9 +581,15 @@ export default {
   mount(raiz, ctx) {
     raiz.innerHTML = HTML;
     montar(raiz, ctx);
+    if (ctx.conta) {
+      painel = criarPlacarPainel({ conta: ctx.conta, jogo: 'velha', limite: 5, rotulo: 'Vitórias contra a IA' });
+      raiz.querySelector('.placar-lateral').append(painel.el);
+    }
   },
   pause() {},
-  resume() {},
+  resume() {
+    painel?.atualizar();
+  },
   recorde(storage) {
     const p = storage.get('placar');
     if (!p || !(p.x || p.o || p.ties)) return null;

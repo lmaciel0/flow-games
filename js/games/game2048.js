@@ -2,7 +2,11 @@
  * Jogo 2048 — motor lógico, animações e controles touch/teclado.
  */
 
+import { criarPlacarPainel } from '../core/placar-painel.js';
+
 const HTML = `
+    <div class="jogo-com-placar">
+      <div class="jogo-com-placar-jogo">
       <header class="app-header">
         <div class="header-badge g2048-badge">
           <span class="badge-dot g2048-dot"></span>
@@ -78,9 +82,12 @@ const HTML = `
           Utilize as <strong>Setas do Teclado (↑ ↓ ← →)</strong> ou <strong>W, A, S, D</strong> para mover os blocos. Quando blocos iguais se colidem, <strong>eles se unem somando seus valores</strong>!
         </p>
       </div>
+      </div>
+      <aside class="placar-lateral" aria-label="Placar"></aside>
+    </div>
 `;
 
-function montar(raiz, { audio, confetti, storage }) {
+function montar(raiz, { audio, confetti, storage, conta }) {
   const byId = (id) => raiz.querySelector('#' + id);
 
 
@@ -318,6 +325,7 @@ function montar(raiz, { audio, confetti, storage }) {
         playSound('win');
       } else if (isGameOver()) {
         state.gameOver = true;
+        enviarRecorde();
         showGameOverOverlay();
         playSound('gameover');
       }
@@ -372,6 +380,28 @@ function montar(raiz, { audio, confetti, storage }) {
   }
 
   // --- Placar e Armazenamento Local ---
+  // Recorde novo vai para o placar da conta com debounce: uma chamada por rajada de jogadas, não por movimento.
+  const DEBOUNCE_RECORDE_MS = 1500;
+  let recordePendente = 0;
+  let timerRecorde = null;
+
+  function agendarRecorde(valor) {
+    if (!conta) return;
+    recordePendente = Math.max(recordePendente, valor);
+    clearTimeout(timerRecorde);
+    timerRecorde = setTimeout(enviarRecorde, DEBOUNCE_RECORDE_MS);
+  }
+
+  // Fim de partida não espera o debounce: envia o pendente na hora.
+  function enviarRecorde() {
+    clearTimeout(timerRecorde);
+    timerRecorde = null;
+    if (recordePendente <= 0) return;
+    const valor = recordePendente;
+    recordePendente = 0;
+    conta?.registrar('game2048', { tipo: 'pontos', valor });
+  }
+
   function updateScoreUI(gained = 0) {
     currentScoreEl.textContent = state.score;
 
@@ -387,6 +417,7 @@ function montar(raiz, { audio, confetti, storage }) {
       state.bestScore = state.score;
       bestScoreEl.textContent = state.bestScore;
       storage.set('recorde', state.bestScore);
+      agendarRecorde(state.bestScore);
     }
   }
 
@@ -396,6 +427,7 @@ function montar(raiz, { audio, confetti, storage }) {
   }
 
   function newGame() {
+    enviarRecorde();
     initGrid();
     state.score = 0;
     state.previousState = null;
@@ -501,6 +533,16 @@ function montar(raiz, { audio, confetti, storage }) {
     }
   });
 
+  // Login/logout reescreve o recorde no storage: relê para a tela mostrar o da conta.
+  // O recorde pendente era da conta anterior: descarta, para não enviá-lo à nova.
+  conta?.assinar((evento) => {
+    if (evento?.tipo !== 'progresso') return;
+    clearTimeout(timerRecorde);
+    timerRecorde = null;
+    recordePendente = 0;
+    loadBestScore();
+  });
+
   loadBestScore();
   newGame();
 
@@ -508,6 +550,7 @@ function montar(raiz, { audio, confetti, storage }) {
 }
 
 let instancia = null;
+let painel = null;
 
 export default {
   id: 'game2048',
@@ -519,9 +562,14 @@ export default {
   mount(raiz, ctx) {
     raiz.innerHTML = HTML;
     instancia = montar(raiz, ctx);
+    if (ctx.conta) {
+      painel = criarPlacarPainel({ conta: ctx.conta, jogo: 'game2048', limite: 5, rotulo: 'Maior pontuação' });
+      raiz.querySelector('.placar-lateral').append(painel.el);
+    }
   },
   pause() {},
   resume() {
+    painel?.atualizar();
     // As peças são posicionadas por medida: reposiciona depois que a seção fica visível.
     setTimeout(() => instancia && instancia.render(), 50);
   },
