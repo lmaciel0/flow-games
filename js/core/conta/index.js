@@ -9,12 +9,21 @@ import { cliente as clienteReal } from './cliente.js';
 import * as storageReal from '../storage.js';
 import { SUPABASE_URL } from './config.js';
 import { validarUsuario, validarSenha } from './validar.js';
+import { normalizar } from './progresso.js';
 import {
   ICONES, codificarIcone, codificarFoto, decodificarAvatar, redimensionarFoto,
 } from './avatar.js';
 
+// Chaves locais (escopo `arcade:`) de cada jogo que entra no progresso da conta.
 const CHAVE_TERMO = 'termo:stats';
 const CHAVE_2048 = 'game2048:recorde';
+const CHAVE_SNAKE = 'snake:recorde';
+const CHAVE_TETRIS = 'tetris:recorde';
+const CHAVE_MINAS = 'minesweeper:recordes';
+const CHAVE_VELHA = 'tictactoe:vitorias';
+const CHAVE_BS_VITORIAS = 'blockstrike:vitorias';
+const CHAVE_BS_PARTIDAS = 'blockstrike:partidas';
+const CHAVE_BS_KD = 'blockstrike:melhorKD';
 // id da conta dona do progresso local ('' = progresso anônimo).
 const CHAVE_DONO = 'conta:dono';
 
@@ -28,11 +37,6 @@ const AVISO_FOTO = 'Conta criada, mas a foto não pôde ser enviada.';
 
 function falha(erro) {
   return { ok: false, erro };
-}
-
-function inteiro(valor) {
-  const n = Number(valor);
-  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
 }
 
 // Montada sem o cliente porque `cliente.urlFoto` é assíncrono e a UI precisa
@@ -87,16 +91,33 @@ export function criarConta({ cliente, storage, redimensionar = redimensionarFoto
   }
 
   function lerLocal() {
-    const termo = storage.get(CHAVE_TERMO, { wins: 0, streak: 0 });
-    return {
-      termo: { wins: inteiro(termo?.wins), streak: inteiro(termo?.streak) },
-      game2048: inteiro(storage.get(CHAVE_2048, 0)),
-    };
+    const minas = storage.get(CHAVE_MINAS, {});
+    return normalizar({
+      termo: storage.get(CHAVE_TERMO, { wins: 0, streak: 0 }),
+      game2048: storage.get(CHAVE_2048, 0),
+      snake: storage.get(CHAVE_SNAKE, 0),
+      tetris: storage.get(CHAVE_TETRIS, 0),
+      velha: storage.get(CHAVE_VELHA, 0),
+      minas,
+      blockstrike: {
+        vitorias: storage.get(CHAVE_BS_VITORIAS, 0),
+        partidas: storage.get(CHAVE_BS_PARTIDAS, 0),
+        melhorKD: storage.get(CHAVE_BS_KD, 0),
+      },
+    });
   }
 
-  function gravarLocal(p) {
-    storage.set(CHAVE_TERMO, { wins: inteiro(p?.termo?.wins), streak: inteiro(p?.termo?.streak) });
-    storage.set(CHAVE_2048, inteiro(p?.game2048));
+  function gravarLocal(progresso) {
+    const p = normalizar(progresso);
+    storage.set(CHAVE_TERMO, p.termo);
+    storage.set(CHAVE_2048, p.game2048);
+    storage.set(CHAVE_SNAKE, p.snake);
+    storage.set(CHAVE_TETRIS, p.tetris);
+    storage.set(CHAVE_VELHA, p.velha);
+    storage.set(CHAVE_MINAS, p.minas);
+    storage.set(CHAVE_BS_VITORIAS, p.blockstrike.vitorias);
+    storage.set(CHAVE_BS_PARTIDAS, p.blockstrike.partidas);
+    storage.set(CHAVE_BS_KD, p.blockstrike.melhorKD);
   }
 
   function limparLocal() {

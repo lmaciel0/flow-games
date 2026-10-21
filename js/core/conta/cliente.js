@@ -7,6 +7,7 @@
 
 import { SUPABASE_URL, SUPABASE_CHAVE } from './config.js';
 import { emailSintetico } from './validar.js';
+import { normalizar } from './progresso.js';
 
 const BUCKET_AVATARES = 'avatars';
 
@@ -69,11 +70,6 @@ function idDaSessao(sessao) {
   return id ? { id } : null;
 }
 
-function inteiro(valor) {
-  const n = Number(valor);
-  return Number.isFinite(n) ? Math.trunc(n) : 0;
-}
-
 function linhaDoPlacar(r) {
   return {
     posicao: Number(r.posicao),
@@ -84,13 +80,26 @@ function linhaDoPlacar(r) {
   };
 }
 
+function numero(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
 function rpcDoEvento(jogo, evento) {
   const tipo = evento?.tipo;
   if (jogo === 'termo' && tipo === 'vitoria') return ['registrar_vitoria_termo'];
   if (jogo === 'termo' && tipo === 'derrota') return ['registrar_derrota_termo'];
-  if (jogo === 'game2048' && tipo === 'pontos'
-    && typeof evento.valor === 'number' && Number.isFinite(evento.valor)) {
+  if (jogo === 'game2048' && tipo === 'pontos' && numero(evento.valor)) {
     return ['registrar_pontos_2048', { p_pontos: Math.trunc(evento.valor) }];
+  }
+  if ((jogo === 'snake' || jogo === 'tetris') && tipo === 'pontos' && numero(evento.valor)) {
+    return ['registrar_pontos', { p_jogo: jogo, p_pontos: Math.trunc(evento.valor) }];
+  }
+  if (jogo === 'minesweeper' && tipo === 'tempo' && typeof evento.nivel === 'string' && numero(evento.valor)) {
+    return ['registrar_tempo_minas', { p_nivel: evento.nivel, p_segundos: Math.trunc(evento.valor) }];
+  }
+  if (jogo === 'tictactoe' && tipo === 'vitoria') return ['registrar_vitoria_velha'];
+  if (jogo === 'blockstrike' && tipo === 'partida' && typeof evento.venceu === 'boolean') {
+    return ['registrar_partida_blockstrike', { p_venceu: evento.venceu, p_kd: numero(evento.kd) ? evento.kd : 0 }];
   }
   return null;
 }
@@ -206,20 +215,12 @@ export function criarCliente(fabrica = carregarCreateClient) {
     trocarAvatar: (codigo) => executar((sb) => rpcSemDados(sb, 'trocar_avatar', { p_avatar: codigo })),
 
     sincronizar: (progresso) => executar(async (sb) => {
-      const { data, error } = await sb.rpc('sincronizar_progresso', {
-        p_termo_wins: inteiro(progresso?.termo?.wins),
-        p_termo_streak: inteiro(progresso?.termo?.streak),
-        p_2048: inteiro(progresso?.game2048),
+      const { data, error } = await sb.rpc('sincronizar_progresso_v2', {
+        p_progresso: normalizar(progresso),
       });
       if (error) return falha(traduzir(error));
       if (!data || typeof data !== 'object' || !data.termo) return falha(ERRO_GENERICO);
-      return {
-        ok: true,
-        dados: {
-          termo: { wins: inteiro(data.termo.wins), streak: inteiro(data.termo.streak) },
-          game2048: inteiro(data.game2048),
-        },
-      };
+      return { ok: true, dados: normalizar(data) };
     }),
 
     registrar: (jogo, evento) => {
