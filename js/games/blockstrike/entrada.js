@@ -19,6 +19,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   let slotPendente = null;
   let recarregarPendente = false;
   let ativa = true; // pausado/em outra tela: não captura teclas do resto do hub
+  let cursorLivre = false; // soltou o mouse de propósito (B na compra): perder a trava não pausa nem retrava
   let aoPerder = () => {};
   let aoTabFn = () => {};
   let aoTeclaFn = () => {};
@@ -55,6 +56,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   }
 
   function travar() {
+    cursorLivre = false;
     try {
       const p = canvas.requestPointerLock();
       if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -63,9 +65,16 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     }
   }
 
+  // Solta o mouse sem abrir a pausa, para clicar no menu de compra.
+  function soltarCursor() {
+    cursorLivre = true;
+    limpar();
+    doc.exitPointerLock();
+  }
+
   function onMouseDown(e) {
     if (doc.pointerLockElement === canvas) botoes.add(e.button);
-    else if (ativa && e.target === canvas) travar(); // retrava com um clique no jogo
+    else if (ativa && !cursorLivre && e.target === canvas) travar(); // retrava com um clique no jogo
   }
 
   function onMouseUp(e) {
@@ -82,7 +91,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   function onLockChange() {
     if (doc.pointerLockElement === canvas) return;
     limpar();
-    aoPerder();
+    if (!cursorLivre) aoPerder();
   }
 
   // Chrome recusa a trava logo após um Esc: volta ao menu de pausa em vez de ficar sem mira.
@@ -133,6 +142,10 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
       return cmd;
     },
     travar,
+    soltarCursor,
+    // Fim do cursor solto sem prender: o próximo clique no canvas retrava e não vira tiro.
+    liberarClique() { cursorLivre = false; },
+    cursorSolto: () => cursorLivre,
     travado: () => doc.pointerLockElement === canvas,
     aoPerderTrava(fn) { aoPerder = fn; },
     aoTab(fn) { aoTabFn = fn; },

@@ -448,7 +448,7 @@ export function criarHud(raiz, handlers) {
   }
   const compra = el('div', { class: 'bs-loadout bs-compra', id: 'bs-compra', hidden: true },
     compraTitulo, compraColunas,
-    el('small', { class: 'bs-loadout-dica', texto: 'Compre com as teclas ou clicando. O que sobreviver continua com você.' }));
+    el('small', { class: 'bs-loadout-dica', texto: 'Compre com as teclas ou aperte B e clique. O que sobreviver continua com você.' }));
   palco.append(compra);
   let chaveCompra = '';
   const renderCompra = (v) => {

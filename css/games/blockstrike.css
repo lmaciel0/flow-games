@@ -365,6 +365,8 @@
   background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--radius-sm); color: var(--text-primary); font: inherit; font-size: 0.82rem;
 }
+/* O painel é transparente ao mouse; os botões só recebem clique com o cursor solto (B). */
+.bs-compra-item { pointer-events: auto; }
 .bs-compra-item:hover { border-color: rgba(249, 115, 22, 0.7); background: rgba(249, 115, 22, 0.14); }
 .bs-compra-item kbd { padding: 0 0.35rem; border-radius: 4px; background: rgba(255, 255, 255, 0.12); font-size: 0.7rem; }
 .bs-compra-item span { flex: 1; text-align: left; }

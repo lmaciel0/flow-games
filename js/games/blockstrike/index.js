@@ -529,8 +529,10 @@ function montar(raiz, ctx) {
       caixas: MAPA.caixas, eu: vista, entidades: mundo.entidades, avistados: p.avistados,
       sites: p.treino ? null : MAPA.bombsites, bomba: mundo.bomba,
     });
-    // Dica só enquanto o mouse nunca prendeu: depois de uma trava, perder a trava abre a pausa.
-    hud.mostrarDica(!p.lock.travou && (regras.fase === 'freeze' || regras.fase === 'jogo'));
+    // Freeze acabou com o mouse solto pelo B: devolve ao clique de sempre (retrava sem atirar).
+    if (regras.fase !== 'freeze' && p.entrada.cursorSolto()) p.entrada.liberarClique();
+    // Dica enquanto o mouse não está preso e não foi solto de propósito: perder uma trava presa abre a pausa.
+    hud.mostrarDica(!p.entrada.travado() && !p.entrada.cursorSolto() && (regras.fase === 'freeze' || regras.fase === 'jogo'));
     p.raf = requestAnimationFrame(quadro);
   }
 
@@ -638,13 +640,18 @@ function montar(raiz, ctx) {
       const eu = partida.mundo.entidades[partida.mundo.jogadorId];
       if (code === 'KeyF' && eu.vivo && partida.partida.fase !== 'fim-partida') partida.render.inspecionar();
       let usada = false;
+      if (partida.partida.fase === 'freeze' && partida.mundo.economia && code === 'KeyB') {
+        // CS2: B solta o mouse para clicar na compra e trava de novo, sem abrir a pausa.
+        if (partida.entrada.cursorSolto()) partida.entrada.travar(); else partida.entrada.soltarCursor();
+        return true;
+      }
       if (partida.partida.fase === 'freeze') usada = partida.mundo.economia ? hud.teclaCompra(code) : hud.teclaLoadout(code);
       else if (partida.treino) {
         if (code === 'KeyB') partida.loadoutAberto = !partida.loadoutAberto;
         else if (partida.loadoutAberto) usada = hud.teclaLoadout(code);
       }
       // Sem trava nunca houve pointerlockchange para abrir a pausa: o Esc abre direto.
-      if (code === 'Escape' && !partida.lock.travou) pausarPartida(false, true);
+      if (code === 'Escape' && !partida.entrada.travado()) pausarPartida(false, true);
       return usada;
     });
     entrada.travar(); // precisa estar dentro do gesto de clique
