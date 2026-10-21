@@ -434,8 +434,11 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     voltarParaRota(ent, c, grafo, caixas, proximoObjetivo(ent, c, mundo, grafo, rng));
   }
 
+  // Procurando o inimigo perdido: se ele reaparece, é combate normal.
+  if (c.estado === 'procura' && alvo) c.estado = 'combate';
+
   let destino = null;
-  if (c.estado === 'recuo' || c.estado === 'cobertura') {
+  if (c.estado === 'recuo' || c.estado === 'cobertura' || c.estado === 'procura') {
     destino = seguirRota(ent, c, grafo, dt, cmd);
     if (!destino) {
       if (!c.chegou) {
@@ -469,6 +472,7 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     cmd.yaw = girar(ent.yaw, yawPara(ent.pos, c.ultimaPos), dt);
     if (c.perdidoHa > PERDER_ALVO) {
       voltarParaRota(ent, c, grafo, caixas, waypointPerto(grafo, c.ultimaPos, caixas));
+      c.estado = 'procura';
     }
   } else {
     // C4: o objetivo mudou (plantada, caiu, outro bombsite) → refaz a rota.
