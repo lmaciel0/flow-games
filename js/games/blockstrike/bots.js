@@ -98,7 +98,7 @@ export function criarCerebro(ent, grafo, rng, caixas = [], mundo = null) {
     rajada: 0, pausaAte: 0, ultimoDanoDe: null,
     passoRota: 0, ultimaPos: null, perdidoHa: 0, esperaAte: 0, chegou: false,
     erro: { yaw: 0, pitch: 0 }, erroAte: 0, cabeca: false, municaoVista: null,
-    gatilho: false, emRajada: false, preso: 0, queriaAndar: false,
+    gatilho: false, emRajada: false, preso: 0, queriaAndar: false, recuou: false,
     ouvidoEm: -Infinity, ouvidoAte: 0, ouvidoPos: null, chaveBomba: bomba ? bomba.chave : null,
     proxGranada: 0, cegoVisto: 0, casaZ: ent.pos.z >= 0 ? 0 : 1, // metade do mapa onde nasceu
     desvioMira: sortear(rng, [-DESVIO_MIRA, DESVIO_MIRA]),
@@ -151,11 +151,15 @@ function destinoBomba(ent, mundo) {
   if (ent.time === b.terroristas) {
     if (b.plantada) return { chave: `site:${b.site}`, waypoint: sites[b.site]?.waypoint };
     if (b.portador === null && b.pos) {
-      // Só o terrorista vivo mais perto vai buscar a C4 solta; os outros esperam no bombsite.
+      // Só um terrorista vai buscar a C4 solta (o mais perto); os outros esperam no bombsite.
+      // Quem já está indo continua até pegar ou morrer: a rota pode se afastar da C4 antes de chegar,
+      // e comparar só a distância fazia dois bots trocarem a vez sem parar.
+      const outros = mundo.entidades.filter((o) => o !== ent && o.vivo && o.time === ent.time && o.bot);
       const meu = distXZ(ent.pos, b.pos);
-      const maisPerto = mundo.entidades.every((o) => o === ent || !o.vivo || o.time !== ent.time || !o.bot ||
-        distXZ(o.pos, b.pos) >= meu);
-      if (maisPerto) return { chave: 'solta', ponto: b.pos };
+      const jaVou = ent.cerebro?.chaveBomba === 'solta';
+      const outroVai = outros.some((o) => o.cerebro?.chaveBomba === 'solta');
+      const maisPerto = outros.every((o) => distXZ(o.pos, b.pos) >= meu);
+      if (jaVou || (!outroVai && maisPerto)) return { chave: 'solta', ponto: b.pos };
     }
     return { chave: `site:${b.siteAlvo}`, waypoint: sites[b.siteAlvo].waypoint };
   }
@@ -420,8 +424,13 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     const visto = vistos.some((v) => v.ent.id === atirador?.id);
     if (atirador && !visto && c.estado !== 'recuo') irParaCobertura(ent, c, grafo, caixas, atirador.pos, 'cobertura');
   }
-  if (alvo && ent.hp < HP_RECUO && c.estado !== 'recuo') {
-    if (irParaCobertura(ent, c, grafo, caixas, alvo.pos, 'recuo')) fumacaDeFuga(ent, c, alvo.pos, mundo, cmd);
+  // Ferido e vendo o inimigo: recua uma vez só por round. Recuar de novo a cada visada virava um vaivém
+  // sem fim (cobertura, espera, volta à rota, vê o inimigo, cobertura...); depois do recuo ele luta.
+  if (alvo && ent.hp < HP_RECUO && c.estado !== 'recuo' && !c.recuou) {
+    if (irParaCobertura(ent, c, grafo, caixas, alvo.pos, 'recuo')) {
+      c.recuou = true;
+      fumacaDeFuga(ent, c, alvo.pos, mundo, cmd);
+    }
   }
   // Cegado pela flash: larga o combate e vai para a cobertura mais perto do último inimigo visto.
   if (agora < (ent.cegoAte ?? 0) && c.cegoVisto !== ent.cegoAte) {
