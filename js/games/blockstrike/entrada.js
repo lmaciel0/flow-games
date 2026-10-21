@@ -6,8 +6,7 @@
 const SENS_MIN = 0.2;
 const SENS_MAX = 3;
 const RAD_POR_PIXEL = 0.002;
-const SLOTS = { Digit1: 'primaria', Digit2: 'pistola', Digit3: 'faca', KeyQ: 'anterior' }; // Q: última arma
-const GRANADAS = { KeyZ: 'flash', KeyX: 'smoke', KeyV: 'he' }; // arremesso rápido
+const SLOTS = { Digit1: 'primaria', Digit2: 'pistola', Digit3: 'faca', Digit4: 'granada', KeyQ: 'anterior' }; // Q: última arma
 const BLOQUEADAS = new Set(['Tab', 'Space']);
 
 export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
@@ -19,7 +18,6 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   let dPitch = 0;
   let slotPendente = null;
   let recarregarPendente = false;
-  let granadaPendente = null;
   let ativa = true; // pausado/em outra tela: não captura teclas do resto do hub
   let aoPerder = () => {};
   let aoTabFn = () => {};
@@ -39,7 +37,6 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     teclas.add(e.code);
     if (SLOTS[e.code]) slotPendente = SLOTS[e.code];
     if (e.code === 'KeyR') recarregarPendente = true;
-    if (GRANADAS[e.code]) granadaPendente = GRANADAS[e.code];
     if (e.code === 'Tab') aoTabFn(true);
     if (aoTeclaFn(e.code) === true) slotPendente = null; // tecla usada pelo jogo (painel de armas)
   }
@@ -126,13 +123,12 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
         zoom: botoes.has(2),
         recarregar: recarregarPendente,
         usar: teclas.has('KeyE'), // segurar: plantar ou desarmar a C4
-        granada: granadaPendente,
+        granada: null, // o jogador arremessa pela mão (clique); o campo fica para os bots
         slot: slotPendente,
         yaw,
         pitch,
       };
       recarregarPendente = false;
-      granadaPendente = null;
       slotPendente = null;
       return cmd;
     },
