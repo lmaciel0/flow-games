@@ -148,8 +148,11 @@ export function criarConta({ cliente, storage, redimensionar = redimensionarFoto
     const dono = storage.get(CHAVE_DONO, '');
     const zerou = dono !== '' && dono !== id;
     if (zerou) gravarLocal(null);
+    // Aparelho já ligado a esta conta: o servidor manda (lê sem enviar o local), para uma
+    // correção feita na conta valer. Progresso anônimo (dono vazio): junta, vale o melhor.
+    const doServidor = dono === id;
     storage.set(CHAVE_DONO, id);
-    const s = await cliente.sincronizar(lerLocal());
+    const s = await cliente.sincronizar(doServidor ? normalizar(null) : lerLocal());
     if (minha !== geracao) return null;
     if (!s?.ok || !s.dados) return zerou ? ['sessao', 'progresso'] : ['sessao'];
     gravarLocal(s.dados);

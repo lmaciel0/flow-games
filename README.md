@@ -27,7 +27,7 @@ Além dos sete jogos, o menu tem a página **Placar** (`#/placar`), que não con
 O login é **opcional**: dá para jogar tudo sem conta. Quem cria uma conta (só **nome de usuário e senha**, sem e-mail) ganha:
 
 - **Avatar** escolhido entre 8 ícones ou uma **foto** própria (reduzida para 128×128 no navegador antes do envio)
-- **Progresso entre aparelhos** em todos os jogos (vitórias e sequência do Termo, recordes de pontos, melhores tempos do Campo Minado, vitórias do Jogo da Velha e do Block Strike): ao entrar, o progresso do aparelho e o da conta se juntam e vale o melhor
+- **Progresso entre aparelhos** em todos os jogos (vitórias e sequência do Termo, recordes de pontos, melhores tempos do Campo Minado, vitórias do Jogo da Velha e do Block Strike): no primeiro login de um aparelho, o progresso dele e o da conta se juntam e vale o melhor; depois disso o servidor manda, e o aparelho só lê o que está na conta
 - **Placar compartilhado** de todos os jogos, na página `#/placar` (uma aba por ranking) e num painel ao lado de cada jogo (menos o Block Strike, que é tela cheia), com a sua posição sempre visível:
 
   | Jogo | Ranking |
