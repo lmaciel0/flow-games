@@ -351,6 +351,17 @@ export function criarSons(audio) {
       }));
     },
 
+    // MVP do round (o jogador): arpejo subindo e o acorde final segurado, em duas vozes.
+    mvp() {
+      const v = voz({ ganho: 0.5 });
+      if (!v) return;
+      [523, 659, 784, 1047].forEach((f, i) => {
+        tom(v, v.t0 + i * 0.1, { onda: 'triangle', freq: f, dur: 0.22, ganho: 0.3 });
+        tom(v, v.t0 + i * 0.1, { onda: 'square', freq: f * 2, dur: 0.08, ganho: 0.05 });
+      });
+      for (const f of [523, 659, 784, 1047]) tom(v, v.t0 + 0.45, { onda: 'triangle', freq: f, dur: 1.1, ganho: 0.16, ataque: 0.02 });
+    },
+
     // Recarga em três tempos ao longo de `duracao`: pente sai, pente entra, ferrolho.
     recarga(duracao = 2.5, distancia = 0, pan = 0) {
       const v = voz({ distancia, pan, ganho: 0.8 });

@@ -96,9 +96,11 @@ export function tickBomba(mundo, dt, agindo, eventos) {
         b.site = siteEm(mundo.mapa, e.pos);
         b.portador = null;
         b.restante = BOMBA.explode;
+        b.plantador = e.id;
         eventos.push({ tipo: 'plantada', id: e.id, site: b.site, ponto: { ...b.pos } });
       } else {
         b.desarmada = true;
+        b.desarmador = e.id;
         eventos.push({ tipo: 'desarmada', id: e.id });
       }
       b.acao = null;

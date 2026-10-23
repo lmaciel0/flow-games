@@ -6,7 +6,7 @@
  */
 
 import { MAPA } from './mapa.js';
-import { criarMundo, posicionarParaRound, passo, vivosPorTime } from './mundo.js';
+import { criarMundo, posicionarParaRound, passo, vivosPorTime, relatorioDano, mvpDoRound } from './mundo.js';
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
@@ -335,7 +335,8 @@ function montar(raiz, ctx) {
         else sons.oof(distDe(ev.vitima), panDe(ev.vitima));
         render.desmanchar(mundo.entidades[ev.vitima]);
         hud.morte({
-          assassino: mundo.entidades[ev.assassino] ?? null, vitima: mundo.entidades[ev.vitima],
+          assassino: mundo.entidades[ev.assassino] ?? null, assistente: mundo.entidades[ev.assistente] ?? null,
+          vitima: mundo.entidades[ev.vitima],
           arma: ev.arma, cabeca: ev.cabeca,
         });
       } else if (ev.tipo === 'recarga') {
@@ -440,6 +441,7 @@ function montar(raiz, ctx) {
     p.render.limparImpactos();
     hud.limparEfeitos();
     p.idVista = p.mundo.jogadorId;
+    p.mvp = null;
   }
 
   // Fim de partida: solta o mouse, mostra o resultado e grava as estatísticas (uma vez).
@@ -473,7 +475,13 @@ function montar(raiz, ctx) {
         const antes = eu.dinheiro;
         premiarRound(mundo, partida, partida.vencedorRound ?? null);
         hud.ganhou(eu.dinheiro - antes, 'Fim de round');
-        if (partida.vencedorRound) sons.fimRound(partida.vencedorRound === eu.time);
+        const mvp = mvpDoRound(mundo, partida.vencedorRound ?? null, partida.motivo);
+        const ent = mvp && mundo.entidades[mvp.id];
+        if (ent) ent.mvps += 1;
+        p.mvp = ent ? { nome: ent.nome, motivo: mvp.motivo, kills: mvp.kills, voce: ent.id === eu.id } : null;
+        // A fanfarra do MVP substitui a vinheta de vitória.
+        if (p.mvp?.voce) sons.mvp();
+        else if (partida.vencedorRound) sons.fimRound(partida.vencedorRound === eu.time);
       } else if (ev === 'fim-partida') finalizarPartida(p);
     }
     if (raiz.dataset.fase !== partida.fase) raiz.dataset.fase = partida.fase;
@@ -523,8 +531,11 @@ function montar(raiz, ctx) {
         : { ...arma, pente: def.pente }), spread, progressoRecarga,
       luneta: eu.vivo && Boolean(cmd.zoom && def?.zoomFov),
       loadout: p.treino && p.loadoutAberto, modo: p.treino ? 'treino' : 'partida',
-      vencedorRound: regras.vencedorRound, motivo: regras.motivo,
+      vencedorRound: regras.vencedorRound, motivo: regras.motivo, mvp: p.mvp ?? null,
       espectando: eu.vivo ? null : alvo.nome, entidades: mundo.entidades,
+      // Fora do treino, morto durante o round ou no fim dele.
+      relatorio: !p.treino && (regras.fase === 'fim-round' || (!eu.vivo && regras.fase === 'jogo'))
+        ? relatorioDano(mundo, eu.id) : null,
     };
   }
 
