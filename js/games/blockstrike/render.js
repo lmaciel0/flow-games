@@ -862,6 +862,8 @@ export function criarRender(canvas, mapa) {
     for (const r of rastros) r.linha.geometry.dispose();
     matRastro.dispose();
     geoGota.dispose();
+    geoFagulha.dispose();
+    for (const m of matsFagulha) m.dispose();
     matGota.dispose();
     Object.values(geo).forEach((g) => g.dispose());
     Object.values(mat).forEach((m) => m.dispose());

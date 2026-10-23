@@ -221,8 +221,14 @@ export function relatorioDano(mundo, id) {
 }
 
 // MVP do round, só no time vencedor: quem desarmou, quem plantou a C4 que explodiu, ou quem mais matou
-// (desempate pelo dano causado). Round sem abates nem bomba não tem MVP.
-export function mvpDoRound(mundo, vencedor, motivo) {
+// (desempate pelo dano causado). Round sem abates nem bomba não tem MVP. Soma a estrela em `mvps`.
+export function registrarMvp(mundo, vencedor, motivo) {
+  const mvp = mvpDoRound(mundo, vencedor, motivo);
+  if (mvp) mundo.entidades[mvp.id].mvps += 1;
+  return mvp;
+}
+
+function mvpDoRound(mundo, vencedor, motivo) {
   if (!vencedor) return null;
   const b = mundo.bomba;
   if (motivo === 'bomba-desarmada' && b?.desarmador != null) return { id: b.desarmador, motivo: 'desarmou' };
@@ -245,7 +251,9 @@ function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   if (alvo.time === atirador.time) return; // fogo amigo desligado (mas o corpo bloqueia o tiro)
   if (alvo.hp <= 0) return; // morte já registrada neste passo, só falta o `vivo` cair
   let dano = danoFixo ?? danoDe(tipo, golpe.parte);
-  const capacete = golpe.parte === 'cabeca' && Boolean(mundo.economia && alvo.equip.capacete); // tiro no capacete: fagulhas e "plink"
+  // Tiro no capacete (fagulhas e "plink"): sem colete o capacete não protege mais (ver danoComColete).
+  const capacete = golpe.parte === 'cabeca' && tipo !== 'faca' &&
+    Boolean(mundo.economia && alvo.equip.capacete && alvo.equip.colete > 0);
   if (mundo.economia) {
     const r = danoComColete(alvo.equip, golpe.parte, dano);
     dano = r.dano;

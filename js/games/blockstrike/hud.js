@@ -554,7 +554,7 @@ export function criarHud(raiz, handlers) {
     mostrar(danoArco, false);
   };
   let chaveRelatorio = '';
-  const vida = (r) => (r.acertos ? `${r.dano} em ${r.acertos}` : '—');
+  const textoDano = (r) => (r.acertos ? `${r.dano} em ${r.acertos}` : '—');
   const renderRelatorio = (linhas) => {
     const chave = linhas.map((l) => `${l.id}:${l.vivo}:${l.deu.dano}:${l.deu.acertos}:${l.levou.dano}:${l.levou.acertos}`).join('|');
     if (chave === chaveRelatorio) return;
@@ -563,7 +563,7 @@ export function criarHud(raiz, handlers) {
     for (const l of linhas) {
       corpo.append(el('tr', { class: l.vivo ? '' : 'morto' },
         el('td', {}, el('b', { class: `bs-time-${l.time}`, texto: l.nome })),
-        el('td', { class: 'bs-rel-deu', texto: vida(l.deu) }), el('td', { class: 'bs-rel-levou', texto: vida(l.levou) })));
+        el('td', { class: 'bs-rel-deu', texto: textoDano(l.deu) }), el('td', { class: 'bs-rel-levou', texto: textoDano(l.levou) })));
     }
     relatorio.replaceChildren(el('table', {},
       el('thead', {}, el('tr', {}, ...['Dano no round', 'Deu', 'Levou'].map((x) => el('th', { texto: x })))), corpo));

@@ -6,7 +6,7 @@
  */
 
 import { MAPA } from './mapa.js';
-import { criarMundo, posicionarParaRound, passo, vivosPorTime, relatorioDano, mvpDoRound } from './mundo.js';
+import { criarMundo, posicionarParaRound, passo, vivosPorTime, relatorioDano, registrarMvp } from './mundo.js';
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
@@ -126,6 +126,9 @@ function anguloDe(eu, origem) {
   const vz = origem.pos.z - eu.pos.z;
   return (Math.atan2(vx * -f.z + vz * f.x, vx * f.x + vz * f.z) * 180) / Math.PI;
 }
+
+// Pan estéreo [-1, 1] de um ponto do mundo em relação à vista de `eu`.
+const panPonto = (eu, pt) => Math.sin((anguloDe(eu, { pos: pt }) * Math.PI) / 180);
 
 function montar(raiz, ctx) {
   raiz.dataset.fase = 'menu';
@@ -316,7 +319,7 @@ function montar(raiz, ctx) {
           render.fagulhasCapacete(ev.ponto);
           // O "plink" substitui o som de headshot de quem atirou; os outros ouvem pela distância.
           const proprio = ev.atirador === eu.id;
-          sons.plink(proprio ? 0 : distancia(ouvido, ev.ponto), proprio ? 0 : Math.sin((anguloDe(eu, { pos: ev.ponto }) * Math.PI) / 180));
+          sons.plink(proprio ? 0 : distancia(ouvido, ev.ponto), proprio ? 0 : panPonto(eu, ev.ponto));
         }
         if (ev.atirador === eu.id) {
           if (!ev.capacete) sons.acerto(ev.parte === 'cabeca');
@@ -365,7 +368,7 @@ function montar(raiz, ctx) {
     const { render } = p;
     const pt = ev.ponto;
     const dist = pt ? distancia(ouvido, pt) : 0;
-    const pan = pt ? Math.sin((anguloDe(eu, { pos: pt }) * Math.PI) / 180) : 0;
+    const pan = pt ? panPonto(eu, pt) : 0;
     if (ev.tipo === 'arremesso') sons.arremesso(ev.atirador === eu.id ? 0 : dist, ev.atirador === eu.id ? 0 : pan);
     else if (ev.tipo === 'granada-quique') sons.quiqueGranada(dist, pan);
     else if (ev.tipo === 'explosao-he') {
@@ -382,7 +385,7 @@ function montar(raiz, ctx) {
   function reagirBomba(p, ev, { eu, ouvido }) {
     const { mundo, render } = p;
     const dist = (pt) => (pt ? distancia(ouvido, pt) : 0);
-    const pan = (pt) => (pt ? Math.sin((anguloDe(eu, { pos: pt }) * Math.PI) / 180) : 0);
+    const pan = (pt) => (pt ? panPonto(eu, pt) : 0);
     if (ev.tipo === 'acao-inicio') {
       const ent = mundo.entidades[ev.id];
       sons.acaoC4(ev.acao, dist(ent.pos), ev.id === eu.id ? 0 : pan(ent.pos));
@@ -411,7 +414,7 @@ function montar(raiz, ctx) {
     if (p.proxBip > 0) return;
     p.proxBip = 0.12 + 0.88 * (b.restante / 40) ** 1.5;
     const eu = p.mundo.entidades[p.mundo.jogadorId];
-    sons.bipC4(distancia(olho(eu), b.pos), Math.sin((anguloDe(eu, { pos: b.pos }) * Math.PI) / 180), b.restante);
+    sons.bipC4(distancia(olho(eu), b.pos), panPonto(eu, b.pos), b.restante);
   }
 
   // Inimigos que algum aliado vivo enxerga (ou que atiraram há pouco): aparecem no radar.
@@ -475,9 +478,8 @@ function montar(raiz, ctx) {
         const antes = eu.dinheiro;
         premiarRound(mundo, partida, partida.vencedorRound ?? null);
         hud.ganhou(eu.dinheiro - antes, 'Fim de round');
-        const mvp = mvpDoRound(mundo, partida.vencedorRound ?? null, partida.motivo);
+        const mvp = registrarMvp(mundo, partida.vencedorRound ?? null, partida.motivo);
         const ent = mvp && mundo.entidades[mvp.id];
-        if (ent) ent.mvps += 1;
         p.mvp = ent ? { nome: ent.nome, motivo: mvp.motivo, kills: mvp.kills, voce: ent.id === eu.id } : null;
         // A fanfarra do MVP substitui a vinheta de vitória.
         if (p.mvp?.voce) sons.mvp();
