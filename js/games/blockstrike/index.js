@@ -267,7 +267,7 @@ function montar(raiz, ctx) {
     if (fundo.render) fundo.render.destruir();
     fundo = null;
   }
-  ligarFundo();
+  void ligarFundo();
 
   // Liga os eventos do passo a som e efeitos visuais, do ponto de vista do jogador.
   // Sons de outros saem com pan estéreo (esquerda/direita) e abafados pela distância.
@@ -608,7 +608,7 @@ function montar(raiz, ctx) {
 
   // Volta à rota: só redesenha a cena pausada. Quem retoma a simulação é o botão Continuar.
   function reexibir() {
-    if (raiz.dataset.fase === 'menu') ligarFundo();
+    if (raiz.dataset.fase === 'menu') void ligarFundo();
     if (partida && partida.pausado && partida.raf === null) partida.raf = requestAnimationFrame(quadroPausado);
   }
 
@@ -649,7 +649,7 @@ function montar(raiz, ctx) {
     hud.mostrarMenu();
     raiz.dataset.fase = 'menu';
     raiz.dataset.pausado = 'false';
-    ligarFundo();
+    void ligarFundo();
   }
 
   async function iniciar() {
