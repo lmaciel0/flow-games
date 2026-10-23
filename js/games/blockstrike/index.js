@@ -177,6 +177,7 @@ function montar(raiz, ctx) {
   let geracao = 0; // cada iniciar() guarda a sua; sair/destruir invalida a que ainda espera o import
   let pausaPendente = false; // o hub pediu pausa enquanto a partida ainda carregava
 
+  let previaMenu = null; // arma clicada no loadout e ainda não equipada: só o boneco do menu segura
   const hud = criarHud(raiz, {
     jogar: () => iniciar(),
     escolherPrimaria(tipo) {
@@ -244,6 +245,9 @@ function montar(raiz, ctx) {
       cfg.sensLuneta = n;
       ctx.storage.set('sensLuneta', n);
     },
+    previaArma(tipo) {
+      previaMenu = tipo;
+    },
     mudarBoneco(time) {
       cfg.boneco = time;
       ctx.storage.set('boneco', time);
@@ -265,7 +269,7 @@ function montar(raiz, ctx) {
       if (fundo !== f) return; // desligado enquanto carregava
       f.render = criarRender(canvas, MAPA);
       const quadro = () => {
-        f.render.desenharVitrine(cfg.boneco, cfg.primaria);
+        f.render.desenharVitrine(cfg.boneco, previaMenu ?? cfg.primaria);
         f.raf = requestAnimationFrame(quadro);
       };
       quadro();

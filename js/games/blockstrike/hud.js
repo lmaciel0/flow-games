@@ -3,7 +3,8 @@
  * Só toca no DOM dentro de `raiz`; `atualizar` escreve apenas quando o valor muda.
  */
 
-import { ARMAS, ITENS } from './config.js';
+import { ARMAS, ITENS, familia } from './config.js';
+import { MODELOS_ARMA } from './modelos.js';
 
 const PRIMARIAS = ['rifle', 'fuzil', 'rifleS', 'smg', 'miniSmg', 'smgS', 'sniper', 'escopeta'];
 const TECLAS_LOADOUT = PRIMARIAS.map((_, i) => `Digit${i + 1}`);
@@ -13,6 +14,13 @@ const MODOS = [
   ['treino', 'Treino livre', 'Sozinho no mapa · munição infinita'],
 ];
 const TAMANHOS = [['normal', 'Normal'], ['grande', 'Grande']];
+// Loadout no estilo do CS2: uma coluna por categoria, com a cor da categoria na base do card.
+const COLUNAS_LOADOUT = [
+  ['Pistola', ['pistola']],
+  ['Intermediárias', ['smg', 'miniSmg', 'smgS', 'escopeta']],
+  ['Rifles', ['rifle', 'fuzil', 'rifleS', 'sniper']],
+];
+const COR_CATEGORIA = { pistola: '#4b69ff', smg: '#8847ff', escopeta: '#8847ff', rifle: '#d32ce6', sniper: '#eb4b4b' };
 const BONECOS = [['azul', 'CT'], ['laranja', 'T']];
 const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ciano'], ['#facc15', 'Amarela'], ['#f472b6', 'Rosa']];
 const CONTROLES = [
@@ -86,6 +94,32 @@ function criarGradeArmas(id, aoEscolher, comTecla) {
   return grade;
 }
 
+// Miniatura de lado: as caixas do modelo projetadas no plano z/y, com o cano para a direita.
+function desenharMiniatura(tipo, largura = 264, altura = 104) {
+  const tela = el('canvas', { width: largura, height: altura, class: 'bs-miniatura' });
+  const c = tela.getContext('2d');
+  if (!c) return tela;
+  const caixas = MODELOS_ARMA[tipo].caixas;
+  const xs = caixas.flatMap(([, , d, , , z]) => [-z - d / 2, -z + d / 2]);
+  const ys = caixas.flatMap(([, h, , , y]) => [y - h / 2, y + h / 2]);
+  const x0 = Math.min(...xs);
+  const y1 = Math.max(...ys);
+  const larg = Math.max(...xs) - x0;
+  const alt = y1 - Math.min(...ys);
+  const esc = Math.min((largura - 24) / larg, (altura - 20) / alt);
+  const ox = (largura - larg * esc) / 2;
+  const oy = (altura - alt * esc) / 2;
+  for (const [, h, d, , y, z, madeira] of caixas) {
+    const x = ox + (-z - d / 2 - x0) * esc;
+    const topo = oy + (y1 - (y + h / 2)) * esc;
+    c.fillStyle = madeira ? '#a57a45' : '#7d858f';
+    c.fillRect(x, topo, d * esc, h * esc);
+    c.fillStyle = 'rgba(255, 255, 255, 0.18)'; // brilho na aresta de cima
+    c.fillRect(x, topo, d * esc, Math.max(1.5, h * esc * 0.2));
+  }
+  return tela;
+}
+
 function marcarSelecionada(grade, tipo) {
   for (const b of grade.children) b.classList.toggle('selecionada', b.dataset.arma === tipo);
 }
@@ -106,13 +140,51 @@ export function criarHud(raiz, handlers) {
   const hud = {};
   const escolher = (tipo) => {
     estado.primaria = tipo;
-    marcarSelecionada(gradeMenu, tipo);
+    previa = tipo;
+    marcarLoadout();
     marcarSelecionada(gradeLoadout, tipo);
     handlers.escolherPrimaria(tipo);
   };
 
   // --- Menu ---
-  const gradeMenu = criarGradeArmas('bs-menu-armas', escolher, false);
+  // Clicar no card mostra a arma na mão do boneco; Equipar salva (vale no treino e no menu).
+  let previa = estado.primaria;
+  const cardsLoadout = new Map();
+  const btnEquipar = el('button', { type: 'button', id: 'bs-equipar', class: 'bs-equipar', texto: 'Equipada' });
+  const gradeEquip = el('div', { class: 'bs-equip-grade', id: 'bs-menu-armas' });
+  for (const [titulo, tipos] of COLUNAS_LOADOUT) {
+    const col = el('div', { class: 'bs-equip-col' }, el('h4', { class: 'bs-equip-cat', texto: titulo }));
+    for (const tipo of tipos) {
+      const card = el('button', { type: 'button', class: 'bs-card-arma', 'data-arma': tipo },
+        desenharMiniatura(tipo), el('span', { texto: ARMAS[tipo].nome }));
+      card.style.setProperty('--cor-cat', COR_CATEGORIA[familia(tipo)]);
+      card.addEventListener('click', () => verPrevia(tipo));
+      cardsLoadout.set(tipo, card);
+      col.append(card);
+    }
+    gradeEquip.append(col);
+  }
+  const marcarLoadout = () => {
+    for (const [tipo, card] of cardsLoadout) {
+      card.classList.toggle('selecionada', tipo === previa);
+      card.classList.toggle('equipada', tipo === estado.primaria || tipo === 'pistola');
+    }
+    for (const col of gradeEquip.children) {
+      col.classList.toggle('ativa', Boolean(col.querySelector(`[data-arma="${estado.primaria}"]`)));
+    }
+    const inicial = ARMAS[previa].slot !== 'primaria';
+    btnEquipar.disabled = inicial || previa === estado.primaria;
+    escrever(btnEquipar, inicial ? 'Inicial' : previa === estado.primaria ? 'Equipada' : 'Equipar');
+  };
+  const verPrevia = (tipo) => {
+    previa = tipo;
+    marcarLoadout();
+    handlers.previaArma(tipo === estado.primaria ? null : tipo);
+  };
+  btnEquipar.addEventListener('click', () => {
+    if (ARMAS[previa].slot === 'primaria') escolher(previa);
+    handlers.previaArma(null);
+  });
   const selDif = el('select', { id: 'bs-dificuldade' });
   for (const [v, rotulo] of DIFICULDADES) selDif.append(el('option', { value: v, texto: rotulo }));
   selDif.addEventListener('change', () => {
@@ -218,7 +290,8 @@ export function criarHud(raiz, handlers) {
   const ABAS = [
     ['jogar', 'Jogar', [gradeModos, campoDif]],
     ['loadout', 'Loadout', [
-      el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária (treino)' }), gradeMenu),
+      el('div', { class: 'bs-equip-topo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária · treino e menu' }), btnEquipar),
+      gradeEquip,
       el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Boneco do menu' }), gradeBoneco),
     ]],
     ['opcoes', 'Opções', [
@@ -239,14 +312,16 @@ export function criarHud(raiz, handlers) {
     paineis.push(el('div', { class: 'bs-menu-painel', 'data-aba': id }, ...conteudo));
   }
   const abrirAba = (id) => {
+    menu.dataset.aba = id;
     for (const b of abas.children) b.classList.toggle('selecionada', b.dataset.aba === id);
     for (const pn of paineis) mostrar(pn, pn.dataset.aba === id);
+    if (id !== 'loadout' && previa !== estado.primaria) verPrevia(estado.primaria); // saiu sem equipar: volta a arma equipada
   };
-  abrirAba('jogar');
   const menu = el('div', { class: 'bs-overlay bs-menu', id: 'bs-menu' },
     el('header', { class: 'bs-menu-topo' }, el('h2', { class: 'bs-menu-titulo', texto: 'Block Strike' }), abas),
     el('section', { class: 'bs-menu-lado' }, menuTexto, ...paineis),
     btnJogar);
+  abrirAba('jogar');
 
   // SECOES
   palco.append(menu);
@@ -263,7 +338,8 @@ export function criarHud(raiz, handlers) {
     for (const sel of selsTamanho) sel.value = tamanho;
     selMira.value = corMira;
     palco.style.setProperty('--cor-mira', corMira);
-    marcarSelecionada(gradeMenu, primaria);
+    previa = primaria;
+    marcarLoadout();
     marcarSelecionada(gradeLoadout, primaria);
     selDif.value = dificuldade;
     rngSens.value = String(sensibilidade);
