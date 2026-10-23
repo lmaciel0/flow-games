@@ -781,6 +781,26 @@ export function criarRender(canvas, mapa) {
     renderer.render(scene, camera);
   }
 
+  // Fundo do menu: um boneco parado no spawn A e a câmera indo e voltando devagar na frente dele.
+  let vitrine = null;
+  function desenharVitrine(time = 'azul') {
+    if (!vitrine || vitrine.time !== time) {
+      if (vitrine) scene.remove(vitrine.g);
+      vitrine = { ...criarAvatar({ time }), time };
+      vitrine.g.position.set(0, 0, 24);
+    }
+    const t = performance.now() / 1000;
+    const a = Math.sin(t * 0.25) * 0.5;
+    const respira = Math.sin(t * 1.6) * 0.04;
+    vitrine.bracoE.rotation.x = respira;
+    vitrine.bracoD.rotation.x = respira;
+    const p = vitrine.g.position;
+    camera.position.set(p.x - Math.sin(a) * 3, 1.5, p.z - Math.cos(a) * 3);
+    camera.lookAt(p.x, 1.1, p.z);
+    camera.rotateY(0.3); // boneco à direita da tela, painel do menu à esquerda
+    renderer.render(scene, camera);
+  }
+
   function destruir() {
     observador.disconnect();
     geoMapa.dispose();
@@ -807,6 +827,6 @@ export function criarRender(canvas, mapa) {
 
   return {
     desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, desmanchar,
-    explosao, clarao: clarearFlash, inspecionar, destruir,
+    explosao, clarao: clarearFlash, inspecionar, desenharVitrine, destruir,
   };
 }
