@@ -187,13 +187,14 @@ function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   if (alvo.time === atirador.time) return; // fogo amigo desligado (mas o corpo bloqueia o tiro)
   if (alvo.hp <= 0) return; // morte já registrada neste passo, só falta o `vivo` cair
   let dano = danoFixo ?? danoDe(tipo, golpe.parte);
+  const capacete = golpe.parte === 'cabeca' && Boolean(mundo.economia && alvo.equip.capacete); // tiro no capacete: fagulhas e "plink"
   if (mundo.economia) {
     const r = danoComColete(alvo.equip, golpe.parte, dano);
     dano = r.dano;
     alvo.equip.colete = r.colete;
   }
   alvo.hp = Math.max(0, alvo.hp - dano);
-  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto });
+  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto, capacete });
   if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
   if (alvo.hp > 0) return;
   // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.

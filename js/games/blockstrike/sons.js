@@ -183,6 +183,16 @@ export function criarSons(audio) {
       }
     },
 
+    // Bala no capacete: "PLINK" agudo e curto, com o estalo do metal na frente. Ouve quem estiver perto.
+    plink(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.7 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 6000, dur: 0.015, ganho: 0.45 });
+      for (const [f, g] of [[3700, 0.45], [5550, 0.25], [8300, 0.12]]) {
+        tom(v, v.t0, { onda: 'sine', freq: f, freqFim: f * 0.97, dur: 0.2, ganho: g });
+      }
+    },
+
     // Levou tiro: baque abafado no peito.
     dano() {
       const v = voz({ ganho: 0.7 });

@@ -312,8 +312,14 @@ function montar(raiz, ctx) {
         if (ev.atirador === p.idVista) render.golpe(ev.forte);
       } else if (ev.tipo === 'acerto') {
         if (ev.ponto) render.sangue(ev.ponto, ev.parte === 'cabeca');
+        if (ev.capacete && ev.ponto) {
+          render.fagulhasCapacete(ev.ponto);
+          // O "plink" substitui o som de headshot de quem atirou; os outros ouvem pela distância.
+          const proprio = ev.atirador === eu.id;
+          sons.plink(proprio ? 0 : distancia(ouvido, ev.ponto), proprio ? 0 : Math.sin((anguloDe(eu, { pos: ev.ponto }) * Math.PI) / 180));
+        }
         if (ev.atirador === eu.id) {
-          sons.acerto(ev.parte === 'cabeca');
+          if (!ev.capacete) sons.acerto(ev.parte === 'cabeca');
           hud.acerto(ev.parte === 'cabeca');
         }
         if (ev.alvo === eu.id) {
