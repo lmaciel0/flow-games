@@ -480,3 +480,43 @@
 .bs-compra-col.ativa small { color: #fb923c; }
 .bs-compra-col small kbd { padding: 0 0.3rem; border-radius: 4px; background: rgba(255, 255, 255, 0.12); }
 .bs-menu .bs-armas { flex-wrap: wrap; justify-content: flex-start; }
+
+/* Loadout estilo CS2: colunas por categoria, cards com miniatura e a cor da categoria na base. */
+.bs-menu[data-aba="loadout"] .bs-menu-lado { width: min(40rem, 64%); }
+.bs-equip-topo { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; }
+.bs-equipar {
+  font: inherit; font-weight: 800; font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 0.45rem 1.4rem; border: 0; border-radius: 4px; cursor: pointer; color: #1a1406; background: #f2c14e;
+  transition: filter var(--transition-fast);
+}
+.bs-equipar:hover:not(:disabled) { filter: brightness(1.12); }
+.bs-equipar:disabled { cursor: default; color: var(--text-secondary); background: rgba(255, 255, 255, 0.1); }
+.bs-equip-grade {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; width: 100%;
+  padding: 0.6rem; background: rgba(10, 12, 18, 0.72); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px;
+}
+.bs-equip-col { display: flex; flex-direction: column; gap: 0.45rem; min-width: 0; }
+.bs-equip-cat {
+  margin: 0; padding: 0.2rem 0.5rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-secondary); border-radius: 3px;
+}
+.bs-equip-col.ativa .bs-equip-cat { color: #1a1406; background: #f2c14e; }
+.bs-card-arma {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 0.15rem; padding: 0.3rem 0.35rem 0.45rem;
+  font: inherit; font-size: 0.72rem; color: var(--text-secondary); text-align: left; cursor: pointer;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 3px; transition: border-color var(--transition-fast);
+}
+.bs-card-arma::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--cor-cat);
+}
+.bs-card-arma:hover { border-color: rgba(255, 255, 255, 0.35); }
+.bs-card-arma.selecionada { border-color: #f2c14e; box-shadow: 0 0 10px rgba(242, 193, 78, 0.35); color: var(--text-primary); }
+.bs-card-arma.equipada span::after { content: ' ✓'; color: #f2c14e; }
+.bs-miniatura { width: 100%; height: auto; aspect-ratio: 264 / 104; }
+
+@media (max-width: 480px) {
+  .bs-menu[data-aba="loadout"] .bs-menu-lado { width: 100%; }
+  .bs-equip-grade { gap: 0.3rem; padding: 0.3rem; }
+  .bs-card-arma { font-size: 0.6rem; }
+}
