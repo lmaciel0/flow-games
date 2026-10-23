@@ -17,6 +17,11 @@ const TIROS = {
   sniper: { estalo: [2000, 0.12, 0.75], corpo: [600, 0.65, 0.85], soco: [110, 32, 0.26, 0.95] },
   escopeta: { estalo: [1800, 0.1, 0.6], corpo: [520, 0.45, 0.9], soco: [100, 32, 0.22, 1] },
   pistola: { estalo: [3000, 0.05, 0.45], corpo: [1500, 0.12, 0.4], soco: [210, 70, 0.08, 0.45] },
+  fuzil: { estalo: [2300, 0.08, 0.6], corpo: [800, 0.28, 0.68], soco: [130, 40, 0.14, 0.8] },
+  miniSmg: { estalo: [3600, 0.04, 0.38], corpo: [1500, 0.12, 0.4], soco: [200, 70, 0.06, 0.42] },
+  // Silenciadas: "pff" curto e baixo, sem o estrondo do corpo.
+  rifleS: { estalo: [4200, 0.03, 0.2], corpo: [1800, 0.07, 0.14], soco: [260, 90, 0.04, 0.16] },
+  smgS: { estalo: [4600, 0.025, 0.17], corpo: [2000, 0.06, 0.12], soco: [280, 100, 0.035, 0.14] },
 };
 
 // Atenuação por distância: quase cheio até REF_DIST e zero em DIST_AUDIVEL.

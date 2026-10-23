@@ -474,3 +474,9 @@
   .bs-menu-lado { width: 60%; padding: 0.5rem; gap: 0.5rem; }
   .bs-menu #bs-jogar { right: 0.5rem; bottom: 0.5rem; padding: 0.5rem 1.4rem; font-size: 0.9rem; }
 }
+
+/* Compra em dois passos: o grupo aberto pelo número fica aceso, os outros apagam. */
+.bs-compra-colunas.escolhendo .bs-compra-col:not(.ativa) { opacity: 0.4; }
+.bs-compra-col.ativa small { color: #fb923c; }
+.bs-compra-col small kbd { padding: 0 0.3rem; border-radius: 4px; background: rgba(255, 255, 255, 0.12); }
+.bs-menu .bs-armas { flex-wrap: wrap; justify-content: flex-start; }
