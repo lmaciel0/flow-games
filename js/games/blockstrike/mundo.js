@@ -23,6 +23,8 @@ const ALCANCE_RASTRO = 80; // tiro que não bate em nada: o rastro visual para a
 const QUEDA_POUSO = 4; // m/s de queda a partir dos quais o pouso faz barulho
 const COSTAS = -0.5; // cosseno: atacante atrás do alvo (faca pelas costas)
 const VIDA_RUIDO = 2; // s que um ruído de passo continua audível para os bots
+const OUVIR_TIRO = 40; // m: tiro sem silenciador chama a atenção dos bots até aqui
+const OUVIR_TIRO_SILENCIADO = 8;
 
 function criarEntidade(id, nome, time, bot, primariaEscolhida) {
   return {
@@ -49,8 +51,15 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
 
 // Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
 // Quem anda com Shift ou agachado não emite 'passo', então não deixa rastro aqui.
+// Tiros também: os normais chegam longe, os silenciados só de perto.
 function registrarRuidos(mundo, eventos) {
   for (const ev of eventos) {
+    if (ev.tipo === 'tiro') {
+      const e = mundo.entidades[ev.atirador];
+      const alcance = ARMAS[ev.arma].silenciador ? OUVIR_TIRO_SILENCIADO : OUVIR_TIRO;
+      mundo.ruidos.push({ id: e.id, time: e.time, x: e.pos.x, z: e.pos.z, em: mundo.tempo, alcance });
+      continue;
+    }
     if (ev.tipo !== 'passo' && ev.tipo !== 'pouso') continue;
     const e = mundo.entidades[ev.id];
     mundo.ruidos.push({ id: e.id, time: e.time, x: e.pos.x, z: e.pos.z, em: mundo.tempo });

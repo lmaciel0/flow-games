@@ -5,13 +5,15 @@
 
 import { ARMAS, ITENS } from './config.js';
 
-const PRIMARIAS = ['rifle', 'smg', 'sniper', 'escopeta'];
+const PRIMARIAS = ['rifle', 'fuzil', 'rifleS', 'smg', 'miniSmg', 'smgS', 'sniper', 'escopeta'];
+const TECLAS_LOADOUT = PRIMARIAS.map((_, i) => `Digit${i + 1}`);
 const DIFICULDADES = [['facil', 'Fácil'], ['medio', 'Médio'], ['dificil', 'Difícil']];
 const MODOS = [
   ['partida', 'Partida 5x5', 'Desarme com economia · primeiro a 13'],
   ['treino', 'Treino livre', 'Sozinho no mapa · munição infinita'],
 ];
 const TAMANHOS = [['normal', 'Normal'], ['grande', 'Grande']];
+const BONECOS = [['azul', 'CT'], ['laranja', 'T']];
 const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ciano'], ['#facc15', 'Amarela'], ['#f472b6', 'Rosa']];
 const CONTROLES = [
   ['WASD', 'andar'], ['Mouse', 'mirar'], ['Clique', 'atirar'], ['Botão direito', 'luneta / estocada'],
@@ -92,7 +94,7 @@ export function criarHud(raiz, handlers) {
   const palco = raiz.querySelector('.bs-stage');
   const estado = {
     primaria: 'rifle', dificuldade: 'medio', sensibilidade: 1, modo: 'partida', volume: 0.8,
-    tamanho: 'normal', corMira: CORES_MIRA[0][0],
+    tamanho: 'normal', corMira: CORES_MIRA[0][0], sensLuneta: 1, boneco: 'azul',
   };
   const timers = new Set();
   const depois = (fn, ms) => {
@@ -127,6 +129,30 @@ export function criarHud(raiz, handlers) {
     escrever(rotuloSens, n.toFixed(1));
     handlers.mudarSensibilidade(n);
   });
+  const rngLuneta = el('input', {
+    type: 'range', id: 'bs-sens-luneta', min: '0.3', max: '2', step: '0.05', value: '1',
+  });
+  const rotuloLuneta = el('span', { class: 'bs-valor', texto: '1.00' });
+  rngLuneta.addEventListener('input', () => {
+    const n = Number(rngLuneta.value);
+    estado.sensLuneta = n;
+    escrever(rotuloLuneta, n.toFixed(2));
+    handlers.mudarSensLuneta(n);
+  });
+  // Boneco do fundo do menu: CT (azul) ou T (laranja). Só visual.
+  const gradeBoneco = el('div', { class: 'bs-armas', id: 'bs-boneco' });
+  for (const [time, rotulo] of BONECOS) {
+    const b = el('button', { type: 'button', class: 'bs-arma-btn', 'data-time': time, texto: rotulo });
+    b.addEventListener('click', () => {
+      estado.boneco = time;
+      marcarBoneco();
+      handlers.mudarBoneco(time);
+    });
+    gradeBoneco.append(b);
+  }
+  const marcarBoneco = () => {
+    for (const b of gradeBoneco.children) b.classList.toggle('selecionada', b.dataset.time === estado.boneco);
+  };
   const btnJogar = el('button', { id: 'bs-jogar', type: 'button', class: 'action-btn primary-btn', texto: 'Jogar' });
   btnJogar.addEventListener('click', () => handlers.jogar());
 
@@ -191,9 +217,13 @@ export function criarHud(raiz, handlers) {
   // Menu no estilo do CS2: abas na barra do topo, painel à esquerda e o Jogar fixo no canto.
   const ABAS = [
     ['jogar', 'Jogar', [gradeModos, campoDif]],
-    ['loadout', 'Loadout', [el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária (treino)' }), gradeMenu)]],
+    ['loadout', 'Loadout', [
+      el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Arma primária (treino)' }), gradeMenu),
+      el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Boneco do menu' }), gradeBoneco),
+    ]],
     ['opcoes', 'Opções', [
       campo('Sensibilidade', el('span', { class: 'bs-slider' }, rngSens, rotuloSens)),
+      campo('Sensibilidade da luneta', el('span', { class: 'bs-slider' }, rngLuneta, rotuloLuneta)),
       campo('Volume', el('span', { class: 'bs-slider' }, rngVol, rotuloVol)),
       campo('Mira', selMira),
       criarControlesTela(''),
@@ -222,9 +252,12 @@ export function criarHud(raiz, handlers) {
   palco.append(menu);
 
   // Aplica o que está salvo no storage aos controles do menu.
-  hud.definirConfig = ({ primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira }) => {
-    Object.assign(estado, { primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira });
+  hud.definirConfig = ({ primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira, sensLuneta, boneco }) => {
+    Object.assign(estado, { primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira, sensLuneta, boneco });
     marcarModo();
+    marcarBoneco();
+    rngLuneta.value = String(sensLuneta);
+    escrever(rotuloLuneta, Number(sensLuneta).toFixed(2));
     rngVol.value = String(volume);
     escrever(rotuloVol, `${Math.round(volume * 100)}%`);
     for (const sel of selsTamanho) sel.value = tamanho;
@@ -438,20 +471,22 @@ export function criarHud(raiz, handlers) {
   const gradeLoadout = criarGradeArmas('bs-loadout-armas', escolher, true);
   const loadout = el('div', { class: 'bs-loadout', id: 'bs-loadout', hidden: true },
     el('strong', { texto: 'Escolha sua arma' }), gradeLoadout,
-    el('small', { class: 'bs-loadout-dica', texto: 'Teclas 1 a 4. Vale para este round e os seguintes.' }));
+    el('small', { class: 'bs-loadout-dica', texto: 'Teclas 1 a 8. Vale para este round e os seguintes.' }));
   palco.append(loadout);
   marcarSelecionada(gradeLoadout, estado.primaria);
   // Digit1–Digit4 no freeze: o index chama isto a partir de entrada.aoTecla.
-  // --- Menu de compra (partida com economia): teclas 1-9 e 0 compram na ordem dos itens ---
+  // --- Menu de compra (partida com economia): como no CS, um número abre o grupo e o seguinte compra o item ---
   const ordemItens = Object.keys(ITENS);
+  const itensDoGrupo = GRUPOS_COMPRA.map(([grupo]) => ordemItens.filter((i) => ITENS[i].grupo === grupo));
+  let grupoAtivo = -1;
   const botoesCompra = new Map();
   const compraTitulo = el('strong', { texto: 'Compra' });
   const compraColunas = el('div', { class: 'bs-compra-colunas' });
-  for (const [grupo, rotulo] of GRUPOS_COMPRA) {
-    const col = el('div', { class: 'bs-compra-col' }, el('small', { texto: rotulo }));
-    for (const id of ordemItens.filter((i) => ITENS[i].grupo === grupo)) {
+  for (const [g, [, rotulo]] of GRUPOS_COMPRA.entries()) {
+    const col = el('div', { class: 'bs-compra-col' }, el('small', {}, el('kbd', { texto: String(g + 1) }), ` ${rotulo}`));
+    for (const [n, id] of itensDoGrupo[g].entries()) {
       const b = el('button', { type: 'button', class: 'bs-compra-item', 'data-item': id },
-        el('kbd', { texto: String((ordemItens.indexOf(id) + 1) % 10) }),
+        el('kbd', { texto: String(n + 1) }),
         el('span', { texto: ITENS[id].nome }), el('em', { texto: dolar(ITENS[id].preco) }));
       b.addEventListener('click', () => handlers.comprar(id));
       botoesCompra.set(id, b);
@@ -461,7 +496,7 @@ export function criarHud(raiz, handlers) {
   }
   const compra = el('div', { class: 'bs-loadout bs-compra', id: 'bs-compra', hidden: true },
     compraTitulo, compraColunas,
-    el('small', { class: 'bs-loadout-dica', texto: 'Compre com as teclas ou aperte B e clique. O que sobreviver continua com você.' }));
+    el('small', { class: 'bs-loadout-dica', texto: 'Número do grupo e depois do item (Backspace volta), ou aperte B e clique. O que sobreviver continua com você.' }));
   palco.append(compra);
   let chaveCompra = '';
   const renderCompra = (v) => {
@@ -477,10 +512,29 @@ export function criarHud(raiz, handlers) {
       b.title = i.motivo ? ROTULO_MOTIVO[i.motivo] ?? '' : '';
     }
   };
+  const abrirGrupo = (g) => {
+    grupoAtivo = g;
+    compraColunas.classList.toggle('escolhendo', g >= 0);
+    [...compraColunas.children].forEach((col, i) => col.classList.toggle('ativa', i === g));
+  };
   hud.teclaCompra = (code) => {
+    if (compra.hidden) {
+      if (grupoAtivo >= 0) abrirGrupo(-1);
+      return false;
+    }
+    if (code === 'Backspace' && grupoAtivo >= 0) {
+      abrirGrupo(-1);
+      return true;
+    }
     const i = TECLAS_COMPRA.indexOf(code);
-    if (i < 0 || compra.hidden) return false;
-    handlers.comprar(ordemItens[i]);
+    if (i < 0) return false;
+    if (grupoAtivo < 0) {
+      if (i < GRUPOS_COMPRA.length) abrirGrupo(i);
+    } else {
+      const id = itensDoGrupo[grupoAtivo][i];
+      if (id) handlers.comprar(id);
+      abrirGrupo(-1);
+    }
     return true;
   };
   // Dinheiro e equipamento na base da tela; "+$" sobe quando entra dinheiro.
@@ -498,7 +552,7 @@ export function criarHud(raiz, handlers) {
   hud.loadoutAberto = () => !loadout.hidden;
   hud.textoLoadout = (texto) => escrever(loadout.querySelector('.bs-loadout-dica'), texto);
   hud.teclaLoadout = (code) => {
-    const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code);
+    const i = TECLAS_LOADOUT.indexOf(code);
     if (i < 0 || loadout.hidden) return false;
     escolher(PRIMARIAS[i]);
     return true;

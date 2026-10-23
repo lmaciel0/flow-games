@@ -5,11 +5,10 @@
 
 import * as THREE from '../../vendor/three.module.min.js';
 import { olho } from './fisica.js';
-import { ARMAS } from './config.js';
+import { ARMAS, FOV_PADRAO } from './config.js';
 import { SAQUE } from './armas.js';
 import { criarRng } from './rng.js';
 
-const FOV_PADRAO = 75;
 const PITCH_CAM = Math.PI / 2 - 0.01; // pitch + recuo nunca passa da vertical
 const COR_CABECA = 0xf5cd30;
 const COR_TIME = { azul: 0x2f6fde, laranja: 0xf08a24 };
@@ -21,6 +20,9 @@ const MAX_GOTAS = 48;
 const VIDA_GOTA = 0.45;
 const POS_VIEW = { x: 0.24, y: -0.22, z: -0.4 }; // arma em repouso, no espaço da câmera
 const VEL_OLHO = 10; // 1/s: suaviza a câmera ao agachar e levantar
+const VEL_ZOOM = 18; // 1/s: a luneta abre e fecha deslizando o campo de visão
+// Boneco segurando a arma: braços para a frente (rad, ordem YXZ) e a arma na altura das mãos.
+const POSE = { bracoD: [1.25, 0.2], bracoE: [1.4, -0.7], arma: { x: 0.17, y: 1.27, z: -0.45 } };
 
 // Armas em primeira pessoa: [largura, altura, profundidade, x, y, z, madeira?] no espaço da câmera.
 // A primeira caixa é o corpo (define a altura do clarão); `boca` é o z do cano.
@@ -30,9 +32,30 @@ const MODELOS_ARMA = {
     boca: -0.68,
     pente: 2,
   },
+  fuzil: {
+    caixas: [[0.08, 0.1, 0.52, 0, 0, -0.1], [0.035, 0.035, 0.28, 0, 0.01, -0.52], [0.06, 0.2, 0.07, 0, -0.14, -0.02], [0.08, 0.11, 0.22, 0, -0.02, 0.28, 1]],
+    boca: -0.72,
+    pente: 2,
+  },
+  // Silenciadas: o cano grosso e comprido é o silenciador.
+  rifleS: {
+    caixas: [[0.07, 0.09, 0.5, 0, 0, -0.1], [0.05, 0.05, 0.32, 0, 0.01, -0.52], [0.06, 0.14, 0.06, 0, -0.11, 0.02], [0.07, 0.1, 0.2, 0, -0.02, 0.28]],
+    boca: -0.74,
+    pente: 2,
+  },
   smg: {
     caixas: [[0.07, 0.09, 0.32, 0, 0, -0.05], [0.03, 0.03, 0.14, 0, 0.01, -0.32], [0.05, 0.2, 0.05, 0, -0.14, 0.04]],
     boca: -0.45,
+    pente: 2,
+  },
+  miniSmg: {
+    caixas: [[0.06, 0.1, 0.24, 0, 0, -0.02], [0.03, 0.03, 0.08, 0, 0.01, -0.18], [0.04, 0.22, 0.04, 0, -0.15, 0]],
+    boca: -0.24,
+    pente: 2,
+  },
+  smgS: {
+    caixas: [[0.07, 0.09, 0.32, 0, 0, -0.05], [0.05, 0.05, 0.26, 0, 0.01, -0.34], [0.05, 0.2, 0.05, 0, -0.14, 0.04]],
+    boca: -0.5,
     pente: 2,
   },
   sniper: {
@@ -168,12 +191,10 @@ export function criarRender(canvas, mapa) {
     tronco: new THREE.BoxGeometry(0.5, 0.6, 0.28).translate(0, 0.3, 0),
     braco: topo(0.18, 0.6, 0.18),
     perna: topo(0.22, 0.8, 0.22),
-    armaAvatar: new THREE.BoxGeometry(0.08, 0.1, 0.55),
     sombra: new THREE.CircleGeometry(0.42, 16).rotateX(-Math.PI / 2),
   };
   const mat = {
     cabeca: new THREE.MeshLambertMaterial({ color: COR_CABECA }),
-    armaAvatar: new THREE.MeshLambertMaterial({ color: 0x2a2c31 }),
     olho: new THREE.MeshBasicMaterial({ color: 0x111111 }),
     sombra: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }),
   };
@@ -192,19 +213,56 @@ export function criarRender(canvas, mapa) {
       return m;
     };
     parte(geo.tronco, mat[ent.time], 0, 0.8);
-    parte(geo.cabeca, mat.cabeca, 0, 1.4);
-    parte(geo.olho, mat.olho, -0.1, 1.62).position.z = -0.2;
-    parte(geo.olho, mat.olho, 0.1, 1.62).position.z = -0.2;
+    // Cabeça e olhos num grupo com pivô no pescoço: o idle vira a cabeça inteira.
+    const cabeca = new THREE.Group();
+    cabeca.position.y = 1.4;
+    g.add(cabeca);
+    cabeca.add(new THREE.Mesh(geo.cabeca, mat.cabeca));
+    for (const x of [-0.1, 0.1]) {
+      const olhoM = new THREE.Mesh(geo.olho, mat.olho);
+      olhoM.position.set(x, 0.22, -0.2);
+      cabeca.add(olhoM);
+    }
     const escuro = mat[`${ent.time}Escuro`];
     const bracoE = parte(geo.braco, escuro, -0.34, 1.4);
     const bracoD = parte(geo.braco, escuro, 0.34, 1.4);
+    bracoE.rotation.order = 'YXZ';
+    bracoD.rotation.order = 'YXZ';
+    bracoE.rotation.y = POSE.bracoE[1];
+    bracoD.rotation.y = POSE.bracoD[1];
     const pernaE = parte(geo.perna, escuro, -0.12, 0.8);
     const pernaD = parte(geo.perna, escuro, 0.12, 0.8);
-    const arma = parte(geo.armaAvatar, mat.armaAvatar, 0.22, 1.18);
-    arma.position.z = -0.32;
+    const arma = new THREE.Group();
+    arma.position.set(POSE.arma.x, POSE.arma.y, POSE.arma.z);
+    g.add(arma);
     parte(geo.sombra, mat.sombra, 0, 0.03); // sombra de blob: ancora o boneco no chão sem sombra dinâmica
     scene.add(g);
-    return { g, bracoE, bracoD, pernaE, pernaD, dist: ent.distAndada, amp: 0 };
+    const a = { g, cabeca, bracoE, bracoD, pernaE, pernaD, arma, tipo: undefined, dist: ent.distAndada ?? 0, amp: 0, fase: (ent.id ?? 0) * 1.7 };
+    respirar(a, 0);
+    return a;
+  }
+
+  // Troca o modelo na mão do boneco: as mesmas caixas da arma em primeira pessoa (a granada não aparece).
+  function armarAvatar(a, tipo) {
+    a.tipo = tipo;
+    a.arma.clear();
+    const modelo = MODELOS_ARMA[tipo];
+    if (!modelo) return;
+    for (const [w, h, d, x, y, z, claro] of modelo.caixas) {
+      const chave = `${w},${h},${d}`;
+      if (!geoArma.has(chave)) geoArma.set(chave, new THREE.BoxGeometry(w, h, d));
+      const m = new THREE.Mesh(geoArma.get(chave), tipo === 'faca' && !claro ? matFaca : claro ? matArmaClara : matArma);
+      m.position.set(x, y, z);
+      a.arma.add(m);
+    }
+  }
+
+  // Idle: os braços sobem e descem com a respiração e a arma acompanha as mãos.
+  function respirar(a, t) {
+    const r = Math.sin(t * 1.6 + a.fase) * 0.035;
+    a.bracoE.rotation.x = POSE.bracoE[0] + r;
+    a.bracoD.rotation.x = POSE.bracoD[0] + r;
+    a.arma.position.y = POSE.arma.y + r * 0.57;
   }
 
   function atualizarAvatar(ent, idVista) {
@@ -218,14 +276,15 @@ export function criarRender(canvas, mapa) {
     a.g.position.set(ent.pos.x, ent.pos.y, ent.pos.z);
     a.g.rotation.y = ent.yaw;
     a.g.scale.y = ent.agachado ? 1.2 / 1.8 : 1;
+    const tipo = ent.armas?.[ent.slot]?.tipo ?? null;
+    if (tipo !== a.tipo) armarAvatar(a, tipo);
     const andou = ent.distAndada - a.dist;
     a.dist = ent.distAndada;
     a.amp += ((andou > 0.0005 ? 0.8 : 0) - a.amp) * 0.3;
     const balanco = Math.sin(ent.distAndada * 4) * a.amp;
     a.pernaE.rotation.x = balanco;
     a.pernaD.rotation.x = -balanco;
-    a.bracoE.rotation.x = -balanco;
-    a.bracoD.rotation.x = balanco;
+    respirar(a, performance.now() / 1000); // os braços seguram a arma: não balançam ao andar
   }
 
   // Marcas de impacto: anel de 64 caixas pretas reaproveitadas.
@@ -718,8 +777,9 @@ export function criarRender(canvas, mapa) {
     const vista = mundo.entidades[idVista];
     const fov = zoomFov ?? FOV_PADRAO;
     if (fov !== fovAtual) {
-      fovAtual = fov;
-      camera.fov = fov;
+      fovAtual += (fov - fovAtual) * Math.min(1, dt * VEL_ZOOM);
+      if (Math.abs(fov - fovAtual) < 0.3) fovAtual = fov;
+      camera.fov = fovAtual;
       camera.updateProjectionMatrix();
     }
     const o = olho(vista);
@@ -783,17 +843,20 @@ export function criarRender(canvas, mapa) {
 
   // Fundo do menu: um boneco parado no spawn A e a câmera indo e voltando devagar na frente dele.
   let vitrine = null;
-  function desenharVitrine(time = 'azul') {
+  function desenharVitrine(time = 'azul', tipo = 'rifle') {
     if (!vitrine || vitrine.time !== time) {
       if (vitrine) scene.remove(vitrine.g);
       vitrine = { ...criarAvatar({ time }), time };
       vitrine.g.position.set(0, 0, 24);
+      vitrine.g.rotation.y = -0.7; // em 3/4, virado para o centro da tela: a arma aparece de lado
     }
+    if (vitrine.tipo !== tipo) armarAvatar(vitrine, tipo);
     const t = performance.now() / 1000;
     const a = Math.sin(t * 0.25) * 0.5;
-    const respira = Math.sin(t * 1.6) * 0.04;
-    vitrine.bracoE.rotation.x = respira;
-    vitrine.bracoD.rotation.x = respira;
+    // Idle do menu: respira, olha em volta e passa o peso de uma perna para a outra.
+    respirar(vitrine, t);
+    vitrine.cabeca.rotation.y = Math.sin(t * 0.45) * 0.35;
+    vitrine.g.rotation.z = Math.sin(t * 0.8) * 0.015;
     const p = vitrine.g.position;
     camera.position.set(p.x - Math.sin(a) * 3, 1.5, p.z - Math.cos(a) * 3);
     camera.lookAt(p.x, 1.1, p.z);

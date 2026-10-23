@@ -4,7 +4,7 @@
  * O equipamento comprado (`e.equip`) vale enquanto o jogador sobrevive; morrer perde tudo.
  */
 
-import { COLETE, ECONOMIA, ITENS, MAX_GRANADAS } from './config.js';
+import { COLETE, ECONOMIA, ITENS, MAX_GRANADAS, familia } from './config.js';
 import { criarArma } from './armas.js';
 
 export const equipVazio = () => ({
@@ -34,7 +34,7 @@ const limitar = (n) => Math.min(ECONOMIA.maximo, n);
 // Dinheiro por abate, conforme a arma; só conta inimigo.
 export function premiarKill(atirador, tipoArma) {
   if (atirador.dinheiro === undefined) return;
-  atirador.dinheiro = limitar(atirador.dinheiro + (ECONOMIA.recompensaKill[tipoArma] ?? 300));
+  atirador.dinheiro = limitar(atirador.dinheiro + (ECONOMIA.recompensaKill[familia(tipoArma)] ?? 300));
 }
 
 // Fim do round: o vencedor ganha o bônus de vitória; quem perde ganha o de derrota, que cresce a cada derrota seguida.

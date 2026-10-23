@@ -14,6 +14,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   const teclas = new Set();
   const botoes = new Set();
   let sens = Math.max(SENS_MIN, Math.min(SENS_MAX, sensibilidade));
+  let fatorMira = 1; // luneta aberta: o giro encolhe junto com o campo de visão
   let dYaw = 0; // giro do mouse acumulado desde o último comando
   let dPitch = 0;
   let slotPendente = null;
@@ -51,8 +52,8 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
 
   function onMouseMove(e) {
     if (doc.pointerLockElement !== canvas) return;
-    dYaw -= e.movementX * sens * RAD_POR_PIXEL;
-    dPitch -= e.movementY * sens * RAD_POR_PIXEL;
+    dYaw -= e.movementX * sens * fatorMira * RAD_POR_PIXEL;
+    dPitch -= e.movementY * sens * fatorMira * RAD_POR_PIXEL;
   }
 
   function travar() {
@@ -156,6 +157,7 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
       if (!valor) limpar();
     },
     definirSensibilidade(n) { sens = Math.max(SENS_MIN, Math.min(SENS_MAX, n)); },
+    definirFatorMira(f) { fatorMira = f; },
     destruir() {
       doc.removeEventListener('keydown', onKeyDown);
       doc.removeEventListener('keyup', onKeyUp);

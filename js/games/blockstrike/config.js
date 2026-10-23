@@ -58,7 +58,11 @@ export const ECONOMIA = {
 // id → { nome, preco, grupo }. `kit` só vale para CT; as granadas têm limite por tipo.
 export const ITENS = {
   rifle: { nome: 'Rifle', preco: 2700, grupo: 'arma' },
+  fuzil: { nome: 'Fuzil', preco: 3100, grupo: 'arma' },
+  rifleS: { nome: 'Rifle-S', preco: 2900, grupo: 'arma' },
   smg: { nome: 'SMG', preco: 1250, grupo: 'arma' },
+  miniSmg: { nome: 'Mini SMG', preco: 1050, grupo: 'arma' },
+  smgS: { nome: 'SMG-S', preco: 1400, grupo: 'arma' },
   sniper: { nome: 'Sniper', preco: 4750, grupo: 'arma' },
   escopeta: { nome: 'Escopeta', preco: 1200, grupo: 'arma' },
   colete: { nome: 'Colete', preco: 650, grupo: 'equip' },
@@ -78,19 +82,40 @@ export const COLETE = { pontos: 100, corpo: 0.55, cabeca: 0.6 };
 // Multiplicador de dano por parte do corpo atingida.
 export const MULT_PARTE = { cabeca: 4, tronco: 1, pernas: 0.75 };
 
+// Campo de visão sem zoom (graus); a luneta usa o `zoomFov` da arma.
+export const FOV_PADRAO = 75;
+
 // Teto do recuo acumulado (rad): a mira sobe até aqui e para.
 export const RECUO_MAX = 0.08;
 
 // rpm = tiros por minuto; recarga em segundos; spreadBase/spreadMov em radianos.
+// `familia`: variantes contam como a arma base na recompensa do abate e no jeito do bot lutar.
+// `silenciador`: tiro baixo, sem clarão na ponta e ouvido pelos bots só de perto.
 // vel = velocidade correndo (m/s) com a arma na mão: faca > pistola > SMG > escopeta > rifle > sniper.
 export const ARMAS = {
   rifle: {
     nome: 'Rifle', slot: 'primaria', vel: 5.1, dano: 36, rpm: 600, pente: 30, reserva: 90,
     recarga: 2.5, auto: true, spreadBase: 0.004, spreadMov: 0.06, recuo: 0.012,
   },
+  fuzil: {
+    nome: 'Fuzil', slot: 'primaria', familia: 'rifle', vel: 5.0, dano: 40, rpm: 540, pente: 25, reserva: 75,
+    recarga: 2.6, auto: true, spreadBase: 0.005, spreadMov: 0.07, recuo: 0.016,
+  },
+  rifleS: {
+    nome: 'Rifle-S', slot: 'primaria', familia: 'rifle', silenciador: true, vel: 5.1, dano: 33, rpm: 600, pente: 20,
+    reserva: 80, recarga: 2.4, auto: true, spreadBase: 0.003, spreadMov: 0.06, recuo: 0.01,
+  },
   smg: {
     nome: 'SMG', slot: 'primaria', vel: 5.6, dano: 26, rpm: 850, pente: 30, reserva: 120,
     recarga: 2.0, auto: true, spreadBase: 0.008, spreadMov: 0.02, recuo: 0.008,
+  },
+  miniSmg: {
+    nome: 'Mini SMG', slot: 'primaria', familia: 'smg', vel: 5.7, dano: 21, rpm: 1050, pente: 32, reserva: 128,
+    recarga: 1.8, auto: true, spreadBase: 0.01, spreadMov: 0.025, recuo: 0.007,
+  },
+  smgS: {
+    nome: 'SMG-S', slot: 'primaria', familia: 'smg', silenciador: true, vel: 5.6, dano: 24, rpm: 800, pente: 25,
+    reserva: 100, recarga: 2.1, auto: true, spreadBase: 0.007, spreadMov: 0.02, recuo: 0.007,
   },
   sniper: {
     nome: 'Sniper', slot: 'primaria', vel: 4.8, dano: 115, rpm: 41, pente: 5, reserva: 20,
@@ -122,6 +147,9 @@ export const ARMAS = {
     auto: false, spreadBase: 0, spreadMov: 0, recuo: 0,
   },
 };
+
+// Tipo base da arma (a própria, se não for variante).
+export const familia = (tipo) => ARMAS[tipo]?.familia ?? tipo;
 
 // reacao em segundos; erroMira em radianos; chanceCabeca em [0,1]; alturaTronco em m (ponto de mira no corpo).
 export const DIFICULDADE = {

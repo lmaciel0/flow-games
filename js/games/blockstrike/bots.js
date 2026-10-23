@@ -4,7 +4,7 @@
  * `pensar` devolve o mesmo Comando que a entrada do jogador (yaw/pitch absolutos).
  */
 
-import { ARMAS, BOMBA, DIFICULDADE, RECUO_MAX } from './config.js';
+import { ARMAS, BOMBA, DIFICULDADE, RECUO_MAX, familia } from './config.js';
 import { olho, direcao, temVisada } from './fisica.js';
 import { caminho, maisProximo, coberturaPerto } from './navegacao.js';
 import { siteEm } from './bomba.js';
@@ -40,7 +40,9 @@ const ALCANCE_FLASH = [6, 25];
 const FUMACA_RECUO = 6; // m à frente para a smoke que cobre a fuga
 const DESVIO_MIRA = 0.15; // rad: variação da mira parada no posto entre os CTs
 
-const PESOS = [['rifle', 0.55], ['smg', 0.25], ['escopeta', 0.2]];
+const PESOS = [
+  ['rifle', 0.35], ['fuzil', 0.1], ['rifleS', 0.1], ['smg', 0.13], ['miniSmg', 0.06], ['smgS', 0.06], ['escopeta', 0.2],
+];
 
 export function escolherPrimaria(indiceNoTime, rng) {
   if (indiceNoTime === 0) return 'sniper';
@@ -153,7 +155,7 @@ export function ouvir(ent, mundo, c) {
   let melhor = null;
   for (const r of mundo.ruidos ?? []) {
     if (r.time === ent.time || r.em <= c.ouvidoEm) continue;
-    if (distXZ(ent.pos, r) > ALCANCE_OUVIDO) continue;
+    if (distXZ(ent.pos, r) > (r.alcance ?? ALCANCE_OUVIDO)) continue;
     if (melhor === null || r.em > melhor.em) melhor = r;
   }
   return melhor;
@@ -320,7 +322,7 @@ function atacar(ent, c, alvo, mundo, dif, dt, rng, cmd, { strafe }) {
     c.disparando = c.vistoHa >= dif.reacao && agora >= arma.prontaEm - 0.15;
   }
   c.gatilho = cmd.atirar;
-  if (strafe && (arma.tipo === 'smg' || arma.tipo === 'escopeta')) {
+  if (strafe && (familia(arma.tipo) === 'smg' || arma.tipo === 'escopeta')) {
     cmd.lado = Math.floor(agora / STRAFE_TROCA) % 2 ? 1 : -1;
   }
 }

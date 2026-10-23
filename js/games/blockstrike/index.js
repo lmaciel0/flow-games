@@ -10,7 +10,7 @@ import { criarMundo, posicionarParaRound, passo, vivosPorTime } from './mundo.js
 import { criarEntrada } from './entrada.js';
 import { criarRng } from './rng.js';
 import { criarSons } from './sons.js';
-import { ARMAS, DIFICULDADE, ECONOMIA } from './config.js';
+import { ARMAS, DIFICULDADE, ECONOMIA, FOV_PADRAO, familia } from './config.js';
 import { olho, direcao } from './fisica.js';
 import { visadaLivre, granadasDe } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
@@ -103,8 +103,13 @@ function lerConfig(storage) {
     tamanho: TAMANHOS.includes(tamanho) ? tamanho : 'normal',
     corMira: COR_MIRA.test(corMira) ? corMira : '#4ade80',
     volume: Number.isFinite(volume) ? clamp(volume, 0, 1) : 0.8,
+    sensLuneta: clamp(Number(storage.get('sensLuneta', 1)) || 1, 0.3, 2),
+    boneco: storage.get('boneco', 'azul') === 'laranja' ? 'laranja' : 'azul',
   };
 }
+
+// Giro do mouse com a luneta: encolhe na proporção do campo de visão (como no CS) vezes o ajuste do jogador.
+const fatorLuneta = (zoomFov, sens) => sens * Math.tan((zoomFov * Math.PI) / 360) / Math.tan((FOV_PADRAO * Math.PI) / 360);
 
 // Treino: sem rounds, o relógio só conta o tempo em jogo.
 function criarTreino() {
@@ -235,6 +240,14 @@ function montar(raiz, ctx) {
       ctx.storage.set('sensibilidade', n);
       if (partida) partida.entrada.definirSensibilidade(n);
     },
+    mudarSensLuneta(n) {
+      cfg.sensLuneta = n;
+      ctx.storage.set('sensLuneta', n);
+    },
+    mudarBoneco(time) {
+      cfg.boneco = time;
+      ctx.storage.set('boneco', time);
+    },
     continuar: () => retomar(),
     sairParaMenu: () => voltarAoMenu(),
     jogarDeNovo: () => iniciar(),
@@ -252,7 +265,7 @@ function montar(raiz, ctx) {
       if (fundo !== f) return; // desligado enquanto carregava
       f.render = criarRender(canvas, MAPA);
       const quadro = () => {
-        f.render.desenharVitrine();
+        f.render.desenharVitrine(cfg.boneco, cfg.primaria);
         f.raf = requestAnimationFrame(quadro);
       };
       quadro();
@@ -281,7 +294,7 @@ function montar(raiz, ctx) {
       if (ev.tipo === 'tiro') {
         sons.tiro(ev.arma, distDe(ev.atirador), panDe(ev.atirador));
         if (ev.atirador === p.idVista) {
-          render.flash();
+          if (!ARMAS[ev.arma].silenciador) render.flash();
           render.recuoVisual();
         }
         if (ev.atirador !== eu.id) p.ultimoTiro.set(ev.atirador, mundo.tempo);
@@ -306,7 +319,7 @@ function montar(raiz, ctx) {
       } else if (ev.tipo === 'morte') {
         if (ev.assassino === eu.id) {
           sons.abate(ev.cabeca);
-          if (!p.treino) hud.ganhou(ECONOMIA.recompensaKill[ev.arma] ?? 300, 'Abate');
+          if (!p.treino) hud.ganhou(ECONOMIA.recompensaKill[familia(ev.arma)] ?? 300, 'Abate');
         }
         if (ev.vitima === eu.id) sons.morte();
         else sons.oof(distDe(ev.vitima), panDe(ev.vitima));
@@ -513,10 +526,10 @@ function montar(raiz, ctx) {
     const jogador = mundo.entidades[mundo.jogadorId];
     const cmd = p.entrada.comando(jogador.yaw, jogador.pitch);
     // Só se atira com o round em jogo; fora disso (inclusive em fim-partida) o mundo segue sem tiros.
-    // No freeze as teclas 1–4 escolhem a primária (hud.teclaLoadout): o slot do comando é ignorado.
+    // No freeze as teclas 1–8 escolhem a primária (hud.teclaLoadout): o slot do comando é ignorado.
     const atira = regras.fase === 'jogo';
     const cmdJogador = atira ? cmd : { ...cmd, atirar: false, usar: false, granada: null, slot: regras.fase === 'freeze' ? null : cmd.slot };
-    // Painel de armas aberto no treino: 1–4 escolhem a primária, não trocam de slot.
+    // Painel de armas aberto no treino: 1–8 escolhem a primária, não trocam de slot.
     if (p.treino && p.loadoutAberto) cmdJogador.slot = null;
     const armaMao = jogador.vivo && jogador.armas[jogador.slot];
     if (atira && cmd.atirar && !p.cliqueAntes && armaMao && armaMao.tipo !== 'granada' && armaMao.municao === 0 && armaMao.reserva === 0) sons.vazio();
@@ -545,6 +558,7 @@ function montar(raiz, ctx) {
     }
     p.cliqueAntes = cmd.atirar;
     const zoomFov = cmd.zoom && jogador.vivo ? ARMAS[jogador.armas[jogador.slot].tipo].zoomFov : undefined;
+    p.entrada.definirFatorMira(zoomFov ? fatorLuneta(zoomFov, cfg.sensLuneta) : 1);
     p.render.desenhar(mundo, p.idVista, { zoomFov });
     hud.atualizar(estadoVisivel(p, cmd));
     p.avistarEm -= dt;
@@ -720,7 +734,7 @@ function montar(raiz, ctx) {
       hud.esconderFim();
       hud.mostrarPausa(false);
       hud.limparEfeitos();
-      hud.textoLoadout(treino ? 'Teclas 1 a 4 escolhem · B fecha.' : 'Teclas 1 a 4. Vale para este round e os seguintes.');
+      hud.textoLoadout(treino ? 'Teclas 1 a 8 escolhem · B fecha.' : 'Teclas 1 a 8. Vale para este round e os seguintes.');
       hud.mostrarHud(true);
       raiz.dataset.fase = partida.partida.fase;
       raiz.dataset.pausado = 'false';
