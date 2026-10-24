@@ -47,7 +47,7 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [], danos: new Map() };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [], fogos: [], danos: new Map() };
 }
 
 // Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
@@ -254,7 +254,7 @@ function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   // Tiro no capacete (fagulhas e "plink"): sem colete o capacete não protege mais (ver danoComColete).
   const capacete = golpe.parte === 'cabeca' && tipo !== 'faca' &&
     Boolean(mundo.economia && alvo.equip.capacete && alvo.equip.colete > 0);
-  if (mundo.economia) {
+  if (mundo.economia && tipo !== 'molotov') { // o fogo ignora o colete, como no CS
     const r = danoComColete(alvo.equip, golpe.parte, dano);
     dano = r.dano;
     alvo.equip.colete = r.colete;
@@ -262,7 +262,8 @@ function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   registrarDano(mundo, atirador.id, alvo.id, Math.min(dano, alvo.hp));
   alvo.hp = Math.max(0, alvo.hp - dano);
   eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, arma: tipo, parte: golpe.parte, dano, ponto: golpe.ponto, capacete });
-  if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
+  // Fogo não conta: a cada pulso o bot replanejaria a cobertura; quem trata o fogo é `evitarFogo` (bots.js).
+  if (alvo.bot && alvo.cerebro && tipo !== 'molotov') alvo.cerebro.ultimoDanoDe = atirador.id;
   if (alvo.hp > 0) return;
   // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.
   atirador.kills += 1;

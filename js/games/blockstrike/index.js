@@ -26,6 +26,7 @@ import {
 } from './economia.js';
 
 const DT_MAX = 0.05;
+const FOGO_AVISO = 0.5; // s entre hitmarkers/dor do mesmo par atacante→vítima no fogo
 const AVISTAR_A_CADA = 0.25; // s entre recálculos dos inimigos avistados (radar)
 const ALCANCE_AVISTAR = 50;
 const MODOS = ['partida', 'treino'];
@@ -329,7 +330,11 @@ function montar(raiz, ctx) {
         sons.golpe(ev.forte, ev.acerto, distDe(ev.atirador), panDe(ev.atirador));
         if (ev.atirador === p.idVista) render.golpe(ev.forte);
       } else if (ev.tipo === 'acerto') {
-        if (ev.ponto) render.sangue(ev.ponto, ev.parte === 'cabeca');
+        // Fogo: pulsos a cada 0,25 s. Sem sangue, e hitmarker e dor no máximo a cada FOGO_AVISO.
+        const fogo = ev.arma === 'molotov';
+        if (fogo && mundo.tempo - (p.avisoFogo.get(`${ev.atirador}>${ev.alvo}`) ?? -Infinity) < FOGO_AVISO) continue;
+        if (fogo) p.avisoFogo.set(`${ev.atirador}>${ev.alvo}`, mundo.tempo);
+        if (ev.ponto && !fogo) render.sangue(ev.ponto, ev.parte === 'cabeca');
         if (ev.capacete && ev.ponto) {
           render.fagulhasCapacete(ev.ponto);
           // O "plink" substitui o som de headshot de quem atirou; os outros ouvem pela distância.
@@ -337,12 +342,12 @@ function montar(raiz, ctx) {
           sons.plink(proprio ? 0 : distancia(ouvido, ev.ponto), proprio ? 0 : panPonto(eu, ev.ponto));
         }
         if (ev.atirador === eu.id) {
-          if (!ev.capacete) sons.acerto(ev.parte === 'cabeca');
+          if (!ev.capacete && !fogo) sons.acerto(ev.parte === 'cabeca');
           hud.acerto(ev.parte === 'cabeca');
         }
         if (ev.alvo === eu.id) {
           sons.dano();
-          hud.dano(anguloDe(eu, mundo.entidades[ev.atirador]));
+          hud.dano(fogo ? null : anguloDe(eu, mundo.entidades[ev.atirador]));
         }
       } else if (ev.tipo === 'morte') {
         if (ev.assassino === eu.id) {
@@ -370,7 +375,8 @@ function montar(raiz, ctx) {
       } else if (ev.tipo === 'pouso') {
         sons.pouso(distDe(ev.id), panDe(ev.id));
       } else if (ev.tipo === 'arremesso' || ev.tipo === 'granada-quique' || ev.tipo === 'explosao-he' ||
-        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca') {
+        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca' ||
+        ev.tipo === 'fogo' || ev.tipo === 'fogo-apagado' || ev.tipo === 'molotov-ar') {
         reagirGranada(p, ev, { eu, ouvido });
       } else {
         reagirBomba(p, ev, { eu, ouvido });
@@ -393,6 +399,12 @@ function montar(raiz, ctx) {
       sons.flash(dist, pan);
       render.clarao(pt);
     } else if (ev.tipo === 'fumaca') sons.fumaca(dist, pan);
+    else if (ev.tipo === 'fogo') sons.molotov(dist, pan);
+    else if (ev.tipo === 'fogo-apagado') sons.apagar(dist, pan);
+    else if (ev.tipo === 'molotov-ar') {
+      sons.molotov(dist, pan);
+      render.clarao(pt, 0xff8a1f); // estourou no ar: só o clarão laranja, sem fogo
+    }
     else if (ev.tipo === 'cegueira' && ev.id === eu.id) sons.zumbido(ev.dur);
   }
 
@@ -419,6 +431,18 @@ function montar(raiz, ctx) {
     } else if (ev.tipo === 'bomba-pega') {
       if (mundo.bomba?.terroristas === eu.time) hud.anuncio(`${mundo.entidades[ev.id].nome} pegou a C4`, 'aviso');
     }
+  }
+
+  // Crepitar do fogo das molotovs, de cada poça, enquanto o round corre.
+  const CREPITAR_A_CADA = 0.13;
+  function crepitarFogos(p, dt) {
+    const fogos = p.mundo.fogos;
+    if (!fogos?.length || p.partida.fase !== 'jogo') return;
+    p.proxCrepito = (p.proxCrepito ?? 0) - dt;
+    if (p.proxCrepito > 0) return;
+    p.proxCrepito = CREPITAR_A_CADA;
+    const eu = p.mundo.entidades[p.mundo.jogadorId];
+    for (const f of fogos) sons.crepitar(distancia(olho(eu), f.pos), panPonto(eu, f.pos));
   }
 
   // Bipe da C4 plantada, cada vez mais rápido; sai do ponto onde ela está.
@@ -587,6 +611,7 @@ function montar(raiz, ctx) {
     if (!p.treino) contarEventos(carreira, eventos, mundo.jogadorId);
     reagir(p, eventos);
     bipesDaBomba(p, dt);
+    crepitarFogos(p, dt);
     if (p.treino) regras.tempo += dt;
     else if (regras.fase !== 'fim-partida') {
       const segAntes = Math.ceil(regras.tempo);
@@ -771,7 +796,7 @@ function montar(raiz, ctx) {
       const render = criarRender(canvas, MAPA);
       partida = {
         mundo, render, entrada, grafo, rngBots, partida: regrasIniciais, treino,
-        loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
+        loadoutAberto: false, ultimoTiro: new Map(), avisoFogo: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
         idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock, pausado: false,
         desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),
       };
