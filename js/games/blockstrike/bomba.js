@@ -25,6 +25,7 @@ export function criarBomba(mundo, terroristas) {
     terroristas, portador: portador ? portador.id : null, pos: null,
     siteAlvo: mundo.rng() < 0.5 ? 'A' : 'B', site: null,
     plantada: false, explodiu: false, desarmada: false, restante: BOMBA.explode,
+    plantador: null, desarmador: null, // ids de quem concluiu cada ação (MVP do round)
     acao: null, // { tipo: 'plantar' | 'desarmar', id, t, dur } enquanto alguém segura a tecla
   };
 }
@@ -72,13 +73,14 @@ export function tickBomba(mundo, dt, agindo, eventos) {
     }
   }
   // Plantar e desarmar: o progresso só anda enquanto o mesmo agente segura; soltar ou morrer zera.
+  // Morto neste mesmo passo ainda tem `vivo` (cai no fim do passo): o hp zerado já cancela.
   const atual = b.acao;
-  if (atual && agindo.get(atual.id) !== atual.tipo) {
+  if (atual && (agindo.get(atual.id) !== atual.tipo || mundo.entidades[atual.id].hp <= 0)) {
     b.acao = null;
     eventos.push({ tipo: 'acao-cancelada', id: atual.id });
   }
   if (!b.acao) {
-    const quem = [...agindo].find(([id, tipo]) => tipo === (b.plantada ? 'desarmar' : 'plantar') && mundo.entidades[id].vivo);
+    const quem = [...agindo].find(([id, tipo]) => tipo === (b.plantada ? 'desarmar' : 'plantar') && mundo.entidades[id].hp > 0);
     if (quem) {
       const [id, tipo] = quem;
       const dur = tipo === 'plantar' ? BOMBA.plantar : mundo.entidades[id].kit ? BOMBA.desarmarKit : BOMBA.desarmar;
@@ -96,9 +98,11 @@ export function tickBomba(mundo, dt, agindo, eventos) {
         b.site = siteEm(mundo.mapa, e.pos);
         b.portador = null;
         b.restante = BOMBA.explode;
+        b.plantador = e.id;
         eventos.push({ tipo: 'plantada', id: e.id, site: b.site, ponto: { ...b.pos } });
       } else {
         b.desarmada = true;
+        b.desarmador = e.id;
         eventos.push({ tipo: 'desarmada', id: e.id });
       }
       b.acao = null;

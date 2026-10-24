@@ -40,6 +40,10 @@ const MOTIVOS = {
   eliminacao: 'Time adversário eliminado', tempo: 'Tempo esgotado',
   'bomba-explodiu': 'A C4 explodiu', 'bomba-desarmada': 'A C4 foi desarmada',
 };
+const FEITOS_MVP = {
+  desarmou: () => 'desarmou a C4', plantou: () => 'plantou a C4',
+  abates: (n) => `${n} ${n === 1 ? 'abate' : 'abates'}`,
+};
 const PAPEIS = { T: 'Terrorista', CT: 'Contra-terrorista' };
 const DICAS_C4 = {
   plantar: 'Segure E para plantar a C4', desarmar: 'Segure E para desarmar a C4',
@@ -370,11 +374,16 @@ export function criarHud(raiz, handlers) {
   const roundEl = el('div', { class: 'bs-round', id: 'bs-round', texto: 'Round 1' });
   const killfeed = el('div', { class: 'bs-killfeed', id: 'bs-killfeed' });
   const espectando = el('div', { class: 'bs-espectando', id: 'bs-espectando', hidden: true });
+  // Relatório de dano do round (morto ou no fim do round): o que deu e levou de cada inimigo.
+  const relatorio = el('div', { class: 'bs-relatorio', id: 'bs-relatorio', hidden: true });
   // Não bloqueia nada: só avisa que o mouse ainda não está preso ao jogo.
   const dicaTrava = el('div', { class: 'bs-dica-trava', id: 'bs-dica-trava', hidden: true,
     texto: 'Clique na tela para mirar' });
+  const fimRoundTitulo = el('strong');
+  const fimRoundMotivo = el('small');
+  const fimRoundMvp = el('div', { class: 'bs-mvp', id: 'bs-mvp', hidden: true });
   const fimRound = el('div', { class: 'bs-fim-round', id: 'bs-fim-round', hidden: true },
-    el('strong'), el('small'));
+    fimRoundTitulo, fimRoundMotivo, fimRoundMvp);
   // Vivos de cada time: um quadradinho por jogador, apagado quando morre.
   const vivosAzul = el('div', { class: 'bs-vivos bs-vivos-azul', id: 'bs-vivos-azul' });
   const vivosLaranja = el('div', { class: 'bs-vivos bs-vivos-laranja', id: 'bs-vivos-laranja' });
@@ -398,7 +407,7 @@ export function criarHud(raiz, handlers) {
     luneta, vinheta,
     el('div', { class: 'bs-topo' },
       el('div', { class: 'bs-placar' }, vivosAzul, placarAzul, timerEl, placarLaranja, vivosLaranja), roundEl),
-    radar, killfeed, mira, hitmarker, danoArco, espectando, fimRound, dicaTrava, dicaTreino, recarga, avisoMunicao,
+    radar, killfeed, mira, hitmarker, danoArco, espectando, relatorio, fimRound, dicaTrava, dicaTreino, recarga, avisoMunicao,
     bombaInfo, acaoBarra, dicaC4, anuncio, clarao, cegueira,
     el('div', { class: 'bs-base' }, el('div', { class: 'bs-vida' }, el('small', { texto: 'VIDA' }), hpEl),
       el('div', { class: 'bs-arma' }, armaEl, municaoEl)));
@@ -427,10 +436,11 @@ export function criarHud(raiz, handlers) {
     if (timerDano) { clearTimeout(timerDano); timers.delete(timerDano); }
     timerDano = depois(() => mostrar(danoArco, false), VIDA_DANO_MS);
   };
-  hud.morte = ({ assassino, vitima, arma, cabeca }) => {
+  hud.morte = ({ assassino, assistente, vitima, arma, cabeca }) => {
     const nome = (e) => el('b', { class: `bs-time-${e.time}`, texto: e.nome });
     // Morte pela explosão da C4 não tem assassino: só a vítima e o rótulo da bomba.
     const linha = el('div', { class: 'bs-feed-linha' }, assassino ? nome(assassino) : null,
+      assistente ? el('span', { class: 'bs-feed-assist', texto: '+' }) : null, assistente ? nome(assistente) : null,
       el('span', { class: 'bs-feed-arma', texto: `[${ARMAS[arma]?.nome ?? 'C4'}]` }));
     if (cabeca) linha.append(el('span', { class: 'bs-feed-cabeca', texto: '☠', title: 'Headshot' }));
     linha.append(nome(vitima));
@@ -543,6 +553,22 @@ export function criarHud(raiz, handlers) {
     mostrar(hitmarker, false);
     mostrar(danoArco, false);
   };
+  let chaveRelatorio = '';
+  const textoDano = (r) => (r.acertos ? `${r.dano} em ${r.acertos}` : '—');
+  const renderRelatorio = (linhas) => {
+    const chave = linhas.map((l) => `${l.id}:${l.vivo}:${l.deu.dano}:${l.deu.acertos}:${l.levou.dano}:${l.levou.acertos}`).join('|');
+    if (chave === chaveRelatorio) return;
+    chaveRelatorio = chave;
+    const corpo = el('tbody');
+    for (const l of linhas) {
+      corpo.append(el('tr', { class: l.vivo ? '' : 'morto' },
+        el('td', {}, el('b', { class: `bs-time-${l.time}`, texto: l.nome })),
+        el('td', { class: 'bs-rel-deu', texto: textoDano(l.deu) }), el('td', { class: 'bs-rel-levou', texto: textoDano(l.levou) })));
+    }
+    relatorio.replaceChildren(el('table', {},
+      el('thead', {}, el('tr', {}, ...['Dano no round', 'Deu', 'Levou'].map((x) => el('th', { texto: x })))), corpo));
+  };
+
   // --- Loadout (só no freeze) ---
   const gradeLoadout = criarGradeArmas('bs-loadout-armas', escolher, true);
   const loadout = el('div', { class: 'bs-loadout', id: 'bs-loadout', hidden: true },
@@ -640,13 +666,13 @@ export function criarHud(raiz, handlers) {
   let chaveTabela = '';
   const tabelaTime = (time, titulo, ents) => {
     const t = el('table', { class: `bs-tab-${time}` });
-    t.append(el('thead', {}, el('tr', {}, ...['', 'K', 'D', 'K/D', 'HS%'].map((x, i) =>
+    t.append(el('thead', {}, el('tr', {}, ...['', 'K', 'A', 'D', 'K/D', 'HS%'].map((x, i) =>
       el('th', { texto: i === 0 ? titulo : x })))));
     const corpo = el('tbody');
     for (const e of ents) {
       const hs = e.kills > 0 ? Math.round((e.killsCabeca / e.kills) * 100) : 0;
       const tr = el('tr', { class: e.id === 0 ? 'voce' : '' });
-      tr.append(el('td', { texto: e.nome }), el('td', { texto: String(e.kills) }),
+      tr.append(el('td', { texto: e.mvps ? `${e.nome} ★${e.mvps}` : e.nome }), el('td', { texto: String(e.kills) }), el('td', { texto: String(e.assists) }),
         el('td', { texto: String(e.mortes) }), el('td', { texto: (e.kills / Math.max(1, e.mortes)).toFixed(2) }),
         el('td', { texto: `${hs}%` }));
       corpo.append(tr);
@@ -655,7 +681,7 @@ export function criarHud(raiz, handlers) {
     return t;
   };
   const renderTabela = (entidades) => {
-    const chave = entidades.map((e) => `${e.id}:${e.kills}:${e.mortes}:${e.killsCabeca}`).join('|');
+    const chave = entidades.map((e) => `${e.id}:${e.kills}:${e.assists}:${e.mortes}:${e.killsCabeca}:${e.mvps}`).join('|');
     if (chave === chaveTabela) return;
     chaveTabela = chave;
     const porKills = (time) => entidades.filter((e) => e.time === time)
@@ -780,6 +806,8 @@ export function criarHud(raiz, handlers) {
       mira.style.setProperty('--abertura', `${abertura}px`);
     }
     mostrar(mira, v.vivo);
+    mostrar(relatorio, Boolean(v.relatorio?.length));
+    if (v.relatorio?.length) renderRelatorio(v.relatorio);
     mostrar(espectando, !v.vivo && Boolean(v.espectando));
     if (v.espectando) escrever(espectando, `Assistindo: ${v.espectando}`);
     mostrar(loadout, !v.compra && (v.fase === 'freeze' || v.loadout) && v.vivo);
@@ -801,9 +829,14 @@ export function criarHud(raiz, handlers) {
     mostrar(fimRound, emFimRound);
     if (emFimRound) {
       const t = v.vencedorRound;
-      escrever(fimRound.firstChild, t === 'azul' ? 'Azul venceu o round'
+      escrever(fimRoundTitulo, t === 'azul' ? 'Azul venceu o round'
         : t === 'laranja' ? 'Laranja venceu o round' : 'Round empatado');
-      escrever(fimRound.lastChild, MOTIVOS[v.motivo] ?? '');
+      escrever(fimRoundMotivo, MOTIVOS[v.motivo] ?? '');
+      mostrar(fimRoundMvp, Boolean(v.mvp));
+      if (v.mvp) {
+        fimRoundMvp.classList.toggle('voce', v.mvp.voce);
+        escrever(fimRoundMvp, `★ MVP do round: ${v.mvp.nome} · ${FEITOS_MVP[v.mvp.motivo](v.mvp.kills)}`);
+      }
     }
     const verTabela = fimVisivel || tabVisivel;
     mostrar(tabela, verTabela);

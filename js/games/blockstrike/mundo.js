@@ -25,6 +25,7 @@ const COSTAS = -0.5; // cosseno: atacante atrás do alvo (faca pelas costas)
 const VIDA_RUIDO = 2; // s que um ruído de passo continua audível para os bots
 const OUVIR_TIRO = 40; // m: tiro sem silenciador chama a atenção dos bots até aqui
 const OUVIR_TIRO_SILENCIADO = 8;
+const DANO_ASSISTENCIA = 40; // dano acima disto numa vítima que outro aliado matou conta assistência
 
 function criarEntidade(id, nome, time, bot, primariaEscolhida) {
   return {
@@ -32,7 +33,7 @@ function criarEntidade(id, nome, time, bot, primariaEscolhida) {
     pos: { x: 0, y: 0, z: 0 }, velY: 0, yaw: 0, pitch: 0,
     agachado: false, noChao: false, hp: JOGADOR.hp, vivo: true,
     slot: 'primaria', armas: null, primariaEscolhida,
-    kills: 0, mortes: 0, killsCabeca: 0,
+    kills: 0, mortes: 0, killsCabeca: 0, assists: 0, mvps: 0, killsRound: 0,
     distAndada: 0, passoAcc: 0, velHoriz: 0,
   };
 }
@@ -46,7 +47,7 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [] };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [], danos: new Map() };
 }
 
 // Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
@@ -70,6 +71,7 @@ function registrarRuidos(mundo, eventos) {
 
 export function posicionarParaRound(mundo, ladoAzul) {
   limparGranadas(mundo);
+  mundo.danos.clear();
   const ladoLaranja = ladoAzul === 'A' ? 'B' : 'A';
   mundo.entidades.forEach((e, i) => {
     const lado = e.time === 'azul' ? ladoAzul : ladoLaranja;
@@ -84,6 +86,7 @@ export function posicionarParaRound(mundo, ladoAzul) {
     e.vivo = true;
     e.passoAcc = 0;
     e.velHoriz = 0;
+    e.killsRound = 0;
     if (mundo.economia) {
       // Com economia vale o que foi comprado (e sobreviveu): sem primária, começa com a pistola na mão.
       e.armas = armasDoEquip(e);
@@ -181,28 +184,96 @@ function alvoColado(o, entidades, ignorarId) {
   return null;
 }
 
+// Dano do round por par atacante→vítima, chave `de>para`: { dano, acertos }. Conta só a vida que saiu de fato.
+function registrarDano(mundo, de, para, dano) {
+  const chave = `${de}>${para}`;
+  const r = mundo.danos.get(chave) ?? { dano: 0, acertos: 0 };
+  r.dano += dano;
+  r.acertos += 1;
+  mundo.danos.set(chave, r);
+}
+
+const danoEntre = (mundo, de, para) => mundo.danos.get(`${de}>${para}`) ?? { dano: 0, acertos: 0 };
+
+// Aliado de quem matou com mais de DANO_ASSISTENCIA na vítima neste round (o de maior dano), ou null.
+function assistenteDe(mundo, vitima, assassino) {
+  let melhor = null;
+  let maior = DANO_ASSISTENCIA;
+  for (const e of mundo.entidades) {
+    if (e.id === assassino.id || e.time !== assassino.time) continue;
+    const d = danoEntre(mundo, e.id, vitima.id).dano;
+    if (d > maior) { maior = d; melhor = e; }
+  }
+  return melhor;
+}
+
+// Relatório do round para `id`: um item por inimigo com quem trocou dano (deu e levou, em vida e acertos).
+export function relatorioDano(mundo, id) {
+  const eu = mundo.entidades[id];
+  const linhas = [];
+  for (const o of mundo.entidades) {
+    if (o.time === eu.time) continue;
+    const deu = danoEntre(mundo, id, o.id);
+    const levou = danoEntre(mundo, o.id, id);
+    if (deu.acertos || levou.acertos) linhas.push({ id: o.id, nome: o.nome, time: o.time, vivo: o.vivo, deu, levou });
+  }
+  return linhas;
+}
+
+// MVP do round, só no time vencedor: quem desarmou, quem plantou a C4 que explodiu, ou quem mais matou
+// (desempate pelo dano causado). Round sem abates nem bomba não tem MVP. Soma a estrela em `mvps`.
+export function registrarMvp(mundo, vencedor, motivo) {
+  const mvp = mvpDoRound(mundo, vencedor, motivo);
+  if (mvp) mundo.entidades[mvp.id].mvps += 1;
+  return mvp;
+}
+
+function mvpDoRound(mundo, vencedor, motivo) {
+  if (!vencedor) return null;
+  const b = mundo.bomba;
+  if (motivo === 'bomba-desarmada' && b?.desarmador != null) return { id: b.desarmador, motivo: 'desarmou' };
+  if (motivo === 'bomba-explodiu' && b?.plantador != null) return { id: b.plantador, motivo: 'plantou' };
+  let melhor = null;
+  for (const e of mundo.entidades) {
+    if (e.time !== vencedor || e.killsRound === 0) continue;
+    let dano = 0;
+    for (const o of mundo.entidades) dano += danoEntre(mundo, e.id, o.id).dano;
+    if (!melhor || e.killsRound > melhor.kills || (e.killsRound === melhor.kills && dano > melhor.dano)) {
+      melhor = { id: e.id, motivo: 'abates', kills: e.killsRound, dano };
+    }
+  }
+  return melhor;
+}
+
 // `danoFixo`: a faca tira o mesmo em qualquer parte do corpo (só as costas mudam o valor).
 function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   const alvo = golpe.ent;
   if (alvo.time === atirador.time) return; // fogo amigo desligado (mas o corpo bloqueia o tiro)
   if (alvo.hp <= 0) return; // morte já registrada neste passo, só falta o `vivo` cair
   let dano = danoFixo ?? danoDe(tipo, golpe.parte);
+  // Tiro no capacete (fagulhas e "plink"): sem colete o capacete não protege mais (ver danoComColete).
+  const capacete = golpe.parte === 'cabeca' && tipo !== 'faca' &&
+    Boolean(mundo.economia && alvo.equip.capacete && alvo.equip.colete > 0);
   if (mundo.economia) {
     const r = danoComColete(alvo.equip, golpe.parte, dano);
     dano = r.dano;
     alvo.equip.colete = r.colete;
   }
+  registrarDano(mundo, atirador.id, alvo.id, Math.min(dano, alvo.hp));
   alvo.hp = Math.max(0, alvo.hp - dano);
-  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto });
+  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto, capacete });
   if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
   if (alvo.hp > 0) return;
   // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.
   atirador.kills += 1;
+  atirador.killsRound += 1;
   alvo.mortes += 1;
+  const assistente = assistenteDe(mundo, alvo, atirador);
+  if (assistente) assistente.assists += 1;
   if (mundo.economia) premiarKill(atirador, tipo);
   const cabeca = golpe.parte === 'cabeca';
   if (cabeca) atirador.killsCabeca += 1;
-  eventos.push({ tipo: 'morte', vitima: alvo.id, assassino: atirador.id, arma: tipo, cabeca });
+  eventos.push({ tipo: 'morte', vitima: alvo.id, assassino: atirador.id, assistente: assistente?.id ?? null, arma: tipo, cabeca });
 }
 
 // Um raio (bala ou chumbo): para no primeiro entre caixa e entidade.

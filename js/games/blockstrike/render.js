@@ -19,6 +19,8 @@ const MAX_RASTROS = 24;
 const VIDA_RASTRO = 0.05;
 const MAX_GOTAS = 48;
 const VIDA_GOTA = 0.45;
+const MAX_FAGULHAS = 32;
+const VIDA_FAGULHA = 0.35;
 const POS_VIEW = { x: 0.24, y: -0.22, z: -0.4 }; // arma em repouso, no espaço da câmera
 const VEL_OLHO = 10; // 1/s: suaviza a câmera ao agachar e levantar
 const VEL_ZOOM = 18; // 1/s: a luneta abre e fecha deslizando o campo de visão
@@ -261,6 +263,7 @@ export function criarRender(canvas, mapa) {
     proxImpacto = 0;
     for (const r of rastros) { r.vida = 0; r.linha.visible = false; }
     for (const gt of gotas) { gt.vida = 0; gt.m.visible = false; }
+    for (const f of fagulhas) { f.vida = 0; f.m.visible = false; }
     for (const p of pecas) { p.vida = 0; p.m.visible = false; }
     fogoT = 0;
     fogo.visible = false;
@@ -320,6 +323,29 @@ export function criarRender(canvas, mapa) {
       gt.v.set((aleatorio() - 0.5) * 3, aleatorio() * 2.5, (aleatorio() - 0.5) * 3);
       gt.m.visible = true;
       gt.vida = VIDA_GOTA;
+    }
+  }
+
+  // Fagulhas do capacete: cubinhos amarelos e laranja que saltam do ponto do headshot.
+  const geoFagulha = new THREE.BoxGeometry(0.04, 0.04, 0.04);
+  const matsFagulha = [new THREE.MeshBasicMaterial({ color: 0xffd23f }), new THREE.MeshBasicMaterial({ color: 0xff8a1f })];
+  const fagulhas = [];
+  let proxFagulha = 0;
+
+  function fagulhasCapacete(ponto) {
+    for (let i = 0; i < 10; i++) {
+      if (fagulhas.length < MAX_FAGULHAS) {
+        const m = new THREE.Mesh(geoFagulha, matsFagulha[fagulhas.length % 2]);
+        m.visible = false;
+        scene.add(m);
+        fagulhas.push({ m, vida: 0, v: new THREE.Vector3() });
+      }
+      const f = fagulhas[proxFagulha % MAX_FAGULHAS];
+      proxFagulha += 1;
+      f.m.position.set(ponto.x, ponto.y, ponto.z);
+      f.v.set((aleatorio() - 0.5) * 6, 1.5 + aleatorio() * 3.5, (aleatorio() - 0.5) * 6);
+      f.m.visible = true;
+      f.vida = VIDA_FAGULHA * (0.6 + aleatorio() * 0.4);
     }
   }
 
@@ -525,6 +551,13 @@ export function criarRender(canvas, mapa) {
       gt.v.y -= 12 * dt;
       gt.m.position.addScaledVector(gt.v, dt);
       if (gt.vida <= 0) gt.m.visible = false;
+    }
+    for (const f of fagulhas) {
+      if (f.vida <= 0) continue;
+      f.vida -= dt;
+      f.v.y -= 14 * dt;
+      f.m.position.addScaledVector(f.v, dt);
+      if (f.vida <= 0) f.m.visible = false;
     }
   }
 
@@ -829,6 +862,8 @@ export function criarRender(canvas, mapa) {
     for (const r of rastros) r.linha.geometry.dispose();
     matRastro.dispose();
     geoGota.dispose();
+    geoFagulha.dispose();
+    for (const m of matsFagulha) m.dispose();
     matGota.dispose();
     Object.values(geo).forEach((g) => g.dispose());
     Object.values(mat).forEach((m) => m.dispose());
@@ -837,7 +872,7 @@ export function criarRender(canvas, mapa) {
   }
 
   return {
-    desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, desmanchar,
+    desenhar, redimensionar, impacto, limparImpactos, flash, recuoVisual, golpe, rastro, sangue, fagulhasCapacete, desmanchar,
     explosao, clarao: clarearFlash, inspecionar, desenharVitrine, destruir,
   };
 }

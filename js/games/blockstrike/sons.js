@@ -183,6 +183,16 @@ export function criarSons(audio) {
       }
     },
 
+    // Bala no capacete: "PLINK" agudo e curto, com o estalo do metal na frente. Ouve quem estiver perto.
+    plink(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.7 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 6000, dur: 0.015, ganho: 0.45 });
+      for (const [f, g] of [[3700, 0.45], [5550, 0.25], [8300, 0.12]]) {
+        tom(v, v.t0, { onda: 'sine', freq: f, freqFim: f * 0.97, dur: 0.2, ganho: g });
+      }
+    },
+
     // Levou tiro: baque abafado no peito.
     dano() {
       const v = voz({ ganho: 0.7 });
@@ -339,6 +349,17 @@ export function criarSons(audio) {
       notas.forEach((f, i) => tom(v, v.t0 + i * 0.12, {
         onda: venceu ? 'triangle' : 'sawtooth', freq: f, dur: 0.3, ganho: venceu ? 0.35 : 0.18,
       }));
+    },
+
+    // MVP do round (o jogador): arpejo subindo e o acorde final segurado, em duas vozes.
+    mvp() {
+      const v = voz({ ganho: 0.5 });
+      if (!v) return;
+      [523, 659, 784, 1047].forEach((f, i) => {
+        tom(v, v.t0 + i * 0.1, { onda: 'triangle', freq: f, dur: 0.22, ganho: 0.3 });
+        tom(v, v.t0 + i * 0.1, { onda: 'square', freq: f * 2, dur: 0.08, ganho: 0.05 });
+      });
+      for (const f of [523, 659, 784, 1047]) tom(v, v.t0 + 0.45, { onda: 'triangle', freq: f, dur: 1.1, ganho: 0.16, ataque: 0.02 });
     },
 
     // Recarga em três tempos ao longo de `duracao`: pente sai, pente entra, ferrolho.

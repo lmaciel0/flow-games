@@ -202,6 +202,23 @@
 }
 .bs-feed-arma { color: var(--text-secondary); }
 .bs-feed-cabeca { color: #fca5a5; }
+.bs-feed-assist { color: var(--text-secondary); font-weight: 700; }
+.bs-relatorio {
+  position: absolute; left: 0.5rem; bottom: 4.6rem; max-width: min(22rem, 45%);
+  padding: 0.3rem 0.6rem; background: rgba(5, 6, 10, 0.7); border-radius: var(--radius-sm);
+  font-size: clamp(0.62rem, 1.5vw, 0.8rem);
+}
+.bs-relatorio table { border-collapse: collapse; width: 100%; }
+.bs-relatorio th, .bs-relatorio td { padding: 0.05rem 0.35rem; text-align: right; white-space: nowrap; }
+.bs-relatorio th:first-child, .bs-relatorio td:first-child { text-align: left; overflow: hidden; text-overflow: ellipsis; max-width: 9rem; }
+.bs-relatorio th { color: var(--text-secondary); font-weight: 700; }
+.bs-relatorio tr.morto td:first-child { opacity: 0.55; text-decoration: line-through; }
+.bs-rel-deu { color: #86efac; }
+.bs-rel-levou { color: #fca5a5; }
+@media (max-width: 480px), (max-height: 500px) {
+  .bs-relatorio { bottom: 3.2rem; max-width: 48%; padding: 0.1rem 0.3rem; font-size: 0.55rem; }
+  .bs-relatorio thead { display: none; }
+}
 .bs-time-azul { color: #60a5fa; }
 .bs-time-laranja { color: #fb923c; }
 
@@ -221,6 +238,10 @@
 }
 .bs-fim-round strong { font-size: clamp(1.1rem, 3.6vw, 1.9rem); }
 .bs-fim-round small { color: var(--text-secondary); }
+.bs-mvp { margin-top: 0.2rem; font-weight: 700; color: var(--color-gold); font-size: clamp(0.75rem, 2vw, 1rem); }
+.bs-mvp.voce { animation: bs-mvp-brilho 1.2s ease-in-out infinite alternate; }
+@keyframes bs-mvp-brilho { to { text-shadow: 0 0 10px rgba(251, 191, 36, 0.9); } }
+@media (prefers-reduced-motion: reduce) { .bs-mvp.voce { animation: none; } }
 
 /* Loadout do freeze: aceita clique, o resto do HUD não. */
 .bs-loadout {
