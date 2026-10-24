@@ -535,10 +535,12 @@ export function criarHud(raiz, handlers) {
     timerHit = depois(() => mostrar(hitmarker, false), VIDA_HIT_MS);
   };
   let timerDano = null;
+  // `graus` null (fogo): só a vinheta, sem arco apontando para quem jogou a molotov.
   hud.dano = (graus) => {
     vinheta.classList.remove('anim');
     void vinheta.offsetWidth;
     vinheta.classList.add('anim');
+    if (graus === null) return;
     danoArco.style.transform = `rotate(${Math.round(graus)}deg)`;
     danoArco.classList.remove('anim');
     mostrar(danoArco, true);

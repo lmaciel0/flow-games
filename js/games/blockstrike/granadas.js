@@ -235,8 +235,9 @@ function criarFogo(mundo, g, ponto) {
       const z = ponto.z + k * celula;
       const d = Math.hypot(x - ponto.x, z - ponto.z);
       const meio = { x, y: ponto.y + 0.3, z };
-      if (d > raio || !temPiso(caixas, x, ponto.y, z) || dentroDeCaixa(caixas, meio)) continue;
-      if (d > 0.01 && !temVisada(centro, meio, caixas)) continue;
+      const centroDaPoca = i === 0 && k === 0; // onde a garrafa quebrou sempre queima (a borda de caixa não a tira)
+      if (!centroDaPoca && (d > raio || !temPiso(caixas, x, ponto.y, z) || dentroDeCaixa(caixas, meio))) continue;
+      if (!centroDaPoca && !temVisada(centro, meio, caixas)) continue;
       celulas.push({ x, z, atraso: (d / raio) * espalhar });
     }
   }
@@ -246,8 +247,10 @@ function criarFogo(mundo, g, ponto) {
   };
 }
 
-// Ponto dentro de alguma smoke ativa (no plano)? A smoke apaga o fogo.
-const naFumaca = (mundo, p) => (mundo.fumacas ?? []).some((f) => Math.hypot(p.x - f.pos.x, p.z - f.pos.z) <= f.raio);
+// A smoke `f` cobre o ponto `p` do fogo? Mesma altura (não apaga andar de baixo) e sem parede no meio.
+const fumacaCobre = (mundo, f, p) => Math.hypot(p.x - f.pos.x, p.z - f.pos.z) <= f.raio &&
+  Math.abs(p.y + 0.4 - f.pos.y) <= f.raio && temVisada(f.pos, { x: p.x, y: p.y + 0.4, z: p.z }, mundo.mapa.caixas);
+const naFumaca = (mundo, p) => (mundo.fumacas ?? []).some((f) => fumacaCobre(mundo, f, p));
 
 // Molotov que bateu no piso: acende a poça (ou só chia, se caiu dentro de uma smoke).
 function acender(mundo, g, eventos) {
@@ -257,6 +260,10 @@ function acender(mundo, g, eventos) {
     return;
   }
   const f = criarFogo(mundo, g, ponto);
+  if (!f.celulas.length) { // sem piso de verdade (quina de muro fino): estoura sem fogo e não toma a vaga de outra poça
+    eventos.push({ tipo: 'molotov-ar', ponto });
+    return;
+  }
   const lista = (mundo.fogos ??= []);
   lista.push(f);
   while (lista.length > GRANADA.fogo.max) lista.shift();
@@ -269,17 +276,20 @@ function apagarFogos(mundo, fumaca, eventos) {
   for (let i = fogos.length - 1; i >= 0; i--) {
     const f = fogos[i];
     const antes = f.celulas.length;
-    f.celulas = f.celulas.filter((c) => Math.hypot(c.x - fumaca.pos.x, c.z - fumaca.pos.z) > fumaca.raio);
+    f.celulas = f.celulas.filter((c) => !fumacaCobre(mundo, fumaca, { x: c.x, y: f.y, z: c.z }));
     if (f.celulas.length === antes) continue;
     eventos.push({ tipo: 'fogo-apagado', ponto: { ...f.pos } });
     if (!f.celulas.length) fogos.splice(i, 1);
   }
 }
 
-// Poça de fogo que cobre `p` (pés de alguém, com `margem` em metros para quem só quer passar longe), ou null.
-export function noFogo(mundo, p, margem = 0) {
+// Poça de fogo que cobre `p` (os pés: quem só encosta a borda do corpo não queima), ou null.
+// `margem` em metros para quem quer passar longe; `timeIgnorado`: o fogo do próprio time não queima, então os bots não fogem dele.
+// Até 1,1 m acima do fogo ainda queima (o pulo não salva), mas o topo de uma caixa de 1,2 m não.
+export function noFogo(mundo, p, margem = 0, timeIgnorado = null) {
   for (const f of mundo.fogos ?? []) {
-    if (p.y < f.y - 0.5 || p.y > f.y + 1.2) continue;
+    if (f.time === timeIgnorado || mundo.tempo >= f.fim) continue;
+    if (p.y < f.y - 0.5 || p.y > f.y + 1.1) continue;
     if (Math.hypot(p.x - f.pos.x, p.z - f.pos.z) > f.raio + f.celula + margem) continue;
     const meio = f.celula / 2 + margem;
     const idade = mundo.tempo - f.nasceEm;

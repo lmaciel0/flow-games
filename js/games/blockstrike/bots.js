@@ -40,6 +40,7 @@ const ALCANCE_FLASH = [6, 25];
 const ALCANCE_MOLOTOV = [6, 22];
 const FOGO_OLHAR = 1.2; // m à frente: fogo aqui no caminho → espera em vez de atravessar
 const FOGO_SAIDA = 1.5; // m além da borda do fogo para onde foge quem está queimando
+const SAIDA_FIXA = 0.6; // s mantendo a mesma saída do fogo
 const FUMACA_RECUO = 6; // m à frente para a smoke que cobre a fuga
 const DESVIO_MIRA = 0.15; // rad: variação da mira parada no posto entre os CTs
 
@@ -240,30 +241,57 @@ function proximoObjetivo(ent, c, mundo, grafo, rng) {
   return bomba.waypoint ?? waypointPerto(grafo, bomba.ponto, mundo.mapa.caixas);
 }
 
-// Fogo da molotov: queimando, foge para fora pela linha centro→bot (larga plantar/desarmar);
-// com o fogo logo à frente no caminho, para e espera apagar. Devolve o destino a usar.
-function evitarFogo(ent, mundo, destino, cmd) {
-  const f = noFogo(mundo, ent.pos, 0.3);
-  if (f) {
-    cmd.usar = false;
-    const dx = ent.pos.x - f.pos.x;
-    const dz = ent.pos.z - f.pos.z;
-    const n = Math.hypot(dx, dz);
-    const atras = direcao(ent.yaw + Math.PI, 0); // bem no centro: sai para trás
-    const [ux, uz] = n > 0.05 ? [dx / n, dz / n] : [atras.x, atras.z];
-    return { x: f.pos.x + ux * (f.raio + FOGO_SAIDA), y: ent.pos.y, z: f.pos.z + uz * (f.raio + FOGO_SAIDA) };
+// Saída do fogo: das direções radial (centro→bot), ±45°, ±90°, ±135° e para trás, a de borda mais perto
+// sem parede no caminho. Contra a parede, a radial bate nela: sem isto o bot empurrava a parede até morrer.
+const DIRECOES_SAIDA = [0, 1, -1, 2, -2, 3, -3, 4].map((k) => (k * Math.PI) / 4);
+function saidaDoFogo(ent, mundo, f) {
+  const dx = ent.pos.x - f.pos.x;
+  const dz = ent.pos.z - f.pos.z;
+  const atras = direcao(ent.yaw + Math.PI, 0); // bem no centro: a radial é para trás
+  const base = Math.hypot(dx, dz) > 0.05 ? Math.atan2(dz, dx) : Math.atan2(atras.z, atras.x);
+  const pe = { x: ent.pos.x, y: ent.pos.y + 0.5, z: ent.pos.z };
+  let melhor = null;
+  for (const da of DIRECOES_SAIDA) {
+    const ux = Math.cos(base + da);
+    const uz = Math.sin(base + da);
+    for (let d = 0.4; d <= 2 * f.raio + 1; d += 0.4) {
+      if (noFogo(mundo, { x: ent.pos.x + ux * d, y: ent.pos.y, z: ent.pos.z + uz * d }, 0.3, ent.time)) continue;
+      const alvo = { x: ent.pos.x + ux * (d + FOGO_SAIDA), y: ent.pos.y + 0.5, z: ent.pos.z + uz * (d + FOGO_SAIDA) };
+      if (temVisada(pe, alvo, mundo.mapa.caixas) && (!melhor || d < melhor.d)) melhor = { d, alvo };
+      break;
+    }
   }
-  if (!destino) return null;
-  const dx = destino.x - ent.pos.x;
-  const dz = destino.z - ent.pos.z;
-  const n = Math.hypot(dx, dz);
-  if (n < 0.05) return destino;
-  const k = Math.min(FOGO_OLHAR, n) / n;
-  const frente = { x: ent.pos.x + dx * k, y: ent.pos.y, z: ent.pos.z + dz * k };
-  return noFogo(mundo, frente, 0.3) ? null : destino;
+  const ux = Math.cos(base);
+  const uz = Math.sin(base);
+  return melhor?.alvo ?? { x: f.pos.x + ux * (f.raio + FOGO_SAIDA), y: ent.pos.y, z: f.pos.z + uz * (f.raio + FOGO_SAIDA) };
 }
 
-// Granada no meio da briga: HE ou flash no inimigo à vista, com intervalo e um pouco de sorte.
+// O ponto `FOGO_OLHAR` à frente na direção (dx, dz) está no fogo de outro time?
+function fogoAFrente(ent, mundo, dx, dz) {
+  const n = Math.hypot(dx, dz);
+  if (n < 0.05) return false;
+  const k = FOGO_OLHAR / n;
+  return Boolean(noFogo(mundo, { x: ent.pos.x + dx * k, y: ent.pos.y, z: ent.pos.z + dz * k }, 0.3, ent.time));
+}
+
+// Fogo da molotov (só o do outro time, o do próprio não queima): queimando, foge para fora (larga
+// plantar/desarmar); com o fogo logo à frente no caminho, para e espera apagar. Devolve o destino a usar.
+function evitarFogo(ent, mundo, destino, cmd) {
+  const f = noFogo(mundo, ent.pos, 0.3, ent.time);
+  const c = ent.cerebro;
+  if (!f) c.saidaFogo = null;
+  else {
+    cmd.usar = false;
+    // A saída escolhida vale por SAIDA_FIXA: recalcular a cada quadro alternava entre duas saídas parecidas
+    // (ao longo da parede) e o bot ficava parado no fogo.
+    if (!c.saidaFogo || mundo.tempo >= c.saidaFogo.ate) c.saidaFogo = { alvo: saidaDoFogo(ent, mundo, f), ate: mundo.tempo + SAIDA_FIXA };
+    return c.saidaFogo.alvo;
+  }
+  if (!destino) return null;
+  return fogoAFrente(ent, mundo, destino.x - ent.pos.x, destino.z - ent.pos.z) ? null : destino;
+}
+
+// Granada no meio da briga: HE, molotov ou flash no inimigo à vista, com intervalo e um pouco de sorte.
 // `granadaAlvo` é o ponto onde o arco deve cair (ver `lancar` em granadas.js).
 function jogarGranada(ent, c, alvo, mundo, cmd, rng) {
   const g = ent.equip?.granadas;
@@ -568,6 +596,13 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     const mov = andarPara(ent.pos, cmd.yaw, destino);
     cmd.frente = mov.frente;
     cmd.lado = mov.lado;
+  } else if ((cmd.frente || cmd.lado) && mundo.fogos?.length) {
+    // Strafe do combate (sem destino): não pisa no fogo.
+    const f = direcao(cmd.yaw, 0);
+    if (fogoAFrente(ent, mundo, f.x * cmd.frente - f.z * cmd.lado, f.z * cmd.frente + f.x * cmd.lado)) {
+      cmd.frente = 0;
+      cmd.lado = 0;
+    }
   }
   c.queriaAndar = cmd.frente !== 0 || cmd.lado !== 0;
   recarregarSePreciso(ent, cmd, Boolean(alvo));

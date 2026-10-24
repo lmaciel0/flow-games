@@ -514,6 +514,7 @@ export function criarRender(canvas, mapa) {
   chamas.count = 0;
   chamas.renderOrder = 3;
   scene.add(chamas);
+  chamas.setColorAt(0, new THREE.Color(0xff6a00)); // cria o instanceColor já: senão o shader recompila na 1ª molotov
   const matBrasa = new THREE.MeshBasicMaterial({ color: 0x241208 });
   const brasas = new THREE.InstancedMesh(geoChama, matBrasa, MAX_CELULAS_FOGO);
   brasas.frustumCulled = false;
@@ -528,16 +529,19 @@ export function criarRender(canvas, mapa) {
     let b = 0;
     let maisPerto = null;
     let dPerto = Infinity;
-    for (const f of mundo.fogos ?? []) {
+    (mundo.fogos ?? []).forEach((f, idx) => {
       const idade = mundo.tempo - f.nasceEm;
+      // No fim do round o fogo para de ser atualizado: some pelo `fade` mesmo sem o fogo-fim.
       const fade = Math.min(1, Math.max(0, f.fim - mundo.tempo));
+      if (fade <= 0) return;
       const d = camera.position.distanceTo(tmp.set(f.pos.x, f.y, f.pos.z));
       if (d < dPerto) { dPerto = d; maisPerto = f; }
+      const yBrasa = f.y + 0.02 + idx * 0.003; // poças sobrepostas não brigam pelo mesmo plano
       f.celulas.forEach((c, i) => {
         if (idade < c.atraso || b >= MAX_CELULAS_FOGO) return;
         const cresce = Math.min(1, (idade - c.atraso) / 0.25) * fade;
         const lado = f.celula;
-        m4.makeScale(lado * 0.98, 0.04, lado * 0.98).setPosition(c.x, f.y + 0.02, c.z);
+        m4.makeScale(lado * 0.98 * fade, 0.04, lado * 0.98 * fade).setPosition(c.x, yBrasa, c.z);
         brasas.setMatrixAt(b++, m4);
         const fase = i * 1.7 + c.x * 0.9;
         for (let k = 0; k < 2; k++) {
@@ -551,7 +555,7 @@ export function criarRender(canvas, mapa) {
           n++;
         }
       });
-    }
+    });
     chamas.count = n;
     brasas.count = b;
     chamas.instanceMatrix.needsUpdate = true;
@@ -559,7 +563,7 @@ export function criarRender(canvas, mapa) {
     brasas.instanceMatrix.needsUpdate = true;
     if (maisPerto) {
       luzFogo.position.set(maisPerto.pos.x, maisPerto.y + 1, maisPerto.pos.z);
-      luzFogo.intensity = 1.6 + Math.sin(t * 13) * 0.4 + Math.sin(t * 7.3) * 0.3;
+      luzFogo.intensity = (1.6 + Math.sin(t * 13) * 0.4 + Math.sin(t * 7.3) * 0.3) * Math.min(1, maisPerto.fim - mundo.tempo);
     } else luzFogo.intensity = 0;
   }
 

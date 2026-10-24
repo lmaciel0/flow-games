@@ -26,6 +26,7 @@ import {
 } from './economia.js';
 
 const DT_MAX = 0.05;
+const FOGO_AVISO = 0.5; // s entre hitmarkers/dor do mesmo par atacante→vítima no fogo
 const AVISTAR_A_CADA = 0.25; // s entre recálculos dos inimigos avistados (radar)
 const ALCANCE_AVISTAR = 50;
 const MODOS = ['partida', 'treino'];
@@ -329,7 +330,11 @@ function montar(raiz, ctx) {
         sons.golpe(ev.forte, ev.acerto, distDe(ev.atirador), panDe(ev.atirador));
         if (ev.atirador === p.idVista) render.golpe(ev.forte);
       } else if (ev.tipo === 'acerto') {
-        if (ev.ponto) render.sangue(ev.ponto, ev.parte === 'cabeca');
+        // Fogo: pulsos a cada 0,25 s. Sem sangue, e hitmarker e dor no máximo a cada FOGO_AVISO.
+        const fogo = ev.arma === 'molotov';
+        if (fogo && mundo.tempo - (p.avisoFogo.get(`${ev.atirador}>${ev.alvo}`) ?? -Infinity) < FOGO_AVISO) continue;
+        if (fogo) p.avisoFogo.set(`${ev.atirador}>${ev.alvo}`, mundo.tempo);
+        if (ev.ponto && !fogo) render.sangue(ev.ponto, ev.parte === 'cabeca');
         if (ev.capacete && ev.ponto) {
           render.fagulhasCapacete(ev.ponto);
           // O "plink" substitui o som de headshot de quem atirou; os outros ouvem pela distância.
@@ -337,12 +342,12 @@ function montar(raiz, ctx) {
           sons.plink(proprio ? 0 : distancia(ouvido, ev.ponto), proprio ? 0 : panPonto(eu, ev.ponto));
         }
         if (ev.atirador === eu.id) {
-          if (!ev.capacete) sons.acerto(ev.parte === 'cabeca');
+          if (!ev.capacete && !fogo) sons.acerto(ev.parte === 'cabeca');
           hud.acerto(ev.parte === 'cabeca');
         }
         if (ev.alvo === eu.id) {
           sons.dano();
-          hud.dano(anguloDe(eu, mundo.entidades[ev.atirador]));
+          hud.dano(fogo ? null : anguloDe(eu, mundo.entidades[ev.atirador]));
         }
       } else if (ev.tipo === 'morte') {
         if (ev.assassino === eu.id) {
@@ -791,7 +796,7 @@ function montar(raiz, ctx) {
       const render = criarRender(canvas, MAPA);
       partida = {
         mundo, render, entrada, grafo, rngBots, partida: regrasIniciais, treino,
-        loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
+        loadoutAberto: false, ultimoTiro: new Map(), avisoFogo: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
         idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock, pausado: false,
         desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),
       };
