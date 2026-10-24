@@ -15,6 +15,7 @@ import { olho, direcao } from './fisica.js';
 import { visadaLivre, granadasDe } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
+import { lerMira } from './mira.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
 import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
@@ -28,7 +29,6 @@ const AVISTAR_A_CADA = 0.25; // s entre recálculos dos inimigos avistados (rada
 const ALCANCE_AVISTAR = 50;
 const MODOS = ['partida', 'treino'];
 const TAMANHOS = ['normal', 'grande'];
-const COR_MIRA = /^#[0-9a-f]{6}$/i;
 
 const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
@@ -93,7 +93,6 @@ function lerConfig(storage) {
   const dificuldade = storage.get('dificuldade', 'medio');
   const modo = storage.get('modo', 'partida');
   const tamanho = storage.get('tamanho', 'normal');
-  const corMira = String(storage.get('corMira', '#4ade80'));
   const volume = Number(storage.get('volume', 0.8));
   return {
     primaria: ARMAS[primaria]?.slot === 'primaria' ? primaria : 'rifle',
@@ -101,7 +100,7 @@ function lerConfig(storage) {
     sensibilidade: clamp(Number(storage.get('sensibilidade', 1)) || 1, 0.2, 3),
     modo: MODOS.includes(modo) ? modo : 'partida',
     tamanho: TAMANHOS.includes(tamanho) ? tamanho : 'normal',
-    corMira: COR_MIRA.test(corMira) ? corMira : '#4ade80',
+    mira: lerMira(storage.get('mira', null), storage.get('corMira', null)), // corMira: a versão antiga só tinha a cor
     volume: Number.isFinite(volume) ? clamp(volume, 0, 1) : 0.8,
     sensLuneta: clamp(Number(storage.get('sensLuneta', 1)) || 1, 0.3, 2),
     boneco: storage.get('boneco', 'azul') === 'laranja' ? 'laranja' : 'azul',
@@ -229,9 +228,9 @@ function montar(raiz, ctx) {
       raiz.dataset.tamanho = t;
       ctx.storage.set('tamanho', t);
     },
-    mudarCorMira(c) {
-      cfg.corMira = c;
-      ctx.storage.set('corMira', c);
+    mudarMira(m) {
+      cfg.mira = m;
+      ctx.storage.set('mira', m);
     },
     telaCheia: () => alternarTelaCheia(),
     mudarDificuldade(d) {

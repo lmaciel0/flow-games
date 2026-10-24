@@ -5,6 +5,7 @@
 
 import { ARMAS, ITENS, familia } from './config.js';
 import { MODELOS_ARMA } from './modelos.js';
+import { ESTILOS_MIRA, LIMITES_MIRA, MIRA_PADRAO, aberturaMira } from './mira.js';
 
 const PRIMARIAS = ['rifle', 'fuzil', 'rifleS', 'smg', 'miniSmg', 'smgS', 'sniper', 'escopeta'];
 const TECLAS_LOADOUT = PRIMARIAS.map((_, i) => `Digit${i + 1}`);
@@ -132,7 +133,7 @@ export function criarHud(raiz, handlers) {
   const palco = raiz.querySelector('.bs-stage');
   const estado = {
     primaria: 'rifle', dificuldade: 'medio', sensibilidade: 1, modo: 'partida', volume: 0.8,
-    tamanho: 'normal', corMira: CORES_MIRA[0][0], sensLuneta: 1, boneco: 'azul',
+    tamanho: 'normal', mira: { ...MIRA_PADRAO }, sensLuneta: 1, boneco: 'azul',
   };
   const timers = new Set();
   const depois = (fn, ms) => {
@@ -260,13 +261,70 @@ export function criarHud(raiz, handlers) {
     handlers.mudarVolume(n);
   });
 
-  const selMira = el('select', { id: 'bs-cor-mira', class: 'bs-select' });
-  for (const [v, rotulo] of CORES_MIRA) selMira.append(el('option', { value: v, texto: rotulo }));
-  selMira.addEventListener('change', () => {
-    estado.corMira = selMira.value;
-    palco.style.setProperty('--cor-mira', selMira.value);
-    handlers.mudarCorMira(selMira.value);
-  });
+  // --- Crosshair Lab: estilo, sliders, ponto e cor, com a prévia sobre um pedaço do mapa ---
+  const novaMira = (id) => el('div', { class: 'bs-mira', id },
+    el('i', { class: 'bs-mira-t' }), el('i', { class: 'bs-mira-b' }),
+    el('i', { class: 'bs-mira-e' }), el('i', { class: 'bs-mira-d' }), el('i', { class: 'bs-mira-p' }));
+  const miraPrevia = novaMira('bs-mira-previa-alvo');
+  const previaMira = el('div', { class: 'bs-mira-previa', id: 'bs-mira-previa' }, miraPrevia);
+  const gradeEstilos = el('div', { class: 'bs-armas bs-mira-estilos', id: 'bs-mira-estilo' });
+  for (const [v, rotulo] of ESTILOS_MIRA) {
+    const b = el('button', { type: 'button', class: 'bs-arma-btn', 'data-estilo': v, texto: rotulo });
+    b.addEventListener('click', () => mudarMira({ estilo: v }));
+    gradeEstilos.append(b);
+  }
+  const slidersMira = {};
+  const sliderMira = (chave) => {
+    const [min, max, step] = LIMITES_MIRA[chave];
+    const rng = el('input', { type: 'range', id: `bs-mira-${chave}`, class: 'bs-mira-rng', min: String(min), max: String(max), step: String(step) });
+    const rotulo = el('span', { class: 'bs-valor' });
+    rng.addEventListener('input', () => mudarMira({ [chave]: Number(rng.value) }));
+    slidersMira[chave] = { rng, rotulo };
+    return el('span', { class: 'bs-slider' }, rng, rotulo);
+  };
+  const chkPonto = el('input', { type: 'checkbox', id: 'bs-mira-ponto' });
+  chkPonto.addEventListener('change', () => mudarMira({ ponto: chkPonto.checked }));
+  const coresMira = el('div', { class: 'bs-mira-cores', id: 'bs-mira-cores' });
+  for (const [v, rotulo] of CORES_MIRA) {
+    const b = el('button', { type: 'button', class: 'bs-mira-cor', 'data-cor': v, title: rotulo, 'aria-label': `Cor ${rotulo}` });
+    b.style.background = v;
+    b.addEventListener('click', () => mudarMira({ cor: v }));
+    coresMira.append(b);
+  }
+  const corLivre = el('input', { type: 'color', id: 'bs-mira-cor', class: 'bs-mira-cor-livre', title: 'Outra cor' });
+  corLivre.addEventListener('input', () => mudarMira({ cor: corLivre.value }));
+  coresMira.append(corLivre);
+  const btnMiraPadrao = el('button', { type: 'button', class: 'action-btn secondary-btn bs-btn-tela', id: 'bs-mira-padrao', texto: 'Restaurar padrão' });
+  btnMiraPadrao.addEventListener('click', () => mudarMira({ ...MIRA_PADRAO }));
+  // Desenho da mira via CSS: tamanho, espessura, estilo e ponto em variáveis/atributos do elemento.
+  const desenharMira = (alvo, m) => {
+    alvo.dataset.estilo = m.estilo;
+    alvo.dataset.ponto = m.ponto ? '1' : '0';
+    alvo.style.setProperty('--comp', `${m.tamanho}px`);
+    alvo.style.setProperty('--esp', `${m.espessura}px`);
+  };
+  const marcarMira = () => {
+    const m = estado.mira;
+    for (const b of gradeEstilos.children) b.classList.toggle('selecionada', b.dataset.estilo === m.estilo);
+    for (const [chave, { rng, rotulo }] of Object.entries(slidersMira)) {
+      rng.value = String(m[chave]);
+      escrever(rotulo, `${m[chave]}px`);
+    }
+    chkPonto.checked = m.ponto;
+    chkPonto.disabled = m.estilo === 'ponto';
+    for (const b of coresMira.querySelectorAll('.bs-mira-cor')) b.classList.toggle('selecionada', b.dataset.cor === m.cor);
+    corLivre.value = m.cor;
+    palco.style.setProperty('--cor-mira', m.cor);
+    desenharMira(miraPrevia, m);
+    miraPrevia.style.setProperty('--abertura', `${aberturaMira(m, 0)}px`);
+    desenharMira(mira, m);
+    mira.dataset.abertura = ''; // a abertura do HUD é recalculada no próximo quadro
+  };
+  const mudarMira = (parcial) => {
+    estado.mira = { ...estado.mira, ...parcial };
+    marcarMira();
+    handlers.mudarMira({ ...estado.mira });
+  };
 
   // Tamanho do palco e tela cheia (também na pausa).
   const criarControlesTela = (sufixo) => {
@@ -298,11 +356,20 @@ export function criarHud(raiz, handlers) {
       gradeEquip,
       el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Boneco do menu' }), gradeBoneco),
     ]],
+    ['mira', 'Mira', [
+      previaMira,
+      campo('Estilo', gradeEstilos),
+      campo('Tamanho', sliderMira('tamanho')),
+      campo('Espessura', sliderMira('espessura')),
+      campo('Abertura', sliderMira('abertura')),
+      el('label', { class: 'bs-check' }, chkPonto, el('span', { texto: 'Ponto central' })),
+      campo('Cor', coresMira),
+      btnMiraPadrao,
+    ]],
     ['opcoes', 'Opções', [
       campo('Sensibilidade', el('span', { class: 'bs-slider' }, rngSens, rotuloSens)),
       campo('Sensibilidade da luneta', el('span', { class: 'bs-slider' }, rngLuneta, rotuloLuneta)),
       campo('Volume', el('span', { class: 'bs-slider' }, rngVol, rotuloVol)),
-      campo('Mira', selMira),
       criarControlesTela(''),
     ]],
     ['controles', 'Controles', [ajuda]],
@@ -331,8 +398,8 @@ export function criarHud(raiz, handlers) {
   palco.append(menu);
 
   // Aplica o que está salvo no storage aos controles do menu.
-  hud.definirConfig = ({ primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira, sensLuneta, boneco }) => {
-    Object.assign(estado, { primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira, sensLuneta, boneco });
+  hud.definirConfig = ({ primaria, dificuldade, sensibilidade, modo, volume, tamanho, mira: cfgMira, sensLuneta, boneco }) => {
+    Object.assign(estado, { primaria, dificuldade, sensibilidade, modo, volume, tamanho, mira: { ...cfgMira }, sensLuneta, boneco });
     marcarModo();
     marcarBoneco();
     rngLuneta.value = String(sensLuneta);
@@ -340,8 +407,7 @@ export function criarHud(raiz, handlers) {
     rngVol.value = String(volume);
     escrever(rotuloVol, `${Math.round(volume * 100)}%`);
     for (const sel of selsTamanho) sel.value = tamanho;
-    selMira.value = corMira;
-    palco.style.setProperty('--cor-mira', corMira);
+    marcarMira();
     previa = primaria;
     marcarLoadout();
     marcarSelecionada(gradeLoadout, primaria);
@@ -360,9 +426,7 @@ export function criarHud(raiz, handlers) {
   };
   hud.esconderMenu = () => mostrar(menu, false);
   // --- HUD em jogo ---
-  const mira = el('div', { class: 'bs-mira', id: 'bs-mira' },
-    el('i', { class: 'bs-mira-t' }), el('i', { class: 'bs-mira-b' }),
-    el('i', { class: 'bs-mira-e' }), el('i', { class: 'bs-mira-d' }));
+  const mira = novaMira('bs-mira');
   const hitmarker = el('div', { class: 'bs-hitmarker', id: 'bs-hitmarker', hidden: true });
   const danoArco = el('div', { class: 'bs-dano', id: 'bs-dano', hidden: true }, el('i'));
   const hpEl = el('div', { class: 'bs-hp', id: 'bs-hp', texto: '100' });
@@ -799,8 +863,8 @@ export function criarHud(raiz, handlers) {
     mostrar(luneta, Boolean(v.luneta));
     mira.classList.toggle('escondida', Boolean(v.luneta));
     escrever(armaEl, v.arma ? ARMAS[v.arma.tipo].nome : '');
-    // Abertura da mira em px, quantizada: o spread (rad) vira fração da altura do palco.
-    const abertura = Math.min(48, Math.round(4 + Math.tan(v.spread) * palco.clientHeight * 0.75));
+    // Abertura da mira em px, quantizada: o spread (rad) vira fração da altura do palco (só na dinâmica).
+    const abertura = aberturaMira(estado.mira, Math.min(44, Math.round(Math.tan(v.spread) * palco.clientHeight * 0.75)));
     if (mira.dataset.abertura !== String(abertura)) {
       mira.dataset.abertura = String(abertura);
       mira.style.setProperty('--abertura', `${abertura}px`);

@@ -156,15 +156,25 @@
 .bs-hp.baixo { color: #f87171; }
 
 /* Mira: quatro traços que se afastam do centro com a abertura (--abertura). */
-.bs-mira { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --abertura: 4px; }
+/* Mira: --comp (tamanho), --esp (espessura) e --abertura (vão até o centro) vêm do Crosshair Lab (mira.js).
+   --extra só anima a prévia da dinâmica no menu. */
+@property --extra { syntax: '<length>'; inherits: true; initial-value: 0px; }
+.bs-mira {
+  position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+  --abertura: 4px; --comp: 8px; --esp: 2px; --vao: calc(var(--abertura) + var(--extra)); --pt: var(--esp);
+}
 .bs-mira i { position: absolute; background: var(--cor-mira); box-shadow: 0 0 2px #000; }
 .bs-mira.escondida { display: none; }
-.bs-mira-t, .bs-mira-b { width: 2px; height: 8px; left: -1px; }
-.bs-mira-e, .bs-mira-d { height: 2px; width: 8px; top: -1px; }
-.bs-mira-t { top: calc(-8px - var(--abertura)); }
-.bs-mira-b { top: var(--abertura); }
-.bs-mira-e { left: calc(-8px - var(--abertura)); }
-.bs-mira-d { left: var(--abertura); }
+.bs-mira-t, .bs-mira-b { width: var(--esp); height: var(--comp); left: calc(var(--esp) / -2); }
+.bs-mira-e, .bs-mira-d { height: var(--esp); width: var(--comp); top: calc(var(--esp) / -2); }
+.bs-mira-t { top: calc(-1 * (var(--comp) + var(--vao))); }
+.bs-mira-b { top: var(--vao); }
+.bs-mira-e { left: calc(-1 * (var(--comp) + var(--vao))); }
+.bs-mira-d { left: var(--vao); }
+.bs-mira-p { display: none; width: var(--pt); height: var(--pt); left: calc(var(--pt) / -2); top: calc(var(--pt) / -2); }
+.bs-mira[data-ponto="1"] .bs-mira-p, .bs-mira[data-estilo="ponto"] .bs-mira-p { display: block; }
+.bs-mira[data-estilo="ponto"] { --pt: calc(var(--esp) + 2px); }
+.bs-mira[data-estilo="ponto"] :is(.bs-mira-t, .bs-mira-b, .bs-mira-e, .bs-mira-d) { display: none; }
 
 .bs-hitmarker {
   position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%);
@@ -480,6 +490,31 @@
 .bs-menu .bs-campo { align-items: flex-start; }
 .bs-menu .bs-menu-texto { color: var(--text-secondary); }
 .bs-menu-painel { display: flex; flex-direction: column; align-items: flex-start; gap: 0.8rem; width: 100%; }
+
+/* Crosshair Lab: prévia sobre um recorte do mapa (céu, paredes de bloco e chão). */
+.bs-mira-previa {
+  position: relative; width: 100%; height: 7.5rem; flex: 0 0 auto; overflow: hidden;
+  border: 1px solid var(--surface-glass-border); border-radius: var(--radius-sm);
+  background:
+    linear-gradient(90deg, transparent 0 18%, #6b5a45 18% 34%, transparent 34% 66%, #57606b 66% 84%, transparent 84%) 0 36% / 100% 40% no-repeat,
+    linear-gradient(180deg, #9cc3e6 0 52%, #8a7a60 52% 100%);
+}
+.bs-mira-previa .bs-mira[data-estilo="dinamica"] { animation: bs-mira-spread 1.6s ease-in-out infinite alternate; }
+@keyframes bs-mira-spread { to { --extra: 10px; } }
+@media (prefers-reduced-motion: reduce) { .bs-mira-previa .bs-mira { animation: none; } }
+.bs-mira-estilos { justify-content: flex-start; }
+.bs-mira-estilos .bs-arma-btn { padding: 0.35rem 0.6rem; font-size: 0.8rem; }
+.bs-mira-rng { width: 8rem; max-width: 40vw; accent-color: #fb923c; }
+.bs-check { display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer; font-size: 0.9rem; }
+.bs-check input { accent-color: #fb923c; width: 1rem; height: 1rem; }
+.bs-check:has(input:disabled) { opacity: 0.45; cursor: default; }
+.bs-mira-cores { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.bs-mira-cor {
+  width: 1.6rem; height: 1.6rem; padding: 0; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 50%;
+}
+.bs-mira-cor.selecionada { border-color: #fff; box-shadow: 0 0 0 2px #fb923c; }
+.bs-mira-cor-livre { width: 2rem; height: 1.7rem; padding: 0; border: 0; background: none; cursor: pointer; }
 .bs-menu .bs-modos { flex-direction: column; width: 100%; }
 .bs-menu .bs-modo-btn { align-items: flex-start; width: 100%; }
 .bs-menu .bs-ajuda { display: block; max-width: none; }
