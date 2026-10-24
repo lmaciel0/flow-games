@@ -16,6 +16,7 @@ import { visadaLivre, granadasDe } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
 import { lerMira } from './mira.js';
+import { contarEventos, contarPartida, lerCarreira, novaCarreira, resumoCarreira } from './carreira.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
 import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
@@ -250,6 +251,10 @@ function montar(raiz, ctx) {
     previaArma(tipo) {
       previaMenu = tipo;
     },
+    zerarCarreira() {
+      carreira = novaCarreira();
+      salvarCarreira();
+    },
     mudarBoneco(time) {
       cfg.boneco = time;
       ctx.storage.set('boneco', time);
@@ -259,6 +264,14 @@ function montar(raiz, ctx) {
     jogarDeNovo: () => iniciar(),
   });
   hud.definirConfig(cfg);
+
+  // Carreira (só partidas 5x5): conta em memória e grava no fim de cada round, da partida e ao sair.
+  let carreira = lerCarreira(ctx.storage.get('carreira', null));
+  function salvarCarreira() {
+    ctx.storage.set('carreira', carreira);
+    hud.definirCarreira(resumoCarreira(carreira));
+  }
+  hud.definirCarreira(resumoCarreira(carreira));
 
   // Fundo 3D do menu: o render carrega sob demanda, como na partida, e sai antes dela.
   let fundo = null;
@@ -462,6 +475,8 @@ function montar(raiz, ctx) {
     }
     const kd = eu.kills / Math.max(1, eu.mortes);
     if (kd > (Number(st.get('melhorKD', 0)) || 0)) st.set('melhorKD', kd);
+    contarPartida(carreira, regras.resultado);
+    salvarCarreira();
     ctx.conta?.registrar('blockstrike', { tipo: 'partida', venceu: regras.resultado === 'azul', kd });
   }
 
@@ -480,6 +495,8 @@ function montar(raiz, ctx) {
         const mvp = registrarMvp(mundo, partida.vencedorRound ?? null, partida.motivo);
         const ent = mvp && mundo.entidades[mvp.id];
         p.mvp = ent ? { nome: ent.nome, motivo: mvp.motivo, kills: mvp.kills, voce: ent.id === eu.id } : null;
+        if (p.mvp?.voce) carreira.mvps += 1;
+        salvarCarreira();
         // A fanfarra do MVP substitui a vinheta de vitória.
         if (p.mvp?.voce) sons.mvp();
         else if (partida.vencedorRound) sons.fimRound(partida.vencedorRound === eu.time);
@@ -563,7 +580,9 @@ function montar(raiz, ctx) {
       const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
       comandos.set(e.id, atira ? c : { ...c, atirar: false });
     }
-    reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze', comBomba: atira }));
+    const eventos = passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze', comBomba: atira });
+    if (!p.treino) contarEventos(carreira, eventos, mundo.jogadorId);
+    reagir(p, eventos);
     bipesDaBomba(p, dt);
     if (p.treino) regras.tempo += dt;
     else if (regras.fase !== 'fim-partida') {
@@ -675,6 +694,7 @@ function montar(raiz, ctx) {
   }
 
   function voltarAoMenu() {
+    if (partida && !partida.treino) salvarCarreira(); // abates do round pela metade não se perdem
     cancelarInicio();
     destruirPartida();
     hud.mostrarPausa(false);

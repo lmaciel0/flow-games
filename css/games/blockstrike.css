@@ -468,13 +468,16 @@
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 .bs-menu-topo {
-  justify-self: stretch; display: flex; align-items: center; gap: 1.5rem; padding: 0.5rem 1.2rem;
+  justify-self: stretch; min-width: 0; display: flex; align-items: center; gap: 1.5rem; padding: 0.5rem 1.2rem;
   background: rgba(12, 14, 20, 0.85); border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .bs-menu .bs-menu-titulo {
   font-size: 1rem; letter-spacing: 0.14em; text-transform: uppercase; color: #fb923c; white-space: nowrap;
 }
-.bs-menu-abas { display: flex; align-items: center; margin: 0 auto; }
+/* Palco estreito: a barra de abas rola na horizontal em vez de alargar o menu. */
+.bs-menu-abas { display: flex; align-items: center; margin: 0 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.bs-menu-abas::-webkit-scrollbar { display: none; }
+.bs-menu-aba { flex: 0 0 auto; white-space: nowrap; }
 .bs-menu-aba {
   font: inherit; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
   color: var(--text-secondary); background: none; border: 0; border-left: 1px solid rgba(255, 255, 255, 0.15);
@@ -515,6 +518,30 @@
 }
 .bs-mira-cor.selecionada { border-color: #fff; box-shadow: 0 0 0 2px #fb923c; }
 .bs-mira-cor-livre { width: 2rem; height: 1.7rem; padding: 0; border: 0; background: none; cursor: pointer; }
+
+/* Carreira: grade de números e as armas com mais abates. */
+.bs-carreira { display: flex; flex-direction: column; gap: 0.8rem; width: 100%; }
+.bs-carreira-vazia { margin: 0; color: var(--text-secondary); font-size: 0.9rem; }
+.bs-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; width: 100%; }
+.bs-stat {
+  display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; padding: 0.5rem 0.65rem;
+  background: var(--cell-bg); border: 1px solid var(--cell-border); border-radius: var(--radius-sm);
+}
+.bs-stat small { font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
+.bs-stat strong { font-family: 'JetBrains Mono', monospace; font-size: 1.35rem; line-height: 1.15; color: #fff; }
+.bs-stat span { font-size: 0.72rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bs-armas-fav { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; width: 100%; counter-reset: fav; }
+.bs-armas-fav li {
+  display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0.6rem; counter-increment: fav;
+  background: var(--cell-bg); border-radius: var(--radius-sm); font-size: 0.85rem;
+}
+.bs-armas-fav li::before { content: counter(fav) '.'; color: #fb923c; font-weight: 800; }
+.bs-armas-fav li span { flex: 1; }
+.bs-armas-fav li b { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+@media (max-width: 480px) {
+  .bs-stat { padding: 0.3rem 0.45rem; }
+  .bs-stat strong { font-size: 1rem; }
+}
 .bs-menu .bs-modos { flex-direction: column; width: 100%; }
 .bs-menu .bs-modo-btn { align-items: flex-start; width: 100%; }
 .bs-menu .bs-ajuda { display: block; max-width: none; }

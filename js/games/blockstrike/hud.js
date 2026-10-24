@@ -31,6 +31,7 @@ const CONTROLES = [
 ];
 // Nome do tipo de granada na mão, no lugar da munição.
 const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke' };
+const ZERAR_MS = 4000;
 const RADAR_ESCALA = 2.6; // px por metro
 const RADAR_LADO = 132; // px
 const MAX_LINHAS_FEED = 5;
@@ -296,6 +297,44 @@ export function criarHud(raiz, handlers) {
   coresMira.append(corLivre);
   const btnMiraPadrao = el('button', { type: 'button', class: 'action-btn secondary-btn bs-btn-tela', id: 'bs-mira-padrao', texto: 'Restaurar padrão' });
   btnMiraPadrao.addEventListener('click', () => mudarMira({ ...MIRA_PADRAO }));
+  // --- Carreira: números das partidas 5x5 salvos no navegador ---
+  const carreiraEl = el('div', { class: 'bs-carreira', id: 'bs-carreira' });
+  const btnZerar = el('button', { type: 'button', class: 'action-btn secondary-btn bs-btn-tela', id: 'bs-zerar-carreira', texto: 'Zerar estatísticas' });
+  // Dois cliques: o primeiro só pede confirmação por alguns segundos.
+  let timerZerar = null;
+  btnZerar.addEventListener('click', () => {
+    if (!timerZerar) {
+      escrever(btnZerar, 'Clique de novo para zerar');
+      timerZerar = depois(() => { timerZerar = null; escrever(btnZerar, 'Zerar estatísticas'); }, ZERAR_MS);
+      return;
+    }
+    clearTimeout(timerZerar);
+    timers.delete(timerZerar);
+    timerZerar = null;
+    escrever(btnZerar, 'Zerar estatísticas');
+    handlers.zerarCarreira();
+  });
+  const nomeArma = (tipo) => ARMAS[tipo]?.nome ?? NOMES_GRANADA[tipo] ?? tipo;
+  hud.definirCarreira = (r) => {
+    if (r.partidas === 0 && r.kills === 0 && r.mortes === 0) {
+      carreiraEl.replaceChildren(el('p', { class: 'bs-carreira-vazia', texto: 'Jogue uma partida 5x5 para ver suas estatísticas aqui.' }));
+      return;
+    }
+    const bloco = (rotulo, valor, detalhe) => el('div', { class: 'bs-stat' },
+      el('small', { texto: rotulo }), el('strong', { texto: String(valor) }), detalhe ? el('span', { texto: detalhe }) : null);
+    const grade = el('div', { class: 'bs-stats' },
+      bloco('K/D', r.kd.toFixed(2), `${r.kills} K · ${r.mortes} D`),
+      bloco('Precisão', `${r.precisao}%`, 'tiros que acertaram'),
+      bloco('Headshot', `${r.hs}%`, 'dos abates'),
+      bloco('Vitórias', `${r.taxaVitoria}%`, `${r.vitorias} V · ${r.derrotas} D${r.empates ? ` · ${r.empates} E` : ''}`),
+      bloco('MVPs', r.mvps, `${r.partidas} ${r.partidas === 1 ? 'partida' : 'partidas'}`),
+      bloco('Assistências', r.assists, ''));
+    const armas = el('ol', { class: 'bs-armas-fav' },
+      ...r.armasFav.map(([tipo, n]) => el('li', {}, el('span', { texto: nomeArma(tipo) }), el('b', { texto: `${n} ${n === 1 ? 'abate' : 'abates'}` }))));
+    carreiraEl.replaceChildren(grade,
+      r.armasFav.length ? el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Armas favoritas' }), armas) : null);
+  };
+
   // Desenho da mira via CSS: tamanho, espessura, estilo e ponto em variáveis/atributos do elemento.
   const desenharMira = (alvo, m) => {
     alvo.dataset.estilo = m.estilo;
@@ -366,6 +405,7 @@ export function criarHud(raiz, handlers) {
       campo('Cor', coresMira),
       btnMiraPadrao,
     ]],
+    ['carreira', 'Carreira', [carreiraEl, btnZerar]],
     ['opcoes', 'Opções', [
       campo('Sensibilidade', el('span', { class: 'bs-slider' }, rngSens, rotuloSens)),
       campo('Sensibilidade da luneta', el('span', { class: 'bs-slider' }, rngLuneta, rotuloLuneta)),
