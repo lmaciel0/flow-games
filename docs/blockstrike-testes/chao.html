@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#000} canvas{width:1280px;height:720px;display:block}</style></head>
+<body><canvas id="c" width="1280" height="720"></canvas>
+<script type="module">
+window.onerror = (m) => { document.title = 'ERRO ' + m; };
+window.addEventListener('unhandledrejection', (e) => { document.title = 'ERRO ' + (e.reason?.stack ?? e.reason); });
+const B = '/js/games/blockstrike/';
+const { MAPA } = await import(B + 'mapa.js');
+const M = await import(B + 'mundo.js');
+const G = await import(B + 'granadas.js');
+const { criarRng } = await import(B + 'rng.js');
+const { criarRender } = await import(B + 'render.js');
+const mundo = M.criarMundo({ mapa: MAPA, primariaJogador: 'rifle', dificuldade: 'medio', rng: criarRng(3), modo: 'treino' });
+M.posicionarParaRound(mundo, 'A');
+const eu = mundo.entidades[0];
+eu.pos = { x: 0, y: 0, z: 29 }; eu.yaw = 0; eu.pitch = -0.5;
+const { criarArma } = await import(B + 'armas.js'); ['rifle','sniper','smg','escopeta','pistola'].forEach((t, i) => mundo.armasChao.push({ id: i + 1, arma: criarArma(t), pos: { x: -2 + i, y: 0, z: 26 }, vel: { x: 0, y: 0, z: 0 }, rotY: i * 0.7, giro: 0, noChao: true }));
+const q = new URLSearchParams(location.search);
+const seg = Number(q.get('t') ?? 1.6);
+for (let t = 0; t < seg; t += 1 / 60) M.passo(mundo, 1 / 60, new Map([[0, { frente: 0, lado: 0, yaw: 0, pitch: -0.5 }]]));
+if (q.get('mao')) { eu.slot = 'granada'; eu.armas.granada.sel = 'molotov'; }
+const render = criarRender(document.getElementById('c'), MAPA);
+render.redimensionar?.(1280, 720);
+let n = 0;
+const passo = () => { render.desenhar(mundo, 0, {}); if (++n < 25) setTimeout(passo, 40); else document.title = 'OK fogos=' + mundo.fogos.length; };
+passo();
+</script></body></html>

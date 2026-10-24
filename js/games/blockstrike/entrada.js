@@ -19,6 +19,8 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
   let dPitch = 0;
   let slotPendente = null;
   let recarregarPendente = false;
+  let soltarPendente = false;
+  let pegarPendente = false;
   let ativa = true; // pausado/em outra tela: não captura teclas do resto do hub
   let cursorLivre = false; // soltou o mouse de propósito (B na compra): perder a trava não pausa nem retrava
   let aoPerder = () => {};
@@ -39,6 +41,8 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
     teclas.add(e.code);
     if (SLOTS[e.code]) slotPendente = SLOTS[e.code];
     if (e.code === 'KeyR') recarregarPendente = true;
+    if (e.code === 'KeyG') soltarPendente = true;
+    if (e.code === 'KeyE' && !e.repeat) pegarPendente = true;
     if (e.code === 'Tab') aoTabFn(true);
     if (aoTeclaFn(e.code) === true) slotPendente = null; // tecla usada pelo jogo (painel de armas)
   }
@@ -133,12 +137,16 @@ export function criarEntrada(canvas, { sensibilidade = 1 } = {}) {
         zoom: botoes.has(2),
         recarregar: recarregarPendente,
         usar: teclas.has('KeyE'), // segurar: plantar ou desarmar a C4
+        pegar: pegarPendente, // apertar E: pegar a arma do chão na mira
+        soltar: soltarPendente, // G: soltar a arma da mão
         granada: null, // o jogador arremessa pela mão (clique); o campo fica para os bots
         slot: slotPendente,
         yaw,
         pitch,
       };
       recarregarPendente = false;
+      soltarPendente = false;
+      pegarPendente = false;
       slotPendente = null;
       return cmd;
     },

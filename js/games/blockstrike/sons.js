@@ -406,6 +406,28 @@ export function criarSons(audio) {
       clique(v, t + duracao * 0.85 + 0.07, 1900, 0.35);
     },
 
+    // Soltar arma: sopro do braço.
+    soltarArma(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.45 });
+      if (v) chiado(v, v.t0, { tipo: 'bandpass', freq: 600, freqFim: 1400, q: 1, dur: 0.14, ganho: 0.22, ataque: 0.04 });
+    },
+
+    // Arma batendo no chão: baque metálico com um tinido curto.
+    armaChao(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.6 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'lowpass', freq: 700, dur: 0.07, ganho: 0.5 });
+      tom(v, v.t0, { onda: 'triangle', freq: 1900, freqFim: 1700, dur: 0.12, ganho: 0.12 });
+    },
+
+    // Pegou uma arma do chão: dois cliques de encaixe.
+    pegarArma() {
+      const v = voz({ ganho: 0.5 });
+      if (!v) return;
+      clique(v, v.t0, 2100, 0.3);
+      clique(v, v.t0 + 0.08, 1600, 0.3);
+    },
+
     // Sacar a arma: pano raspando e um clique.
     saque(tipo) {
       const v = voz({ ganho: 0.5 });

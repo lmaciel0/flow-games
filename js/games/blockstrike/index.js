@@ -16,6 +16,7 @@ import { visadaLivre, granadasDe } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
 import { lerMira } from './mira.js';
+import { alvoPegar } from './armasChao.js';
 import { contarEventos, contarPartida, lerCarreira, novaCarreira, resumoCarreira } from './carreira.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
@@ -366,6 +367,12 @@ function montar(raiz, ctx) {
         const ent = mundo.entidades[ev.atirador];
         const tipo = ent.armas?.[ent.slot]?.tipo;
         sons.recarga(ARMAS[tipo]?.recarga ?? 2.5, distDe(ev.atirador), panDe(ev.atirador));
+      } else if (ev.tipo === 'arma-solta') {
+        sons.soltarArma(distDe(ev.id), panDe(ev.id));
+      } else if (ev.tipo === 'arma-chao') {
+        sons.armaChao(distancia(ouvido, ev.ponto), panPonto(eu, ev.ponto));
+      } else if (ev.tipo === 'arma-pega') {
+        if (ev.id === eu.id) sons.pegarArma();
       } else if (ev.tipo === 'saque') {
         if (ev.id === p.idVista) sons.saque(ev.arma);
       } else if (ev.tipo === 'passo') {
@@ -562,6 +569,7 @@ function montar(raiz, ctx) {
     const progressoRecarga = arma && arma.recarregandoAte > 0
       ? 1 - (arma.recarregandoAte - mundo.tempo) / def.recarga : 0;
     return {
+      pegar: eu.vivo ? alvoPegar(mundo, eu)?.arma.tipo ?? null : null,
       bomba: estadoBomba(p, eu), papel: eu.time === regras.terroristas ? 'T' : 'CT',
       compra: eu.vivo && p.mundo.economia && regras.fase === 'freeze'
         ? estadoCompra(eu, eu.time === regras.terroristas ? 'T' : 'CT') : null,

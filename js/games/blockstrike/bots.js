@@ -9,6 +9,7 @@ import { olho, direcao, temVisada } from './fisica.js';
 import { caminho, maisProximo, coberturaPerto } from './navegacao.js';
 import { siteEm } from './bomba.js';
 import { noFogo, visadaLivre } from './granadas.js';
+import { primariaPerto } from './armasChao.js';
 
 const ALCANCE_VISAO = 60;
 const MEIO_CONE = (110 / 2) * (Math.PI / 180);
@@ -41,6 +42,7 @@ const ALCANCE_MOLOTOV = [6, 22];
 const FOGO_OLHAR = 1.2; // m à frente: fogo aqui no caminho → espera em vez de atravessar
 const FOGO_SAIDA = 1.5; // m além da borda do fogo para onde foge quem está queimando
 const SAIDA_FIXA = 0.6; // s mantendo a mesma saída do fogo
+const BUSCA_ARMA = 10; // m: sem primária, vai pegar uma no chão até esta distância
 const FUMACA_RECUO = 6; // m à frente para a smoke que cobre a fuga
 const DESVIO_MIRA = 0.15; // rad: variação da mira parada no posto entre os CTs
 
@@ -467,7 +469,20 @@ function mirarEntrada(ent, c, mundo, dt, cmd) {
   cmd.pitch = ent.pitch + Math.max(-GIRO_MAX * dt, Math.min(GIRO_MAX * dt, -ent.pitch));
 }
 
+// Sem primária e sem inimigo à vista: a primária com munição no chão mais perto e visível (posição) ou null.
+function buscarArma(ent, mundo) {
+  if (ent.armas.primaria || !mundo.armasChao?.length) return null;
+  const o = olho(ent);
+  return primariaPerto(mundo, ent, BUSCA_ARMA, (p) => temVisada(o, { x: p.x, y: p.y + 0.2, z: p.z }, mundo.mapa.caixas));
+}
+
 function recarregarSePreciso(ent, cmd, temAlvo) {
+  const prim = ent.armas.primaria;
+  // Pegou uma primária do chão (ou ainda está na pistola com a primária carregada): volta para ela.
+  if (!cmd.slot && (ent.slot === 'pistola' || ent.slot === 'faca') && prim && prim.municao + prim.reserva > 0) {
+    cmd.slot = 'primaria';
+    return;
+  }
   const arma = ent.armas[ent.slot];
   const def = ARMAS[arma.tipo];
   if (arma.municao === 0 && arma.reserva === 0 && ent.slot === 'primaria') {
@@ -576,6 +591,7 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     }
     destino = seguirRota(ent, c, grafo, dt, cmd);
     const tarefa = tarefaBomba(ent, mundo, cmd);
+    const armaNoChao = tarefa?.direto || tarefa?.parado ? null : buscarArma(ent, mundo);
     if (tarefa?.direto) {
       cmd.yaw = girar(ent.yaw, yawPara(ent.pos, tarefa.direto), dt);
       destino = tarefa.direto;
@@ -588,6 +604,7 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
       // CT antes da plantada que chegou ao `espera`: fica no posto segurando o ângulo.
       c.estado = 'posto';
     }
+    if (armaNoChao) destino = armaNoChao; // passa por cima e pega (alvoAutomatico em mundo.js)
     // Ouviu passos de inimigo: segue a rota, mas com a mira virada para o barulho.
     olharRuido(ent, c, mundo, dt, cmd);
   }

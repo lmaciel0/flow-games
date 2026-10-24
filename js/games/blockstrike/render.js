@@ -193,9 +193,9 @@ export function criarRender(canvas, mapa) {
   }
 
   // Troca o modelo na mão do boneco: as mesmas caixas da arma em primeira pessoa (a granada não aparece).
-  function armarAvatar(a, tipo) {
-    a.tipo = tipo;
-    a.arma.clear();
+  // Caixas da arma `tipo` (modelos.js) dentro de `grupo`: a do boneco e a que está no chão.
+  function montarArma(grupo, tipo) {
+    grupo.clear();
     const modelo = MODELOS_ARMA[tipo];
     if (!modelo) return;
     for (const [w, h, d, x, y, z, claro] of modelo.caixas) {
@@ -203,7 +203,35 @@ export function criarRender(canvas, mapa) {
       if (!geoArma.has(chave)) geoArma.set(chave, new THREE.BoxGeometry(w, h, d));
       const m = new THREE.Mesh(geoArma.get(chave), tipo === 'faca' && !claro ? matFaca : claro ? matArmaClara : matArma);
       m.position.set(x, y, z);
-      a.arma.add(m);
+      grupo.add(m);
+    }
+  }
+
+  function armarAvatar(a, tipo) {
+    a.tipo = tipo;
+    montarArma(a.arma, tipo);
+  }
+
+  // Armas no chão: o modelo deitado de lado, girando enquanto voa; some quando alguém pega ou o round vira.
+  const armasNoChao = new Map(); // id da arma solta → Group
+  function desenharArmasChao(mundo) {
+    const vivas = new Set();
+    for (const a of mundo.armasChao ?? []) {
+      vivas.add(a.id);
+      let g = armasNoChao.get(a.id);
+      if (!g) {
+        g = new THREE.Group();
+        montarArma(g, a.arma.tipo);
+        scene.add(g);
+        armasNoChao.set(a.id, g);
+      }
+      g.position.set(a.pos.x, a.pos.y + 0.04, a.pos.z);
+      g.rotation.set(0, a.rotY, Math.PI / 2);
+    }
+    for (const [id, g] of armasNoChao) {
+      if (vivas.has(id)) continue;
+      scene.remove(g);
+      armasNoChao.delete(id);
     }
   }
 
@@ -891,6 +919,7 @@ export function criarRender(canvas, mapa) {
     desenharGranadas(mundo, dt);
     desenharFumaca(mundo);
     desenharFogo(mundo);
+    desenharArmasChao(mundo);
     if (viewAtual) posarArma(vista, mundo, dt);
     luzTiro.intensity = clarao > 0 ? 2 : 0;
     luzTiro.position.copy(camera.position);

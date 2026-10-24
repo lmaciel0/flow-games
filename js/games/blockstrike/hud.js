@@ -27,7 +27,7 @@ const CORES_MIRA = [['#4ade80', 'Verde'], ['#ffffff', 'Branca'], ['#22d3ee', 'Ci
 const CONTROLES = [
   ['WASD', 'andar'], ['Mouse', 'mirar'], ['Clique', 'atirar'], ['Botão direito', 'luneta / estocada'],
   ['R', 'recarregar'], ['Espaço', 'pular'], ['C', 'agachar'], ['Shift', 'andar em silêncio'],
-  ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['4', 'granada · 4 troca · esq. longe · dir. curto · ambos médio'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
+  ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['4', 'granada · 4 troca · esq. longe · dir. curto · ambos médio'], ['Q', 'última arma'], ['G', 'soltar arma'], ['E', 'pegar arma do chão'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
 // Nome do tipo de granada na mão, no lugar da munição.
 const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke', molotov: 'Molotov' };
@@ -511,6 +511,7 @@ export function criarHud(raiz, handlers) {
   const acaoBarra = el('div', { class: 'bs-acao', id: 'bs-acao', hidden: true },
     el('small'), el('div', { class: 'bs-recarga-barra' }, el('i')));
   const dicaC4 = el('div', { class: 'bs-dica-c4', id: 'bs-dica-c4', hidden: true });
+  const dicaPegar = el('div', { class: 'bs-dica-pegar', id: 'bs-dica-pegar', hidden: true });
   const anuncio = el('div', { class: 'bs-anuncio', id: 'bs-anuncio', hidden: true });
   const clarao = el('div', { class: 'bs-explosao', id: 'bs-explosao', hidden: true });
   const cegueira = el('div', { class: 'bs-cegueira', id: 'bs-cegueira', hidden: true });
@@ -519,7 +520,7 @@ export function criarHud(raiz, handlers) {
     el('div', { class: 'bs-topo' },
       el('div', { class: 'bs-placar' }, vivosAzul, placarAzul, timerEl, placarLaranja, vivosLaranja), roundEl),
     radar, killfeed, mira, hitmarker, danoArco, espectando, relatorio, fimRound, dicaTrava, dicaTreino, recarga, avisoMunicao,
-    bombaInfo, acaoBarra, dicaC4, anuncio, clarao, cegueira,
+    bombaInfo, acaoBarra, dicaC4, dicaPegar, anuncio, clarao, cegueira,
     el('div', { class: 'bs-base' }, el('div', { class: 'bs-vida' }, el('small', { texto: 'VIDA' }), hpEl),
       el('div', { class: 'bs-arma' }, armaEl, municaoEl)));
   palco.append(hudEl);
@@ -884,6 +885,8 @@ export function criarHud(raiz, handlers) {
     const dica = b && v.vivo && !agindo
       ? DICAS_C4[b.dica] ?? (b.levaC4 ? 'Você leva a C4 · vá a um bombsite (A ou B)' : '') : '';
     mostrar(dicaC4, Boolean(dica));
+    mostrar(dicaPegar, Boolean(v.pegar) && v.vivo);
+    if (v.pegar) escrever(dicaPegar, `E · pegar ${ARMAS[v.pegar].nome}`);
     if (dica) escrever(dicaC4, dica);
     hudEl.classList.toggle('bs-treino', treino);
     mostrar(dicaTreino, treino && v.vivo);
