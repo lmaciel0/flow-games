@@ -14,6 +14,7 @@ import { armasDoEquip, danoComColete, perderEquip, premiarKill } from './economi
 import {
   abrirBuracos, atualizarGranadas, atualizarMao, criarMao, granadasDe, lancar, limparGranadas, proximaGranada,
 } from './granadas.js';
+import { alvoAutomatico, alvoPegar, atualizarArmasChao, pegarArma, podeSoltar, soltarArma } from './armasChao.js';
 
 const PITCH_MAX = 1.5;
 const DIST_PASSO = 1.8;
@@ -47,7 +48,7 @@ export function criarMundo({ mapa, primariaJogador, dificuldade, rng, modo = 'pa
     const indice = i < 5 ? i - 1 : i - 5;
     entidades.push(criarEntidade(i, `Bot ${NOMES_BOTS[i - 1]}`, time, true, escolherPrimaria(indice, rng)));
   }
-  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [], fogos: [], danos: new Map() };
+  return { mapa, entidades, jogadorId: ID_JOGADOR, tempo: 0, dificuldade, rng, modo, ruidos: [], bomba: null, granadas: [], fumacas: [], fogos: [], armasChao: [], danos: new Map() };
 }
 
 // Passos e pousos viram ruído que os bots do outro time ouvem (ver `ouvir` em bots.js).
@@ -72,6 +73,7 @@ function registrarRuidos(mundo, eventos) {
 export function posicionarParaRound(mundo, ladoAzul) {
   limparGranadas(mundo);
   mundo.danos.clear();
+  mundo.armasChao = []; // arma solta não passa de um round para o outro
   const ladoLaranja = ladoAzul === 'A' ? 'B' : 'A';
   mundo.entidades.forEach((e, i) => {
     const lado = e.time === 'azul' ? ladoAzul : ladoLaranja;
@@ -109,7 +111,7 @@ export function posicionarParaRound(mundo, ladoAzul) {
 
 const idle = (e) => ({
   frente: 0, lado: 0, pular: false, agachar: false, devagar: false, atirar: false,
-  zoom: false, recarregar: false, usar: false, granada: null, slot: null, yaw: e.yaw, pitch: e.pitch,
+  zoom: false, recarregar: false, usar: false, soltar: false, pegar: false, granada: null, slot: null, yaw: e.yaw, pitch: e.pitch,
 });
 
 // Só levanta se o corpo em pé couber (sem teto em cima).
@@ -357,6 +359,33 @@ function trocarSlot(mundo, e, pedido, eventos) {
   eventos.push({ tipo: 'saque', id: e.id, arma: nova.tipo });
 }
 
+// Saca `slot` sem mexer na arma anterior (que acabou de ir para o chão).
+function sacar(mundo, e, slot, eventos) {
+  e.slot = slot;
+  const nova = e.armas[slot];
+  nova.prontaEm = Math.max(nova.prontaEm, mundo.tempo + SAQUE[slot]);
+  eventos.push({ tipo: 'saque', id: e.id, arma: nova.tipo });
+}
+
+// G solta a arma da mão (primária ou pistola) e saca a próxima; E pega a da mira (trocando pela do slot) e saca;
+// passar por cima de uma arma com o slot dela vazio pega sem trocar a da mão.
+function armasDoChao(mundo, e, cmd, eventos) {
+  if (cmd.soltar && podeSoltar(e.slot) && soltarArma(mundo, e, e.slot, eventos)) {
+    e.slotAnterior = 'faca';
+    sacar(mundo, e, ['primaria', 'pistola', 'faca'].find((s) => e.armas[s]), eventos);
+  }
+  const alvo = cmd.pegar ? alvoPegar(mundo, e) : null;
+  if (alvo) {
+    if (e.slot === 'granada') e.armas.granada.pino = null;
+    const slot = pegarArma(mundo, e, alvo, eventos);
+    if (slot !== e.slot) e.slotAnterior = e.slot;
+    sacar(mundo, e, slot, eventos);
+    return;
+  }
+  const auto = alvoAutomatico(mundo, e);
+  if (auto) pegarArma(mundo, e, auto, eventos);
+}
+
 // Granada na mão: o 4 de novo cicla o tipo; jogar (ou ficar sem estoque) volta para a arma anterior.
 function combateGranada(mundo, e, cmd, eventos) {
   const mao = e.armas.granada;
@@ -424,6 +453,8 @@ export function passo(mundo, dt, comandos, { congelado = false, comBomba = true 
       cmd = { ...cmd, atirar: false, zoom: false };
     }
     moverEntidade(e, cmd, dt, mundo.mapa.caixas, congelado, eventos);
+    // Soltar e pegar valem também no freeze (comprar e soltar para um aliado, como no CS), mas não plantando/desarmando.
+    if (e.armas) armasDoChao(mundo, e, acao ? { ...cmd, pegar: false, soltar: false } : cmd, eventos);
     if (!congelado) combate(mundo, e, cmd, dt, eventos);
     if (comBomba && !congelado && cmd.granada) lancar(mundo, e, cmd.granada, eventos, cmd.granadaAlvo ?? null);
   }
@@ -434,9 +465,12 @@ export function passo(mundo, dt, comandos, { congelado = false, comBomba = true 
     }, evs, dano));
   }
   // Trocas no mesmo passo valem para os dois lados: as mortes só têm efeito depois de todos agirem.
+  atualizarArmasChao(mundo, dt, eventos);
   for (const e of mundo.entidades) {
     if (!e.vivo || e.hp > 0) continue;
     e.vivo = false;
+    // Ao morrer cai a melhor arma (primária, senão a pistola), com a munição que tinha.
+    if (e.armas) soltarArma(mundo, e, e.armas.primaria ? 'primaria' : 'pistola', eventos, { morte: true });
     if (mundo.economia) perderEquip(e); // morrer perde primária, colete, kit e granadas
   }
   mundo.tempo += dt;
