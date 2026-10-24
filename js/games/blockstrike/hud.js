@@ -266,6 +266,7 @@ export function criarHud(raiz, handlers) {
   const novaMira = (id) => el('div', { class: 'bs-mira', id },
     el('i', { class: 'bs-mira-t' }), el('i', { class: 'bs-mira-b' }),
     el('i', { class: 'bs-mira-e' }), el('i', { class: 'bs-mira-d' }), el('i', { class: 'bs-mira-p' }));
+  const mira = novaMira('bs-mira'); // a do HUD: vai para o palco junto com o resto do HUD, mais abaixo
   const miraPrevia = novaMira('bs-mira-previa-alvo');
   const previaMira = el('div', { class: 'bs-mira-previa', id: 'bs-mira-previa' }, miraPrevia);
   const gradeEstilos = el('div', { class: 'bs-armas bs-mira-estilos', id: 'bs-mira-estilo' });
@@ -299,7 +300,7 @@ export function criarHud(raiz, handlers) {
   btnMiraPadrao.addEventListener('click', () => mudarMira({ ...MIRA_PADRAO }));
   // --- Carreira: números das partidas 5x5 salvos no navegador ---
   const carreiraEl = el('div', { class: 'bs-carreira', id: 'bs-carreira' });
-  const btnZerar = el('button', { type: 'button', class: 'action-btn secondary-btn bs-btn-tela', id: 'bs-zerar-carreira', texto: 'Zerar estatísticas' });
+  const btnZerar = el('button', { type: 'button', class: 'action-btn secondary-btn bs-btn-tela', id: 'bs-zerar-carreira', texto: 'Zerar estatísticas', 'aria-live': 'polite' });
   // Dois cliques: o primeiro só pede confirmação por alguns segundos.
   let timerZerar = null;
   btnZerar.addEventListener('click', () => {
@@ -341,17 +342,21 @@ export function criarHud(raiz, handlers) {
     alvo.dataset.ponto = m.ponto ? '1' : '0';
     alvo.style.setProperty('--comp', `${m.tamanho}px`);
     alvo.style.setProperty('--esp', `${m.espessura}px`);
+    // Recuo inteiro até o meio: com espessura ímpar a mira fica 0,5px fora do centro, mas nítida.
+    alvo.style.setProperty('--meio', `${-Math.floor(m.espessura / 2)}px`);
+    alvo.style.setProperty('--meio-pt', `${-Math.floor((m.estilo === 'ponto' ? m.espessura + 2 : m.espessura) / 2)}px`);
   };
   const marcarMira = () => {
     const m = estado.mira;
-    for (const b of gradeEstilos.children) b.classList.toggle('selecionada', b.dataset.estilo === m.estilo);
+    const marcar = (b, sel) => { b.classList.toggle('selecionada', sel); b.setAttribute('aria-pressed', String(sel)); };
+    for (const b of gradeEstilos.children) marcar(b, b.dataset.estilo === m.estilo);
     for (const [chave, { rng, rotulo }] of Object.entries(slidersMira)) {
       rng.value = String(m[chave]);
       escrever(rotulo, `${m[chave]}px`);
     }
-    chkPonto.checked = m.ponto;
     chkPonto.disabled = m.estilo === 'ponto';
-    for (const b of coresMira.querySelectorAll('.bs-mira-cor')) b.classList.toggle('selecionada', b.dataset.cor === m.cor);
+    chkPonto.checked = m.ponto || chkPonto.disabled; // só o ponto: o ponto aparece sempre
+    for (const b of coresMira.querySelectorAll('.bs-mira-cor')) marcar(b, b.dataset.cor === m.cor);
     corLivre.value = m.cor;
     palco.style.setProperty('--cor-mira', m.cor);
     desenharMira(miraPrevia, m);
@@ -387,6 +392,9 @@ export function criarHud(raiz, handlers) {
     el('ul', {}, ...CONTROLES.map(([k, o]) => el('li', {}, el('kbd', { texto: k }), el('span', { texto: o })))));
   const menuTexto = el('p', { class: 'bs-menu-texto', id: 'bs-menu-texto', texto: 'FPS 5x5 contra bots' });
   const campo = (rotulo, ...filhos) => el('label', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: rotulo }), ...filhos);
+  // Grade de botões: num <label>, clicar no rótulo apertaria o primeiro botão.
+  const grupo = (rotulo, ...filhos) => el('div', { class: 'bs-campo', role: 'group', 'aria-label': rotulo },
+    el('span', { class: 'bs-rotulo', texto: rotulo }), ...filhos);
   // Menu no estilo do CS2: abas na barra do topo, painel à esquerda e o Jogar fixo no canto.
   const ABAS = [
     ['jogar', 'Jogar', [gradeModos, campoDif]],
@@ -397,12 +405,12 @@ export function criarHud(raiz, handlers) {
     ]],
     ['mira', 'Mira', [
       previaMira,
-      campo('Estilo', gradeEstilos),
+      grupo('Estilo', gradeEstilos),
       campo('Tamanho', sliderMira('tamanho')),
       campo('Espessura', sliderMira('espessura')),
       campo('Abertura', sliderMira('abertura')),
       el('label', { class: 'bs-check' }, chkPonto, el('span', { texto: 'Ponto central' })),
-      campo('Cor', coresMira),
+      grupo('Cor', coresMira),
       btnMiraPadrao,
     ]],
     ['carreira', 'Carreira', [carreiraEl, btnZerar]],
@@ -466,7 +474,6 @@ export function criarHud(raiz, handlers) {
   };
   hud.esconderMenu = () => mostrar(menu, false);
   // --- HUD em jogo ---
-  const mira = novaMira('bs-mira');
   const hitmarker = el('div', { class: 'bs-hitmarker', id: 'bs-hitmarker', hidden: true });
   const danoArco = el('div', { class: 'bs-dano', id: 'bs-dano', hidden: true }, el('i'));
   const hpEl = el('div', { class: 'bs-hp', id: 'bs-hp', texto: '100' });

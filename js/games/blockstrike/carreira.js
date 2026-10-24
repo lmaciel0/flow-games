@@ -24,16 +24,16 @@ export function lerCarreira(bruto) {
 }
 
 // Eventos de um passo. Precisão por disparo: o tiro conta como acerto se algum chumbo pegou
-// (a escopeta não passa de 100%). Dano de granada, sem tiro antes, não entra na precisão.
+// (a escopeta não passa de 100%). Só vale acerto da mesma arma do tiro: granada no mesmo passo não entra.
 export function contarEventos(c, eventos, id) {
-  let tiroAberto = false;
+  let tiroAberto = null; // arma do disparo ainda sem acerto
   for (const ev of eventos) {
     if (ev.tipo === 'tiro' && ev.atirador === id) {
       c.tiros += 1;
-      tiroAberto = true;
-    } else if (ev.tipo === 'acerto' && ev.atirador === id && tiroAberto) {
+      tiroAberto = ev.arma;
+    } else if (ev.tipo === 'acerto' && ev.atirador === id && tiroAberto !== null && ev.arma === tiroAberto) {
       c.acertos += 1;
-      tiroAberto = false;
+      tiroAberto = null;
     } else if (ev.tipo === 'morte') {
       if (ev.assassino === id) {
         c.kills += 1;

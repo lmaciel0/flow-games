@@ -272,6 +272,9 @@ function montar(raiz, ctx) {
     hud.definirCarreira(resumoCarreira(carreira));
   }
   hud.definirCarreira(resumoCarreira(carreira));
+  // Fechar a aba ou sair da rota no meio do round também grava.
+  const salvarSeEmPartida = () => { if (partida && !partida.treino) salvarCarreira(); };
+  window.addEventListener('pagehide', salvarSeEmPartida);
 
   // Fundo 3D do menu: o render carrega sob demanda, como na partida, e sai antes dela.
   let fundo = null;
@@ -694,7 +697,7 @@ function montar(raiz, ctx) {
   }
 
   function voltarAoMenu() {
-    if (partida && !partida.treino) salvarCarreira(); // abates do round pela metade não se perdem
+    salvarSeEmPartida(); // abates do round pela metade não se perdem
     cancelarInicio();
     destruirPartida();
     hud.mostrarPausa(false);
@@ -810,6 +813,8 @@ function montar(raiz, ctx) {
     },
     resume: reexibir,
     destruir() {
+      salvarSeEmPartida();
+      window.removeEventListener('pagehide', salvarSeEmPartida);
       cancelarInicio();
       destruirPartida();
       desligarFundo();

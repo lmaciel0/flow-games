@@ -155,23 +155,23 @@
 .bs-hp, .bs-municao { font-weight: 800; font-size: clamp(1.1rem, 3.4vw, 1.9rem); line-height: 1.1; }
 .bs-hp.baixo { color: #f87171; }
 
-/* Mira: quatro traços que se afastam do centro com a abertura (--abertura). */
 /* Mira: --comp (tamanho), --esp (espessura) e --abertura (vão até o centro) vêm do Crosshair Lab (mira.js).
    --extra só anima a prévia da dinâmica no menu. */
 @property --extra { syntax: '<length>'; inherits: true; initial-value: 0px; }
 .bs-mira {
   position: absolute; left: 50%; top: 50%; width: 0; height: 0;
-  --abertura: 4px; --comp: 8px; --esp: 2px; --vao: calc(var(--abertura) + var(--extra)); --pt: var(--esp);
+  --abertura: 4px; --comp: 8px; --esp: 2px; --meio: -1px; --meio-pt: -1px;
+  --vao: calc(var(--abertura) + var(--extra, 0px)); --pt: var(--esp);
 }
 .bs-mira i { position: absolute; background: var(--cor-mira); box-shadow: 0 0 2px #000; }
 .bs-mira.escondida { display: none; }
-.bs-mira-t, .bs-mira-b { width: var(--esp); height: var(--comp); left: calc(var(--esp) / -2); }
-.bs-mira-e, .bs-mira-d { height: var(--esp); width: var(--comp); top: calc(var(--esp) / -2); }
+.bs-mira-t, .bs-mira-b { width: var(--esp); height: var(--comp); left: var(--meio); }
+.bs-mira-e, .bs-mira-d { height: var(--esp); width: var(--comp); top: var(--meio); }
 .bs-mira-t { top: calc(-1 * (var(--comp) + var(--vao))); }
 .bs-mira-b { top: var(--vao); }
 .bs-mira-e { left: calc(-1 * (var(--comp) + var(--vao))); }
 .bs-mira-d { left: var(--vao); }
-.bs-mira-p { display: none; width: var(--pt); height: var(--pt); left: calc(var(--pt) / -2); top: calc(var(--pt) / -2); }
+.bs-mira-p { display: none; width: var(--pt); height: var(--pt); left: var(--meio-pt); top: var(--meio-pt); }
 .bs-mira[data-ponto="1"] .bs-mira-p, .bs-mira[data-estilo="ponto"] .bs-mira-p { display: block; }
 .bs-mira[data-estilo="ponto"] { --pt: calc(var(--esp) + 2px); }
 .bs-mira[data-estilo="ponto"] :is(.bs-mira-t, .bs-mira-b, .bs-mira-e, .bs-mira-d) { display: none; }
@@ -474,11 +474,14 @@
 .bs-menu .bs-menu-titulo {
   font-size: 1rem; letter-spacing: 0.14em; text-transform: uppercase; color: #fb923c; white-space: nowrap;
 }
-/* Palco estreito: a barra de abas rola na horizontal em vez de alargar o menu. */
-.bs-menu-abas { display: flex; align-items: center; margin: 0 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.bs-menu-abas::-webkit-scrollbar { display: none; }
-.bs-menu-aba { flex: 0 0 auto; white-space: nowrap; }
+/* Palco estreito: a barra de abas rola na horizontal (barra fina) em vez de alargar o menu. */
+.bs-menu-abas {
+  display: flex; align-items: center; margin: 0 auto; min-width: 0; padding: 0.15rem 0;
+  overflow-x: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+.bs-menu-aba:focus-visible { outline-offset: -2px; }
 .bs-menu-aba {
+  flex: 0 0 auto; white-space: nowrap;
   font: inherit; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
   color: var(--text-secondary); background: none; border: 0; border-left: 1px solid rgba(255, 255, 255, 0.15);
   padding: 0.3rem 1.1rem; transition: color var(--transition-fast);

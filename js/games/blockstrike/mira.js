@@ -13,7 +13,7 @@ export const MIRA_PADRAO = { estilo: 'dinamica', tamanho: 8, espessura: 2, abert
 const ABERTURA_CLASSICA = 6;
 const COR = /^#[0-9a-f]{6}$/i;
 
-const inteiro = (v, [min, max], padrao) => (Number.isFinite(Number(v)) ? Math.max(min, Math.min(max, Math.round(Number(v)))) : padrao);
+const inteiro = (v, [min, max], padrao) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(min, Math.min(max, Math.round(v))) : padrao);
 
 // `bruto` é o objeto salvo (ou lixo); `corLegada` é a cor da versão antiga, que só tinha 5 cores fixas.
 export function lerMira(bruto, corLegada) {

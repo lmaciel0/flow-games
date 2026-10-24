@@ -261,7 +261,7 @@ function aplicarDano(mundo, atirador, tipo, golpe, eventos, danoFixo) {
   }
   registrarDano(mundo, atirador.id, alvo.id, Math.min(dano, alvo.hp));
   alvo.hp = Math.max(0, alvo.hp - dano);
-  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, parte: golpe.parte, dano, ponto: golpe.ponto, capacete });
+  eventos.push({ tipo: 'acerto', atirador: atirador.id, alvo: alvo.id, arma: tipo, parte: golpe.parte, dano, ponto: golpe.ponto, capacete });
   if (alvo.bot && alvo.cerebro) alvo.cerebro.ultimoDanoDe = atirador.id;
   if (alvo.hp > 0) return;
   // `vivo` só cai no fim do passo (ver `passo`): quem ainda não agiu neste passo revida.
