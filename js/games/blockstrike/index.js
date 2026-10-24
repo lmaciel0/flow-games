@@ -15,6 +15,8 @@ import { olho, direcao } from './fisica.js';
 import { visadaLivre, granadasDe } from './granadas.js';
 import { criarArma, calcularSpread, velocidadeDe } from './armas.js';
 import { criarHud } from './hud.js';
+import { lerMira } from './mira.js';
+import { contarEventos, contarPartida, lerCarreira, novaCarreira, resumoCarreira } from './carreira.js';
 import { criarGrafo } from './navegacao.js';
 import { criarCerebro, pensar } from './bots.js';
 import { criarPartida, ladoAzul, tickPartida } from './rounds.js';
@@ -24,11 +26,11 @@ import {
 } from './economia.js';
 
 const DT_MAX = 0.05;
+const FOGO_AVISO = 0.5; // s entre hitmarkers/dor do mesmo par atacante→vítima no fogo
 const AVISTAR_A_CADA = 0.25; // s entre recálculos dos inimigos avistados (radar)
 const ALCANCE_AVISTAR = 50;
 const MODOS = ['partida', 'treino'];
 const TAMANHOS = ['normal', 'grande'];
-const COR_MIRA = /^#[0-9a-f]{6}$/i;
 
 const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
@@ -93,7 +95,6 @@ function lerConfig(storage) {
   const dificuldade = storage.get('dificuldade', 'medio');
   const modo = storage.get('modo', 'partida');
   const tamanho = storage.get('tamanho', 'normal');
-  const corMira = String(storage.get('corMira', '#4ade80'));
   const volume = Number(storage.get('volume', 0.8));
   return {
     primaria: ARMAS[primaria]?.slot === 'primaria' ? primaria : 'rifle',
@@ -101,7 +102,7 @@ function lerConfig(storage) {
     sensibilidade: clamp(Number(storage.get('sensibilidade', 1)) || 1, 0.2, 3),
     modo: MODOS.includes(modo) ? modo : 'partida',
     tamanho: TAMANHOS.includes(tamanho) ? tamanho : 'normal',
-    corMira: COR_MIRA.test(corMira) ? corMira : '#4ade80',
+    mira: lerMira(storage.get('mira', null), storage.get('corMira', null)), // corMira: a versão antiga só tinha a cor
     volume: Number.isFinite(volume) ? clamp(volume, 0, 1) : 0.8,
     sensLuneta: clamp(Number(storage.get('sensLuneta', 1)) || 1, 0.3, 2),
     boneco: storage.get('boneco', 'azul') === 'laranja' ? 'laranja' : 'azul',
@@ -229,9 +230,9 @@ function montar(raiz, ctx) {
       raiz.dataset.tamanho = t;
       ctx.storage.set('tamanho', t);
     },
-    mudarCorMira(c) {
-      cfg.corMira = c;
-      ctx.storage.set('corMira', c);
+    mudarMira(m) {
+      cfg.mira = m;
+      ctx.storage.set('mira', m);
     },
     telaCheia: () => alternarTelaCheia(),
     mudarDificuldade(d) {
@@ -251,6 +252,10 @@ function montar(raiz, ctx) {
     previaArma(tipo) {
       previaMenu = tipo;
     },
+    zerarCarreira() {
+      carreira = novaCarreira();
+      salvarCarreira();
+    },
     mudarBoneco(time) {
       cfg.boneco = time;
       ctx.storage.set('boneco', time);
@@ -260,6 +265,17 @@ function montar(raiz, ctx) {
     jogarDeNovo: () => iniciar(),
   });
   hud.definirConfig(cfg);
+
+  // Carreira (só partidas 5x5): conta em memória e grava no fim de cada round, da partida e ao sair.
+  let carreira = lerCarreira(ctx.storage.get('carreira', null));
+  function salvarCarreira() {
+    ctx.storage.set('carreira', carreira);
+    hud.definirCarreira(resumoCarreira(carreira));
+  }
+  hud.definirCarreira(resumoCarreira(carreira));
+  // Fechar a aba ou sair da rota no meio do round também grava.
+  const salvarSeEmPartida = () => { if (partida && !partida.treino) salvarCarreira(); };
+  window.addEventListener('pagehide', salvarSeEmPartida);
 
   // Fundo 3D do menu: o render carrega sob demanda, como na partida, e sai antes dela.
   let fundo = null;
@@ -314,7 +330,11 @@ function montar(raiz, ctx) {
         sons.golpe(ev.forte, ev.acerto, distDe(ev.atirador), panDe(ev.atirador));
         if (ev.atirador === p.idVista) render.golpe(ev.forte);
       } else if (ev.tipo === 'acerto') {
-        if (ev.ponto) render.sangue(ev.ponto, ev.parte === 'cabeca');
+        // Fogo: pulsos a cada 0,25 s. Sem sangue, e hitmarker e dor no máximo a cada FOGO_AVISO.
+        const fogo = ev.arma === 'molotov';
+        if (fogo && mundo.tempo - (p.avisoFogo.get(`${ev.atirador}>${ev.alvo}`) ?? -Infinity) < FOGO_AVISO) continue;
+        if (fogo) p.avisoFogo.set(`${ev.atirador}>${ev.alvo}`, mundo.tempo);
+        if (ev.ponto && !fogo) render.sangue(ev.ponto, ev.parte === 'cabeca');
         if (ev.capacete && ev.ponto) {
           render.fagulhasCapacete(ev.ponto);
           // O "plink" substitui o som de headshot de quem atirou; os outros ouvem pela distância.
@@ -322,12 +342,12 @@ function montar(raiz, ctx) {
           sons.plink(proprio ? 0 : distancia(ouvido, ev.ponto), proprio ? 0 : panPonto(eu, ev.ponto));
         }
         if (ev.atirador === eu.id) {
-          if (!ev.capacete) sons.acerto(ev.parte === 'cabeca');
+          if (!ev.capacete && !fogo) sons.acerto(ev.parte === 'cabeca');
           hud.acerto(ev.parte === 'cabeca');
         }
         if (ev.alvo === eu.id) {
           sons.dano();
-          hud.dano(anguloDe(eu, mundo.entidades[ev.atirador]));
+          hud.dano(fogo ? null : anguloDe(eu, mundo.entidades[ev.atirador]));
         }
       } else if (ev.tipo === 'morte') {
         if (ev.assassino === eu.id) {
@@ -355,7 +375,8 @@ function montar(raiz, ctx) {
       } else if (ev.tipo === 'pouso') {
         sons.pouso(distDe(ev.id), panDe(ev.id));
       } else if (ev.tipo === 'arremesso' || ev.tipo === 'granada-quique' || ev.tipo === 'explosao-he' ||
-        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca') {
+        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca' ||
+        ev.tipo === 'fogo' || ev.tipo === 'fogo-apagado' || ev.tipo === 'molotov-ar') {
         reagirGranada(p, ev, { eu, ouvido });
       } else {
         reagirBomba(p, ev, { eu, ouvido });
@@ -378,6 +399,12 @@ function montar(raiz, ctx) {
       sons.flash(dist, pan);
       render.clarao(pt);
     } else if (ev.tipo === 'fumaca') sons.fumaca(dist, pan);
+    else if (ev.tipo === 'fogo') sons.molotov(dist, pan);
+    else if (ev.tipo === 'fogo-apagado') sons.apagar(dist, pan);
+    else if (ev.tipo === 'molotov-ar') {
+      sons.molotov(dist, pan);
+      render.clarao(pt, 0xff8a1f); // estourou no ar: só o clarão laranja, sem fogo
+    }
     else if (ev.tipo === 'cegueira' && ev.id === eu.id) sons.zumbido(ev.dur);
   }
 
@@ -404,6 +431,18 @@ function montar(raiz, ctx) {
     } else if (ev.tipo === 'bomba-pega') {
       if (mundo.bomba?.terroristas === eu.time) hud.anuncio(`${mundo.entidades[ev.id].nome} pegou a C4`, 'aviso');
     }
+  }
+
+  // Crepitar do fogo das molotovs, de cada poça, enquanto o round corre.
+  const CREPITAR_A_CADA = 0.13;
+  function crepitarFogos(p, dt) {
+    const fogos = p.mundo.fogos;
+    if (!fogos?.length || p.partida.fase !== 'jogo') return;
+    p.proxCrepito = (p.proxCrepito ?? 0) - dt;
+    if (p.proxCrepito > 0) return;
+    p.proxCrepito = CREPITAR_A_CADA;
+    const eu = p.mundo.entidades[p.mundo.jogadorId];
+    for (const f of fogos) sons.crepitar(distancia(olho(eu), f.pos), panPonto(eu, f.pos));
   }
 
   // Bipe da C4 plantada, cada vez mais rápido; sai do ponto onde ela está.
@@ -463,6 +502,8 @@ function montar(raiz, ctx) {
     }
     const kd = eu.kills / Math.max(1, eu.mortes);
     if (kd > (Number(st.get('melhorKD', 0)) || 0)) st.set('melhorKD', kd);
+    contarPartida(carreira, regras.resultado);
+    salvarCarreira();
     ctx.conta?.registrar('blockstrike', { tipo: 'partida', venceu: regras.resultado === 'azul', kd });
   }
 
@@ -481,6 +522,8 @@ function montar(raiz, ctx) {
         const mvp = registrarMvp(mundo, partida.vencedorRound ?? null, partida.motivo);
         const ent = mvp && mundo.entidades[mvp.id];
         p.mvp = ent ? { nome: ent.nome, motivo: mvp.motivo, kills: mvp.kills, voce: ent.id === eu.id } : null;
+        if (p.mvp?.voce) carreira.mvps += 1;
+        salvarCarreira();
         // A fanfarra do MVP substitui a vinheta de vitória.
         if (p.mvp?.voce) sons.mvp();
         else if (partida.vencedorRound) sons.fimRound(partida.vencedorRound === eu.time);
@@ -564,8 +607,11 @@ function montar(raiz, ctx) {
       const c = pensar(e, mundo, p.grafo, mundo.dificuldade, dt, p.rngBots);
       comandos.set(e.id, atira ? c : { ...c, atirar: false });
     }
-    reagir(p, passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze', comBomba: atira }));
+    const eventos = passo(mundo, dt, comandos, { congelado: regras.fase === 'freeze', comBomba: atira });
+    if (!p.treino) contarEventos(carreira, eventos, mundo.jogadorId);
+    reagir(p, eventos);
     bipesDaBomba(p, dt);
+    crepitarFogos(p, dt);
     if (p.treino) regras.tempo += dt;
     else if (regras.fase !== 'fim-partida') {
       const segAntes = Math.ceil(regras.tempo);
@@ -676,6 +722,7 @@ function montar(raiz, ctx) {
   }
 
   function voltarAoMenu() {
+    salvarSeEmPartida(); // abates do round pela metade não se perdem
     cancelarInicio();
     destruirPartida();
     hud.mostrarPausa(false);
@@ -749,7 +796,7 @@ function montar(raiz, ctx) {
       const render = criarRender(canvas, MAPA);
       partida = {
         mundo, render, entrada, grafo, rngBots, partida: regrasIniciais, treino,
-        loadoutAberto: false, ultimoTiro: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
+        loadoutAberto: false, ultimoTiro: new Map(), avisoFogo: new Map(), avistados: new Set(), avistarEm: 0, proxBip: 0,
         idVista: mundo.jogadorId, cliqueAntes: false, raf: null, antes: 0, lock, pausado: false,
         desligarTrava: () => document.removeEventListener('pointerlockchange', aoTravar),
       };
@@ -791,6 +838,8 @@ function montar(raiz, ctx) {
     },
     resume: reexibir,
     destruir() {
+      salvarSeEmPartida();
+      window.removeEventListener('pagehide', salvarSeEmPartida);
       cancelarInicio();
       destruirPartida();
       desligarFundo();

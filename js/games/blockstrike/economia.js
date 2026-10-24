@@ -8,7 +8,7 @@ import { COLETE, ECONOMIA, ITENS, MAX_GRANADAS, familia } from './config.js';
 import { criarArma } from './armas.js';
 
 export const equipVazio = () => ({
-  primaria: null, colete: 0, capacete: false, kit: false, granadas: { smoke: 0, flash: 0, he: 0 },
+  primaria: null, colete: 0, capacete: false, kit: false, granadas: { smoke: 0, flash: 0, he: 0, molotov: 0 },
 });
 
 // Liga a economia: todo mundo começa com o dinheiro inicial e sem equipamento.
@@ -80,7 +80,7 @@ export function motivoNaoComprar(e, item, papel) {
   if (def.grupo === 'granada' && totalGranadas(eq) >= 4) return 'ja-tem';
   return e.dinheiro < def.preco ? 'dinheiro' : null; // o que já se tem aparece como "tem", mesmo sem dinheiro
 }
-const totalGranadas = (eq) => eq.granadas.smoke + eq.granadas.flash + eq.granadas.he;
+const totalGranadas = (eq) => Object.values(eq.granadas).reduce((a, n) => a + n, 0);
 
 // Compra: tira o dinheiro, atualiza `e.equip` e, se a arma já está montada (freeze em andamento), já entrega.
 export function comprar(e, item, papel) {
@@ -127,7 +127,7 @@ export function botComprar(e, papel) {
   if (e.dinheiro >= ITENS.coleteCapacete.preco) comprar(e, 'coleteCapacete', papel);
   else if (e.dinheiro >= ITENS.colete.preco) comprar(e, 'colete', papel);
   if (papel === 'CT' && e.dinheiro >= ITENS.kit.preco) comprar(e, 'kit', papel);
-  for (const g of ['he', 'flash', 'smoke']) if (e.dinheiro >= ITENS[g].preco) comprar(e, g, papel);
+  for (const g of ['he', 'molotov', 'flash', 'smoke']) if (e.dinheiro >= ITENS[g].preco) comprar(e, g, papel);
 }
 
 // Para o menu: cada item com preço e se dá para comprar (ou por que não).

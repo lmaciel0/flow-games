@@ -5,6 +5,7 @@
 
 import { ARMAS, ITENS, familia } from './config.js';
 import { MODELOS_ARMA } from './modelos.js';
+import { ESTILOS_MIRA, LIMITES_MIRA, MIRA_PADRAO, aberturaMira } from './mira.js';
 
 const PRIMARIAS = ['rifle', 'fuzil', 'rifleS', 'smg', 'miniSmg', 'smgS', 'sniper', 'escopeta'];
 const TECLAS_LOADOUT = PRIMARIAS.map((_, i) => `Digit${i + 1}`);
@@ -29,7 +30,8 @@ const CONTROLES = [
   ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['4', 'granada · 4 troca · esq. longe · dir. curto · ambos médio'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
 // Nome do tipo de granada na mão, no lugar da munição.
-const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke' };
+const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke', molotov: 'Molotov' };
+const ZERAR_MS = 4000;
 const RADAR_ESCALA = 2.6; // px por metro
 const RADAR_LADO = 132; // px
 const MAX_LINHAS_FEED = 5;
@@ -132,7 +134,7 @@ export function criarHud(raiz, handlers) {
   const palco = raiz.querySelector('.bs-stage');
   const estado = {
     primaria: 'rifle', dificuldade: 'medio', sensibilidade: 1, modo: 'partida', volume: 0.8,
-    tamanho: 'normal', corMira: CORES_MIRA[0][0], sensLuneta: 1, boneco: 'azul',
+    tamanho: 'normal', mira: { ...MIRA_PADRAO }, sensLuneta: 1, boneco: 'azul',
   };
   const timers = new Set();
   const depois = (fn, ms) => {
@@ -260,13 +262,113 @@ export function criarHud(raiz, handlers) {
     handlers.mudarVolume(n);
   });
 
-  const selMira = el('select', { id: 'bs-cor-mira', class: 'bs-select' });
-  for (const [v, rotulo] of CORES_MIRA) selMira.append(el('option', { value: v, texto: rotulo }));
-  selMira.addEventListener('change', () => {
-    estado.corMira = selMira.value;
-    palco.style.setProperty('--cor-mira', selMira.value);
-    handlers.mudarCorMira(selMira.value);
+  // --- Crosshair Lab: estilo, sliders, ponto e cor, com a prévia sobre um pedaço do mapa ---
+  const novaMira = (id) => el('div', { class: 'bs-mira', id },
+    el('i', { class: 'bs-mira-t' }), el('i', { class: 'bs-mira-b' }),
+    el('i', { class: 'bs-mira-e' }), el('i', { class: 'bs-mira-d' }), el('i', { class: 'bs-mira-p' }));
+  const mira = novaMira('bs-mira'); // a do HUD: vai para o palco junto com o resto do HUD, mais abaixo
+  const miraPrevia = novaMira('bs-mira-previa-alvo');
+  const previaMira = el('div', { class: 'bs-mira-previa', id: 'bs-mira-previa' }, miraPrevia);
+  const gradeEstilos = el('div', { class: 'bs-armas bs-mira-estilos', id: 'bs-mira-estilo' });
+  for (const [v, rotulo] of ESTILOS_MIRA) {
+    const b = el('button', { type: 'button', class: 'bs-arma-btn', 'data-estilo': v, texto: rotulo });
+    b.addEventListener('click', () => mudarMira({ estilo: v }));
+    gradeEstilos.append(b);
+  }
+  const slidersMira = {};
+  const sliderMira = (chave) => {
+    const [min, max, step] = LIMITES_MIRA[chave];
+    const rng = el('input', { type: 'range', id: `bs-mira-${chave}`, class: 'bs-mira-rng', min: String(min), max: String(max), step: String(step) });
+    const rotulo = el('span', { class: 'bs-valor' });
+    rng.addEventListener('input', () => mudarMira({ [chave]: Number(rng.value) }));
+    slidersMira[chave] = { rng, rotulo };
+    return el('span', { class: 'bs-slider' }, rng, rotulo);
+  };
+  const chkPonto = el('input', { type: 'checkbox', id: 'bs-mira-ponto' });
+  chkPonto.addEventListener('change', () => mudarMira({ ponto: chkPonto.checked }));
+  const coresMira = el('div', { class: 'bs-mira-cores', id: 'bs-mira-cores' });
+  for (const [v, rotulo] of CORES_MIRA) {
+    const b = el('button', { type: 'button', class: 'bs-mira-cor', 'data-cor': v, title: rotulo, 'aria-label': `Cor ${rotulo}` });
+    b.style.background = v;
+    b.addEventListener('click', () => mudarMira({ cor: v }));
+    coresMira.append(b);
+  }
+  const corLivre = el('input', { type: 'color', id: 'bs-mira-cor', class: 'bs-mira-cor-livre', title: 'Outra cor' });
+  corLivre.addEventListener('input', () => mudarMira({ cor: corLivre.value }));
+  coresMira.append(corLivre);
+  const btnMiraPadrao = el('button', { type: 'button', class: 'action-btn secondary-btn bs-btn-tela', id: 'bs-mira-padrao', texto: 'Restaurar padrão' });
+  btnMiraPadrao.addEventListener('click', () => mudarMira({ ...MIRA_PADRAO }));
+  // --- Carreira: números das partidas 5x5 salvos no navegador ---
+  const carreiraEl = el('div', { class: 'bs-carreira', id: 'bs-carreira' });
+  const btnZerar = el('button', { type: 'button', class: 'action-btn secondary-btn bs-btn-tela', id: 'bs-zerar-carreira', texto: 'Zerar estatísticas', 'aria-live': 'polite' });
+  // Dois cliques: o primeiro só pede confirmação por alguns segundos.
+  let timerZerar = null;
+  btnZerar.addEventListener('click', () => {
+    if (!timerZerar) {
+      escrever(btnZerar, 'Clique de novo para zerar');
+      timerZerar = depois(() => { timerZerar = null; escrever(btnZerar, 'Zerar estatísticas'); }, ZERAR_MS);
+      return;
+    }
+    clearTimeout(timerZerar);
+    timers.delete(timerZerar);
+    timerZerar = null;
+    escrever(btnZerar, 'Zerar estatísticas');
+    handlers.zerarCarreira();
   });
+  const nomeArma = (tipo) => ARMAS[tipo]?.nome ?? NOMES_GRANADA[tipo] ?? tipo;
+  hud.definirCarreira = (r) => {
+    if (r.partidas === 0 && r.kills === 0 && r.mortes === 0) {
+      carreiraEl.replaceChildren(el('p', { class: 'bs-carreira-vazia', texto: 'Jogue uma partida 5x5 para ver suas estatísticas aqui.' }));
+      return;
+    }
+    const bloco = (rotulo, valor, detalhe) => el('div', { class: 'bs-stat' },
+      el('small', { texto: rotulo }), el('strong', { texto: String(valor) }), detalhe ? el('span', { texto: detalhe }) : null);
+    const grade = el('div', { class: 'bs-stats' },
+      bloco('K/D', r.kd.toFixed(2), `${r.kills} K · ${r.mortes} D`),
+      bloco('Precisão', `${r.precisao}%`, 'tiros que acertaram'),
+      bloco('Headshot', `${r.hs}%`, 'dos abates'),
+      bloco('Vitórias', `${r.taxaVitoria}%`, `${r.vitorias} V · ${r.derrotas} D${r.empates ? ` · ${r.empates} E` : ''}`),
+      bloco('MVPs', r.mvps, `${r.partidas} ${r.partidas === 1 ? 'partida' : 'partidas'}`),
+      bloco('Assistências', r.assists, ''));
+    const armas = el('ol', { class: 'bs-armas-fav' },
+      ...r.armasFav.map(([tipo, n]) => el('li', {}, el('span', { texto: nomeArma(tipo) }), el('b', { texto: `${n} ${n === 1 ? 'abate' : 'abates'}` }))));
+    carreiraEl.replaceChildren(grade,
+      r.armasFav.length ? el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Armas favoritas' }), armas) : null);
+  };
+
+  // Desenho da mira via CSS: tamanho, espessura, estilo e ponto em variáveis/atributos do elemento.
+  const desenharMira = (alvo, m) => {
+    alvo.dataset.estilo = m.estilo;
+    alvo.dataset.ponto = m.ponto ? '1' : '0';
+    alvo.style.setProperty('--comp', `${m.tamanho}px`);
+    alvo.style.setProperty('--esp', `${m.espessura}px`);
+    // Recuo inteiro até o meio: com espessura ímpar a mira fica 0,5px fora do centro, mas nítida.
+    alvo.style.setProperty('--meio', `${-Math.floor(m.espessura / 2)}px`);
+    alvo.style.setProperty('--meio-pt', `${-Math.floor((m.estilo === 'ponto' ? m.espessura + 2 : m.espessura) / 2)}px`);
+  };
+  const marcarMira = () => {
+    const m = estado.mira;
+    const marcar = (b, sel) => { b.classList.toggle('selecionada', sel); b.setAttribute('aria-pressed', String(sel)); };
+    for (const b of gradeEstilos.children) marcar(b, b.dataset.estilo === m.estilo);
+    for (const [chave, { rng, rotulo }] of Object.entries(slidersMira)) {
+      rng.value = String(m[chave]);
+      escrever(rotulo, `${m[chave]}px`);
+    }
+    chkPonto.disabled = m.estilo === 'ponto';
+    chkPonto.checked = m.ponto || chkPonto.disabled; // só o ponto: o ponto aparece sempre
+    for (const b of coresMira.querySelectorAll('.bs-mira-cor')) marcar(b, b.dataset.cor === m.cor);
+    corLivre.value = m.cor;
+    palco.style.setProperty('--cor-mira', m.cor);
+    desenharMira(miraPrevia, m);
+    miraPrevia.style.setProperty('--abertura', `${aberturaMira(m, 0)}px`);
+    desenharMira(mira, m);
+    mira.dataset.abertura = ''; // a abertura do HUD é recalculada no próximo quadro
+  };
+  const mudarMira = (parcial) => {
+    estado.mira = { ...estado.mira, ...parcial };
+    marcarMira();
+    handlers.mudarMira({ ...estado.mira });
+  };
 
   // Tamanho do palco e tela cheia (também na pausa).
   const criarControlesTela = (sufixo) => {
@@ -290,6 +392,9 @@ export function criarHud(raiz, handlers) {
     el('ul', {}, ...CONTROLES.map(([k, o]) => el('li', {}, el('kbd', { texto: k }), el('span', { texto: o })))));
   const menuTexto = el('p', { class: 'bs-menu-texto', id: 'bs-menu-texto', texto: 'FPS 5x5 contra bots' });
   const campo = (rotulo, ...filhos) => el('label', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: rotulo }), ...filhos);
+  // Grade de botões: num <label>, clicar no rótulo apertaria o primeiro botão.
+  const grupo = (rotulo, ...filhos) => el('div', { class: 'bs-campo', role: 'group', 'aria-label': rotulo },
+    el('span', { class: 'bs-rotulo', texto: rotulo }), ...filhos);
   // Menu no estilo do CS2: abas na barra do topo, painel à esquerda e o Jogar fixo no canto.
   const ABAS = [
     ['jogar', 'Jogar', [gradeModos, campoDif]],
@@ -298,11 +403,21 @@ export function criarHud(raiz, handlers) {
       gradeEquip,
       el('div', { class: 'bs-campo' }, el('span', { class: 'bs-rotulo', texto: 'Boneco do menu' }), gradeBoneco),
     ]],
+    ['mira', 'Mira', [
+      previaMira,
+      grupo('Estilo', gradeEstilos),
+      campo('Tamanho', sliderMira('tamanho')),
+      campo('Espessura', sliderMira('espessura')),
+      campo('Abertura', sliderMira('abertura')),
+      el('label', { class: 'bs-check' }, chkPonto, el('span', { texto: 'Ponto central' })),
+      grupo('Cor', coresMira),
+      btnMiraPadrao,
+    ]],
+    ['carreira', 'Carreira', [carreiraEl, btnZerar]],
     ['opcoes', 'Opções', [
       campo('Sensibilidade', el('span', { class: 'bs-slider' }, rngSens, rotuloSens)),
       campo('Sensibilidade da luneta', el('span', { class: 'bs-slider' }, rngLuneta, rotuloLuneta)),
       campo('Volume', el('span', { class: 'bs-slider' }, rngVol, rotuloVol)),
-      campo('Mira', selMira),
       criarControlesTela(''),
     ]],
     ['controles', 'Controles', [ajuda]],
@@ -331,8 +446,8 @@ export function criarHud(raiz, handlers) {
   palco.append(menu);
 
   // Aplica o que está salvo no storage aos controles do menu.
-  hud.definirConfig = ({ primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira, sensLuneta, boneco }) => {
-    Object.assign(estado, { primaria, dificuldade, sensibilidade, modo, volume, tamanho, corMira, sensLuneta, boneco });
+  hud.definirConfig = ({ primaria, dificuldade, sensibilidade, modo, volume, tamanho, mira: cfgMira, sensLuneta, boneco }) => {
+    Object.assign(estado, { primaria, dificuldade, sensibilidade, modo, volume, tamanho, mira: { ...cfgMira }, sensLuneta, boneco });
     marcarModo();
     marcarBoneco();
     rngLuneta.value = String(sensLuneta);
@@ -340,8 +455,7 @@ export function criarHud(raiz, handlers) {
     rngVol.value = String(volume);
     escrever(rotuloVol, `${Math.round(volume * 100)}%`);
     for (const sel of selsTamanho) sel.value = tamanho;
-    selMira.value = corMira;
-    palco.style.setProperty('--cor-mira', corMira);
+    marcarMira();
     previa = primaria;
     marcarLoadout();
     marcarSelecionada(gradeLoadout, primaria);
@@ -360,9 +474,6 @@ export function criarHud(raiz, handlers) {
   };
   hud.esconderMenu = () => mostrar(menu, false);
   // --- HUD em jogo ---
-  const mira = el('div', { class: 'bs-mira', id: 'bs-mira' },
-    el('i', { class: 'bs-mira-t' }), el('i', { class: 'bs-mira-b' }),
-    el('i', { class: 'bs-mira-e' }), el('i', { class: 'bs-mira-d' }));
   const hitmarker = el('div', { class: 'bs-hitmarker', id: 'bs-hitmarker', hidden: true });
   const danoArco = el('div', { class: 'bs-dano', id: 'bs-dano', hidden: true }, el('i'));
   const hpEl = el('div', { class: 'bs-hp', id: 'bs-hp', texto: '100' });
@@ -424,10 +535,12 @@ export function criarHud(raiz, handlers) {
     timerHit = depois(() => mostrar(hitmarker, false), VIDA_HIT_MS);
   };
   let timerDano = null;
+  // `graus` null (fogo): só a vinheta, sem arco apontando para quem jogou a molotov.
   hud.dano = (graus) => {
     vinheta.classList.remove('anim');
     void vinheta.offsetWidth;
     vinheta.classList.add('anim');
+    if (graus === null) return;
     danoArco.style.transform = `rotate(${Math.round(graus)}deg)`;
     danoArco.classList.remove('anim');
     mostrar(danoArco, true);
@@ -441,7 +554,7 @@ export function criarHud(raiz, handlers) {
     // Morte pela explosão da C4 não tem assassino: só a vítima e o rótulo da bomba.
     const linha = el('div', { class: 'bs-feed-linha' }, assassino ? nome(assassino) : null,
       assistente ? el('span', { class: 'bs-feed-assist', texto: '+' }) : null, assistente ? nome(assistente) : null,
-      el('span', { class: 'bs-feed-arma', texto: `[${ARMAS[arma]?.nome ?? 'C4'}]` }));
+      el('span', { class: 'bs-feed-arma', texto: `[${ARMAS[arma]?.nome ?? ITENS[arma]?.nome ?? 'C4'}]` }));
     if (cabeca) linha.append(el('span', { class: 'bs-feed-cabeca', texto: '☠', title: 'Headshot' }));
     linha.append(nome(vitima));
     killfeed.append(linha);
@@ -799,8 +912,8 @@ export function criarHud(raiz, handlers) {
     mostrar(luneta, Boolean(v.luneta));
     mira.classList.toggle('escondida', Boolean(v.luneta));
     escrever(armaEl, v.arma ? ARMAS[v.arma.tipo].nome : '');
-    // Abertura da mira em px, quantizada: o spread (rad) vira fração da altura do palco.
-    const abertura = Math.min(48, Math.round(4 + Math.tan(v.spread) * palco.clientHeight * 0.75));
+    // Abertura da mira em px, quantizada: o spread (rad) vira fração da altura do palco (só na dinâmica).
+    const abertura = aberturaMira(estado.mira, Math.min(44, Math.round(Math.tan(v.spread) * palco.clientHeight * 0.75)));
     if (mira.dataset.abertura !== String(abertura)) {
       mira.dataset.abertura = String(abertura);
       mira.style.setProperty('--abertura', `${abertura}px`);
@@ -821,7 +934,7 @@ export function criarHud(raiz, handlers) {
       const eq = v.equip;
       const g = eq.granadas;
       escrever(dinheiroEl, [dolar(v.dinheiro), eq.colete > 0 ? `${eq.capacete ? 'colete+capacete' : 'colete'} ${eq.colete}` : '',
-        eq.kit ? 'kit' : '', g.flash ? `flash ${g.flash}` : '', g.smoke ? `smoke ${g.smoke}` : '', g.he ? `HE ${g.he}` : '']
+        eq.kit ? 'kit' : '', g.flash ? `flash ${g.flash}` : '', g.smoke ? `smoke ${g.smoke}` : '', g.he ? `HE ${g.he}` : '', g.molotov ? `molotov ${g.molotov}` : '']
         .filter(Boolean).join(' · '));
     }
     // vencedorRound/motivo persistem no freeze seguinte: só valem em fim-round.

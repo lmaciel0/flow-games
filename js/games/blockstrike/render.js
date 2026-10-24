@@ -469,6 +469,7 @@ export function criarRender(canvas, mapa) {
     flash: new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }),
     smoke: new THREE.MeshLambertMaterial({ color: 0x8b95a1 }),
     he: new THREE.MeshLambertMaterial({ color: 0x2f5d2f }),
+    molotov: new THREE.MeshLambertMaterial({ color: 0x6b4a1f }),
   };
   const geoGranada = new THREE.BoxGeometry(0.16, 0.16, 0.16);
   const cubosGranada = [];
@@ -502,6 +503,70 @@ export function criarRender(canvas, mapa) {
   fumaca.renderOrder = 2;
   scene.add(fumaca);
   const m4 = new THREE.Matrix4();
+
+  // Fogo da molotov: chão queimado (blocos escuros e baixos) e chamas (2 blocos por célula, de cor própria)
+  // que tremulam, nascem do centro para fora e encolhem no último segundo. Uma luz laranja na poça mais perto.
+  const MAX_CELULAS_FOGO = 160;
+  const matChama = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.88, depthWrite: false });
+  const geoChama = new THREE.BoxGeometry(1, 1, 1);
+  const chamas = new THREE.InstancedMesh(geoChama, matChama, MAX_CELULAS_FOGO * 2);
+  chamas.frustumCulled = false;
+  chamas.count = 0;
+  chamas.renderOrder = 3;
+  scene.add(chamas);
+  chamas.setColorAt(0, new THREE.Color(0xff6a00)); // cria o instanceColor já: senão o shader recompila na 1ª molotov
+  const matBrasa = new THREE.MeshBasicMaterial({ color: 0x241208 });
+  const brasas = new THREE.InstancedMesh(geoChama, matBrasa, MAX_CELULAS_FOGO);
+  brasas.frustumCulled = false;
+  brasas.count = 0;
+  scene.add(brasas);
+  const luzFogo = new THREE.PointLight(0xff7a1a, 0, 9);
+  scene.add(luzFogo);
+  const CORES_CHAMA = [new THREE.Color(0xff6a00), new THREE.Color(0xd9381e), new THREE.Color(0xffd23f)];
+  function desenharFogo(mundo) {
+    const t = performance.now() / 1000;
+    let n = 0;
+    let b = 0;
+    let maisPerto = null;
+    let dPerto = Infinity;
+    (mundo.fogos ?? []).forEach((f, idx) => {
+      const idade = mundo.tempo - f.nasceEm;
+      // No fim do round o fogo para de ser atualizado: some pelo `fade` mesmo sem o fogo-fim.
+      const fade = Math.min(1, Math.max(0, f.fim - mundo.tempo));
+      if (fade <= 0) return;
+      const d = camera.position.distanceTo(tmp.set(f.pos.x, f.y, f.pos.z));
+      if (d < dPerto) { dPerto = d; maisPerto = f; }
+      const yBrasa = f.y + 0.02 + idx * 0.003; // poças sobrepostas não brigam pelo mesmo plano
+      f.celulas.forEach((c, i) => {
+        if (idade < c.atraso || b >= MAX_CELULAS_FOGO) return;
+        const cresce = Math.min(1, (idade - c.atraso) / 0.25) * fade;
+        const lado = f.celula;
+        m4.makeScale(lado * 0.98 * fade, 0.04, lado * 0.98 * fade).setPosition(c.x, yBrasa, c.z);
+        brasas.setMatrixAt(b++, m4);
+        const fase = i * 1.7 + c.x * 0.9;
+        for (let k = 0; k < 2; k++) {
+          const h = (k ? 0.25 : 0.4) + (k ? 0.3 : 0.45) * Math.abs(Math.sin(t * (6 + k * 3) + fase)) * cresce;
+          const w = lado * (k ? 0.3 : 0.55) * cresce;
+          const ox = Math.sin(fase * 3.1 + k) * 0.15;
+          const oz = Math.cos(fase * 2.3 + k) * 0.15;
+          m4.makeScale(w, h * cresce, w).setPosition(c.x + ox, f.y + (k ? 0.25 : 0) + (h * cresce) / 2, c.z + oz);
+          chamas.setMatrixAt(n, m4);
+          chamas.setColorAt(n, CORES_CHAMA[k ? 2 : (i % 3 === 0 ? 1 : 0)]);
+          n++;
+        }
+      });
+    });
+    chamas.count = n;
+    brasas.count = b;
+    chamas.instanceMatrix.needsUpdate = true;
+    if (chamas.instanceColor) chamas.instanceColor.needsUpdate = true;
+    brasas.instanceMatrix.needsUpdate = true;
+    if (maisPerto) {
+      luzFogo.position.set(maisPerto.pos.x, maisPerto.y + 1, maisPerto.pos.z);
+      luzFogo.intensity = (1.6 + Math.sin(t * 13) * 0.4 + Math.sin(t * 7.3) * 0.3) * Math.min(1, maisPerto.fim - mundo.tempo);
+    } else luzFogo.intensity = 0;
+  }
+
   function desenharFumaca(mundo) {
     let n = 0;
     for (const f of mundo.fumacas ?? []) {
@@ -524,7 +589,8 @@ export function criarRender(canvas, mapa) {
   brilho.visible = false;
   scene.add(brilho);
   let brilhoT = 0;
-  const clarearFlash = (ponto) => {
+  const clarearFlash = (ponto, cor = 0xffffff) => {
+    matBrilho.color.setHex(cor);
     brilho.position.set(ponto.x, ponto.y, ponto.z);
     brilhoT = 0.3;
     brilho.visible = true;
@@ -600,9 +666,17 @@ export function criarRender(canvas, mapa) {
 
   // Granada na mão: um cubo de 0,05 m da cor do tipo selecionado (o mesmo material da granada no ar).
   const geoGranadaMao = new THREE.BoxGeometry(0.05, 0.05, 0.05);
+  // Molotov na mão: garrafa, gargalo e o pano aceso na boca.
+  const geoGarrafa = new THREE.BoxGeometry(0.045, 0.1, 0.045);
+  const geoGargalo = new THREE.BoxGeometry(0.018, 0.04, 0.018).translate(0, 0.07, 0);
+  const geoPano = new THREE.BoxGeometry(0.022, 0.025, 0.022).translate(0, 0.1, 0);
+  const matPano = new THREE.MeshBasicMaterial({ color: 0xff8a1f });
   function criarViewmodelGranada(sel) {
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(geoGranadaMao, matsGranada[sel] ?? matsGranada.he));
+    if (sel === 'molotov') {
+      g.add(new THREE.Mesh(geoGarrafa, matsGranada.molotov), new THREE.Mesh(geoGargalo, matsGranada.molotov),
+        new THREE.Mesh(geoPano, matPano));
+    } else g.add(new THREE.Mesh(geoGranadaMao, matsGranada[sel] ?? matsGranada.he));
     const boca = new THREE.Mesh(geoClarao, matClarao);
     boca.visible = false;
     g.add(boca);
@@ -816,6 +890,7 @@ export function criarRender(canvas, mapa) {
     animarEfeitos(dt);
     desenharGranadas(mundo, dt);
     desenharFumaca(mundo);
+    desenharFogo(mundo);
     if (viewAtual) posarArma(vista, mundo, dt);
     luzTiro.intensity = clarao > 0 ? 2 : 0;
     luzTiro.position.copy(camera.position);
@@ -857,8 +932,11 @@ export function criarRender(canvas, mapa) {
     for (const m of marcasSite) { m.material.map.dispose(); m.material.dispose(); m.geometry.dispose(); }
     [geoC4, geoLed, geoFogo, geoFaisca].forEach((g) => g.dispose());
     [matC4, matLed, matFogo, matFaisca, matFumaca, matBrilho, ...Object.values(matsGranada)].forEach((m) => m.dispose());
-    [geoGranada, geoGranadaMao, geoFumaca].forEach((g) => g.dispose());
+    [geoGranada, geoGranadaMao, geoFumaca, geoChama, geoGarrafa, geoGargalo, geoPano].forEach((g) => g.dispose());
+    [matChama, matBrasa, matPano].forEach((m) => m.dispose());
     fumaca.dispose();
+    chamas.dispose();
+    brasas.dispose();
     for (const r of rastros) r.linha.geometry.dispose();
     matRastro.dispose();
     geoGota.dispose();

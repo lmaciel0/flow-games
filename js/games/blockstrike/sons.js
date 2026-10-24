@@ -240,6 +240,37 @@ export function criarSons(audio) {
       tom(v, v.t0, { freq: 120, freqFim: 35, dur: 0.6, ganho: 0.9 });
     },
 
+    // Molotov acendendo: vidro estilhaçando (chiado agudo e tinidos soltos) e o "vuush" do fogo pegando.
+    molotov(distancia = 0, pan = 0) {
+      const v = voz({ distancia: distancia * 0.8, pan, ganho: 0.85 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 4000, dur: 0.08, ganho: 0.6 });
+      for (let i = 0; i < 5; i++) {
+        tom(v, v.t0 + 0.01 + Math.random() * 0.12, { freq: 3000 + Math.random() * 4000, dur: 0.06, ganho: 0.12 });
+      }
+      chiado(v, v.t0 + 0.04, { tipo: 'lowpass', freq: 300, freqFim: 1600, dur: 0.6, ganho: 0.55, ataque: 0.15 });
+    },
+
+    // Fogo queimando: estalinhos aleatórios e um ronco grave. index.js chama em intervalos curtos enquanto há fogo.
+    crepitar(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.45 });
+      if (!v) return;
+      const n = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < n; i++) {
+        chiado(v, v.t0 + Math.random() * 0.14, {
+          tipo: 'bandpass', freq: 1200 + Math.random() * 3800, q: 4, dur: 0.012 + Math.random() * 0.02, ganho: 0.35 + Math.random() * 0.3,
+        });
+      }
+      chiado(v, v.t0, { tipo: 'lowpass', freq: 380, dur: 0.2, ganho: 0.22, ataque: 0.05 });
+    },
+
+    // Fogo apagado pela smoke (ou molotov que estourou no ar): chiado que morre.
+    apagar(distancia = 0, pan = 0) {
+      const v = voz({ distancia, pan, ganho: 0.6 });
+      if (!v) return;
+      chiado(v, v.t0, { tipo: 'highpass', freq: 2500, freqFim: 900, dur: 0.7, ganho: 0.4, ataque: 0.02 });
+    },
+
     // Flash: estalo agudo seco.
     flash(distancia = 0, pan = 0) {
       const v = voz({ distancia: distancia * 0.7, pan, ganho: 0.8 });
