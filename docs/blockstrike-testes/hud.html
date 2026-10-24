@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/css/base.css"><link rel="stylesheet" href="/css/layout.css"><link rel="stylesheet" href="/css/games/blockstrike.css">
+<style>body{background:#334;margin:0;padding:8px} #raiz{width:100%} .bs-stage{background:#567;opacity:1!important;animation:none!important;transform:none!important}</style></head>
+<body><div id="raiz"><div class="bs-stage glass-card"></div></div>
+<script type="module">
+window.onerror = (m) => { document.title = 'ERRO ' + m; };
+const { criarHud } = await import('/js/games/blockstrike/hud.js');
+const raiz = document.getElementById('raiz');
+const hud = criarHud(raiz, new Proxy({}, { get: () => () => {} }));
+hud.mostrarHud(true); document.querySelectorAll('.bs-overlay').forEach((o) => { o.hidden = true; });
+const ents = [
+  { id: 0, nome: 'Você', time: 'azul', vivo: false, kills: 3, assists: 1, mortes: 1, killsCabeca: 1, mvps: 2 },
+  { id: 1, nome: 'Bot Cubo', time: 'azul', vivo: true, kills: 1, assists: 2, mortes: 0, killsCabeca: 0, mvps: 0 },
+  { id: 5, nome: 'Bot Tijolo', time: 'laranja', vivo: true, kills: 2, assists: 0, mortes: 2, killsCabeca: 1, mvps: 1 },
+  { id: 6, nome: 'Bot Prisma', time: 'laranja', vivo: false, kills: 0, assists: 0, mortes: 3, killsCabeca: 0, mvps: 0 },
+];
+const fase = new URLSearchParams(location.search).get('fase') ?? 'fim-round';
+hud.morte({ assassino: ents[0], assistente: ents[1], vitima: ents[3], arma: 'rifle', cabeca: true });
+hud.morte({ assassino: ents[2], assistente: null, vitima: ents[0], arma: 'pistola', cabeca: false });
+const estado = {
+  fase, round: 4, tempo: 5, placar: { azul: 3, laranja: 1 }, papel: 'CT', bomba: null, hp: 0, vivo: false,
+  arma: null, spread: 0, progressoRecarga: 0, luneta: false, modo: 'partida', vencedorRound: 'azul', motivo: 'eliminacao',
+  espectando: 'Bot Cubo', entidades: ents, compra: null, dinheiro: null, equip: null, cegueira: 0, loadout: false,
+  mvp: { nome: 'Você', motivo: 'abates', kills: 3, voce: true },
+  relatorio: [
+    { id: 5, nome: 'Bot Tijolo', time: 'laranja', vivo: true, deu: { dano: 74, acertos: 2 }, levou: { dano: 104, acertos: 3 } },
+    { id: 6, nome: 'Bot Prisma', time: 'laranja', vivo: false, deu: { dano: 100, acertos: 4 }, levou: { dano: 0, acertos: 0 } },
+  ],
+};
+hud.atualizar(estado);
+if (new URLSearchParams(location.search).get('tab')) { hud.mostrarTabela(true); hud.atualizar(estado); }
+if (!document.title.startsWith('ERRO')) document.title = 'OK';
+</script></body></html>

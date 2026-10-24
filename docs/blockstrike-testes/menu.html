@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/css/base.css"><link rel="stylesheet" href="/css/layout.css"><link rel="stylesheet" href="/css/games/blockstrike.css">
+<style>body{margin:0;padding:8px} #raiz{width:100%} .bs-stage{background:#567}</style></head>
+<body><div id="raiz"><div class="bs-stage glass-card"></div></div>
+<script type="module">
+window.onerror = (m) => { document.title = 'ERRO ' + m; };
+const q = new URLSearchParams(location.search);
+const { criarHud } = await import('/js/games/blockstrike/hud.js');
+const raiz = document.getElementById('raiz');
+const salvo = [];
+const hud = criarHud(raiz, new Proxy({}, { get: (_, k) => (...a) => { salvo.push([k, a]); } }));
+const mira = { estilo: q.get('estilo') ?? 'estatica', tamanho: 10, espessura: 3, abertura: 2, ponto: true, cor: '#22d3ee' };
+hud.definirConfig({ primaria: 'rifle', dificuldade: 'medio', sensibilidade: 1, modo: 'partida', volume: 0.8, tamanho: 'normal', mira, sensLuneta: 1, boneco: 'azul' });
+if (hud.definirCarreira) hud.definirCarreira({ partidas: 12, vitorias: 7, derrotas: 4, empates: 1, taxaVitoria: 58, kills: 140, mortes: 98, assists: 31, mvps: 9, kd: 1.43, precisao: 27, hs: 41, armasFav: [['rifle', 70], ['sniper', 33], ['pistola', 20]] });
+raiz.querySelector(`[data-aba="${q.get('aba') ?? 'mira'}"]`).click();
+if (q.get('clique')) { raiz.querySelector('[data-estilo="ponto"]').click(); }
+if (q.get('rotulo')) { for (const r of raiz.querySelectorAll('.bs-menu-painel[data-aba="mira"] .bs-rotulo')) r.click(); }
+document.title = 'OK ' + JSON.stringify(salvo.filter(([k]) => k === 'mudarMira').map(([, a]) => a[0].estilo));
+</script></body></html>
