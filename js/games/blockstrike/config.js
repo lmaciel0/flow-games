@@ -40,11 +40,13 @@ export const GRANADA = {
   // Força do arremesso: longe (botão esquerdo), médio (os dois) e curto (direito).
   forcas: { longe: { velocidade: 18, subida: 4 }, medio: { velocidade: 12, subida: 3 }, curto: { velocidade: 7, subida: 2 } },
   gravidade: 20, raio: 0.12,
-  fusivel: { flash: 1.5, he: 1.6, smoke: 1.8 },
+  fusivel: { flash: 1.5, he: 1.6, smoke: 1.8, molotov: 2.2 }, // molotov: acende ao bater no chão; no ar até aqui, estoura sem fogo
   intervalo: 0.7, // entre arremessos do mesmo jogador
   he: { raio: 9, dano: 75 },
   flash: { alcance: 40, duracao: 3.5 },
   fumaca: { raio: 3.2, cubo: 0.8, duracao: 18, buraco: 2, abrir: 0.9, max: 3, raioTiro: 0.55, raioHE: 3.6 },
+  // Fogo da molotov: poça de células quadradas; dano por segundo aplicado em pulsos de `tick`.
+  fogo: { raio: 3, celula: 0.8, duracao: 7, dps: 40, tick: 0.25, espalhar: 0.4, max: 3 },
 };
 
 // Economia (só na partida): preços, recompensas e colete. Valores em dólares.
@@ -71,10 +73,11 @@ export const ITENS = {
   smoke: { nome: 'Smoke', preco: 300, grupo: 'granada' },
   flash: { nome: 'Flash', preco: 200, grupo: 'granada' },
   he: { nome: 'Granada HE', preco: 300, grupo: 'granada' },
+  molotov: { nome: 'Molotov', preco: 400, grupo: 'granada' },
 };
 // Ordem do ciclo das granadas na mão (tecla 4).
-export const ORDEM_GRANADAS = ['he', 'flash', 'smoke'];
-export const MAX_GRANADAS = { smoke: 1, flash: 2, he: 1 };
+export const ORDEM_GRANADAS = ['he', 'molotov', 'flash', 'smoke'];
+export const MAX_GRANADAS = { smoke: 1, flash: 2, he: 1, molotov: 1 };
 
 // Colete: o corpo leva `corpo` do dano; o capacete protege a cabeça (`cabeca`). O resto do dano gasta o colete.
 export const COLETE = { pontos: 100, corpo: 0.55, cabeca: 0.6 };

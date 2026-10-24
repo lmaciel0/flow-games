@@ -1,8 +1,9 @@
 /**
- * Block Strike — granadas: flash (cega), HE (dano em área) e smoke (nuvem de blocos que corta a visão).
+ * Block Strike — granadas: flash (cega), HE (dano em área), smoke (nuvem de blocos que corta a visão)
+ * e molotov (poça de fogo que queima e fecha a passagem).
  * Módulo puro: sem Three.js e sem DOM. Unidades em metros e segundos.
  * `mundo.granadas` guarda as que estão no ar; `mundo.fumacas`, as nuvens ativas (blocos que somem
- * quando um tiro ou uma HE passa e voltam depois de alguns segundos).
+ * quando um tiro ou uma HE passa e voltam depois de alguns segundos); `mundo.fogos`, as poças de fogo.
  */
 
 import { GRANADA, ORDEM_GRANADAS } from './config.js';
@@ -13,8 +14,8 @@ const distancia = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
 // Pode lançar? (`treino`: granadas infinitas; com economia, só as compradas.)
 export function granadasDe(mundo, e) {
-  if (mundo.modo === 'treino') return { smoke: 99, flash: 99, he: 99 };
-  return e.equip?.granadas ?? { smoke: 0, flash: 0, he: 0 };
+  if (mundo.modo === 'treino') return { smoke: 99, flash: 99, he: 99, molotov: 99 };
+  return e.equip?.granadas ?? { smoke: 0, flash: 0, he: 0, molotov: 0 };
 }
 
 // Lança a granada `tipo` de `e`. Sem `alvo`, segue a mira (com um arco para cima);
@@ -81,6 +82,7 @@ export function atualizarMao(mundo, e, cmd, eventos) {
 }
 
 // Move um eixo por vez para saber em qual parede bateu e quicar (parede 55%, chão 40% com atrito).
+// Devolve true se bateu de cima em algum piso (chão ou topo de caixa): é aí que a molotov acende.
 function moverGranada(g, dt, caixas, eventos) {
   g.vel.y -= GRANADA.gravidade * dt;
   const r = GRANADA.raio;
@@ -98,10 +100,12 @@ function moverGranada(g, dt, caixas, eventos) {
   const bz = tenta('z');
   const by = tenta('y');
   let quicou = false;
+  let pousou = false;
   if (bx) { g.vel.x *= -0.55; quicou = true; }
   if (bz) { g.vel.z *= -0.55; quicou = true; }
   if (by) {
     if (g.vel.y < 0) {
+      pousou = true;
       g.vel.y = Math.abs(g.vel.y) > 1.5 ? -g.vel.y * 0.4 : 0;
       g.vel.x *= 0.7;
       g.vel.z *= 0.7;
@@ -114,6 +118,7 @@ function moverGranada(g, dt, caixas, eventos) {
     g.quiques += 1;
     eventos.push({ tipo: 'granada-quique', granada: g.tipo, ponto: { ...g.pos } });
   }
+  return pousou;
 }
 
 // Linha de visão que também respeita a fumaça: usar no lugar de `temVisada` quando há `mundo`.
@@ -212,14 +217,109 @@ export function duracaoFlash(mundo, ponto, e) {
   return GRANADA.flash.duracao * angulo * perto;
 }
 
+// Piso que apoia uma célula de fogo em `y`: o topo de alguma caixa (o chão também é uma caixa) sob (x, z).
+const temPiso = (caixas, x, y, z) => caixas.some((c) => Math.abs(c.max.y - y) < 0.2 &&
+  x >= c.min.x && x <= c.max.x && z >= c.min.z && z <= c.max.z);
+
+// Poça de fogo: células numa grade ao redor de onde a molotov caiu. Só entram as que têm piso embaixo,
+// não estão dentro de parede e têm visada do centro (o fogo não atravessa parede). `atraso`: espalha do centro.
+function criarFogo(mundo, g, ponto) {
+  const { raio, celula, duracao, espalhar } = GRANADA.fogo;
+  const caixas = mundo.mapa.caixas;
+  const centro = { x: ponto.x, y: ponto.y + 0.3, z: ponto.z };
+  const celulas = [];
+  const n = Math.ceil(raio / celula);
+  for (let i = -n; i <= n; i++) {
+    for (let k = -n; k <= n; k++) {
+      const x = ponto.x + i * celula;
+      const z = ponto.z + k * celula;
+      const d = Math.hypot(x - ponto.x, z - ponto.z);
+      const meio = { x, y: ponto.y + 0.3, z };
+      if (d > raio || !temPiso(caixas, x, ponto.y, z) || dentroDeCaixa(caixas, meio)) continue;
+      if (d > 0.01 && !temVisada(centro, meio, caixas)) continue;
+      celulas.push({ x, z, atraso: (d / raio) * espalhar });
+    }
+  }
+  return {
+    pos: { ...ponto }, y: ponto.y, raio, celula, celulas, dono: g.dono, time: g.time,
+    nasceEm: mundo.tempo, fim: mundo.tempo + duracao, proxDano: mundo.tempo,
+  };
+}
+
+// Ponto dentro de alguma smoke ativa (no plano)? A smoke apaga o fogo.
+const naFumaca = (mundo, p) => (mundo.fumacas ?? []).some((f) => Math.hypot(p.x - f.pos.x, p.z - f.pos.z) <= f.raio);
+
+// Molotov que bateu no piso: acende a poça (ou só chia, se caiu dentro de uma smoke).
+function acender(mundo, g, eventos) {
+  const ponto = { x: g.pos.x, y: g.pos.y - GRANADA.raio, z: g.pos.z };
+  if (naFumaca(mundo, ponto)) {
+    eventos.push({ tipo: 'fogo-apagado', ponto });
+    return;
+  }
+  const f = criarFogo(mundo, g, ponto);
+  const lista = (mundo.fogos ??= []);
+  lista.push(f);
+  while (lista.length > GRANADA.fogo.max) lista.shift();
+  eventos.push({ tipo: 'fogo', ponto, fogo: f });
+}
+
+// Smoke nova sobre o fogo: as células dentro da nuvem apagam; poça sem célula some.
+function apagarFogos(mundo, fumaca, eventos) {
+  const fogos = mundo.fogos ?? [];
+  for (let i = fogos.length - 1; i >= 0; i--) {
+    const f = fogos[i];
+    const antes = f.celulas.length;
+    f.celulas = f.celulas.filter((c) => Math.hypot(c.x - fumaca.pos.x, c.z - fumaca.pos.z) > fumaca.raio);
+    if (f.celulas.length === antes) continue;
+    eventos.push({ tipo: 'fogo-apagado', ponto: { ...f.pos } });
+    if (!f.celulas.length) fogos.splice(i, 1);
+  }
+}
+
+// Poça de fogo que cobre `p` (pés de alguém, com `margem` em metros para quem só quer passar longe), ou null.
+export function noFogo(mundo, p, margem = 0) {
+  for (const f of mundo.fogos ?? []) {
+    if (p.y < f.y - 0.5 || p.y > f.y + 1.2) continue;
+    if (Math.hypot(p.x - f.pos.x, p.z - f.pos.z) > f.raio + f.celula + margem) continue;
+    const meio = f.celula / 2 + margem;
+    const idade = mundo.tempo - f.nasceEm;
+    if (f.celulas.some((c) => idade >= c.atraso && Math.abs(p.x - c.x) <= meio && Math.abs(p.z - c.z) <= meio)) return f;
+  }
+  return null;
+}
+
+// Fogo: pulsos de dano em quem pisa nas células acesas; acaba no fim da duração.
+function atualizarFogos(mundo, eventos, danoDireto) {
+  const fogos = mundo.fogos ?? [];
+  const { dps, tick } = GRANADA.fogo;
+  for (let i = fogos.length - 1; i >= 0; i--) {
+    const f = fogos[i];
+    if (mundo.tempo >= f.fim) {
+      fogos.splice(i, 1);
+      eventos.push({ tipo: 'fogo-fim', ponto: { ...f.pos } });
+      continue;
+    }
+    if (mundo.tempo < f.proxDano) continue;
+    f.proxDano += tick;
+    const dono = mundo.entidades[f.dono];
+    for (const e of mundo.entidades) {
+      if (!e.vivo || e.hp <= 0 || e.time === f.time) continue; // fogo amigo desligado, como na HE
+      if (noFogo(mundo, e.pos)) danoDireto(dono, e, Math.round(dps * tick), 'molotov', eventos);
+    }
+  }
+}
+
 function detonar(mundo, g, eventos, danoDireto) {
   const ponto = { ...g.pos };
-  if (g.tipo === 'smoke') {
+  if (g.tipo === 'molotov') {
+    eventos.push({ tipo: 'molotov-ar', ponto }); // fusível acabou ainda no ar: estoura sem fogo
+  } else if (g.tipo === 'smoke') {
     const f = criarFumaca(mundo, ponto);
     const lista = (mundo.fumacas ??= []);
     lista.push(f);
     while (lista.length > GRANADA.fumaca.max) lista.shift();
     eventos.push({ tipo: 'fumaca', ponto, fumaca: f });
+    apagarFogos(mundo, f, eventos);
   } else if (g.tipo === 'flash') {
     eventos.push({ tipo: 'flash', ponto });
     for (const e of mundo.entidades) {
@@ -247,14 +347,17 @@ function detonar(mundo, g, eventos, danoDireto) {
   }
 }
 
-// Um passo: granadas no ar (voo, quique, fusível), nuvens (blocos que voltam, fim) e cegueira que acaba.
-// `danoDireto(dono, alvo, dano, tipoArma, eventos)` aplica o dano da HE (mundo.js usa o mesmo cálculo dos tiros).
+// Um passo: granadas no ar (voo, quique, fusível), nuvens (blocos que voltam, fim), fogo e cegueira que acaba.
+// `danoDireto(dono, alvo, dano, tipoArma, eventos)` aplica o dano da HE e do fogo (mundo.js usa o mesmo cálculo dos tiros).
 export function atualizarGranadas(mundo, dt, eventos, danoDireto) {
   const ativas = mundo.granadas ?? [];
   for (let i = ativas.length - 1; i >= 0; i--) {
     const g = ativas[i];
-    moverGranada(g, dt, mundo.mapa.caixas, eventos);
-    if (mundo.tempo - g.nasceEm >= g.fusivel) {
+    const pousou = moverGranada(g, dt, mundo.mapa.caixas, eventos);
+    if (g.tipo === 'molotov' && pousou) {
+      ativas.splice(i, 1);
+      acender(mundo, g, eventos);
+    } else if (mundo.tempo - g.nasceEm >= g.fusivel) {
       ativas.splice(i, 1);
       detonar(mundo, g, eventos, danoDireto);
     }
@@ -271,12 +374,14 @@ export function atualizarGranadas(mundo, dt, eventos, danoDireto) {
       if (!c.vivo && mundo.tempo >= c.voltaEm) { c.vivo = true; f.versao += 1; }
     }
   }
+  atualizarFogos(mundo, eventos, danoDireto);
 }
 
-// Fim do round / novo round: nada no ar e nenhuma nuvem; ninguém cego.
+// Fim do round / novo round: nada no ar, nenhuma nuvem nem fogo; ninguém cego.
 export function limparGranadas(mundo) {
   mundo.granadas = [];
   mundo.fumacas = [];
+  mundo.fogos = [];
   for (const e of mundo.entidades) {
     e.cegoAte = 0;
     e.cegoDur = 0;

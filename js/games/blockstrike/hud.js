@@ -30,7 +30,7 @@ const CONTROLES = [
   ['E (segurar)', 'plantar / desarmar C4'], ['1 2 3 / roda', 'armas'], ['4', 'granada · 4 troca · esq. longe · dir. curto · ambos médio'], ['Q', 'última arma'], ['F', 'inspecionar arma'], ['Tab', 'placar'], ['B', 'trocar arma (treino)'],
 ];
 // Nome do tipo de granada na mão, no lugar da munição.
-const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke' };
+const NOMES_GRANADA = { he: 'HE', flash: 'Flash', smoke: 'Smoke', molotov: 'Molotov' };
 const ZERAR_MS = 4000;
 const RADAR_ESCALA = 2.6; // px por metro
 const RADAR_LADO = 132; // px
@@ -552,7 +552,7 @@ export function criarHud(raiz, handlers) {
     // Morte pela explosão da C4 não tem assassino: só a vítima e o rótulo da bomba.
     const linha = el('div', { class: 'bs-feed-linha' }, assassino ? nome(assassino) : null,
       assistente ? el('span', { class: 'bs-feed-assist', texto: '+' }) : null, assistente ? nome(assistente) : null,
-      el('span', { class: 'bs-feed-arma', texto: `[${ARMAS[arma]?.nome ?? 'C4'}]` }));
+      el('span', { class: 'bs-feed-arma', texto: `[${ARMAS[arma]?.nome ?? ITENS[arma]?.nome ?? 'C4'}]` }));
     if (cabeca) linha.append(el('span', { class: 'bs-feed-cabeca', texto: '☠', title: 'Headshot' }));
     linha.append(nome(vitima));
     killfeed.append(linha);
@@ -932,7 +932,7 @@ export function criarHud(raiz, handlers) {
       const eq = v.equip;
       const g = eq.granadas;
       escrever(dinheiroEl, [dolar(v.dinheiro), eq.colete > 0 ? `${eq.capacete ? 'colete+capacete' : 'colete'} ${eq.colete}` : '',
-        eq.kit ? 'kit' : '', g.flash ? `flash ${g.flash}` : '', g.smoke ? `smoke ${g.smoke}` : '', g.he ? `HE ${g.he}` : '']
+        eq.kit ? 'kit' : '', g.flash ? `flash ${g.flash}` : '', g.smoke ? `smoke ${g.smoke}` : '', g.he ? `HE ${g.he}` : '', g.molotov ? `molotov ${g.molotov}` : '']
         .filter(Boolean).join(' · '));
     }
     // vencedorRound/motivo persistem no freeze seguinte: só valem em fim-round.

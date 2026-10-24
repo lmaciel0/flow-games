@@ -8,7 +8,7 @@ import { ARMAS, BOMBA, DIFICULDADE, RECUO_MAX, familia } from './config.js';
 import { olho, direcao, temVisada } from './fisica.js';
 import { caminho, maisProximo, coberturaPerto } from './navegacao.js';
 import { siteEm } from './bomba.js';
-import { visadaLivre } from './granadas.js';
+import { noFogo, visadaLivre } from './granadas.js';
 
 const ALCANCE_VISAO = 60;
 const MEIO_CONE = (110 / 2) * (Math.PI / 180);
@@ -37,6 +37,9 @@ const OLHAR_RUIDO = 1; // s olhando para onde veio o barulho
 const GRANADA_INTERVALO = [6, 12]; // s entre arremessos do mesmo bot
 const ALCANCE_HE = [9, 28];
 const ALCANCE_FLASH = [6, 25];
+const ALCANCE_MOLOTOV = [6, 22];
+const FOGO_OLHAR = 1.2; // m à frente: fogo aqui no caminho → espera em vez de atravessar
+const FOGO_SAIDA = 1.5; // m além da borda do fogo para onde foge quem está queimando
 const FUMACA_RECUO = 6; // m à frente para a smoke que cobre a fuga
 const DESVIO_MIRA = 0.15; // rad: variação da mira parada no posto entre os CTs
 
@@ -237,6 +240,29 @@ function proximoObjetivo(ent, c, mundo, grafo, rng) {
   return bomba.waypoint ?? waypointPerto(grafo, bomba.ponto, mundo.mapa.caixas);
 }
 
+// Fogo da molotov: queimando, foge para fora pela linha centro→bot (larga plantar/desarmar);
+// com o fogo logo à frente no caminho, para e espera apagar. Devolve o destino a usar.
+function evitarFogo(ent, mundo, destino, cmd) {
+  const f = noFogo(mundo, ent.pos, 0.3);
+  if (f) {
+    cmd.usar = false;
+    const dx = ent.pos.x - f.pos.x;
+    const dz = ent.pos.z - f.pos.z;
+    const n = Math.hypot(dx, dz);
+    const atras = direcao(ent.yaw + Math.PI, 0); // bem no centro: sai para trás
+    const [ux, uz] = n > 0.05 ? [dx / n, dz / n] : [atras.x, atras.z];
+    return { x: f.pos.x + ux * (f.raio + FOGO_SAIDA), y: ent.pos.y, z: f.pos.z + uz * (f.raio + FOGO_SAIDA) };
+  }
+  if (!destino) return null;
+  const dx = destino.x - ent.pos.x;
+  const dz = destino.z - ent.pos.z;
+  const n = Math.hypot(dx, dz);
+  if (n < 0.05) return destino;
+  const k = Math.min(FOGO_OLHAR, n) / n;
+  const frente = { x: ent.pos.x + dx * k, y: ent.pos.y, z: ent.pos.z + dz * k };
+  return noFogo(mundo, frente, 0.3) ? null : destino;
+}
+
 // Granada no meio da briga: HE ou flash no inimigo à vista, com intervalo e um pouco de sorte.
 // `granadaAlvo` é o ponto onde o arco deve cair (ver `lancar` em granadas.js).
 function jogarGranada(ent, c, alvo, mundo, cmd, rng) {
@@ -245,6 +271,7 @@ function jogarGranada(ent, c, alvo, mundo, cmd, rng) {
   const d = distXZ(ent.pos, alvo.pos);
   let tipo = null;
   if (g.he > 0 && d >= ALCANCE_HE[0] && d <= ALCANCE_HE[1] && rng() < 0.5) tipo = 'he';
+  else if (g.molotov > 0 && d >= ALCANCE_MOLOTOV[0] && d <= ALCANCE_MOLOTOV[1] && rng() < 0.45) tipo = 'molotov';
   else if (g.flash > 0 && d >= ALCANCE_FLASH[0] && d <= ALCANCE_FLASH[1] && rng() < 0.4) tipo = 'flash';
   if (!tipo) return;
   cmd.granada = tipo;
@@ -536,6 +563,7 @@ export function pensar(ent, mundo, grafo, dificuldade, dt, rng) {
     // Ouviu passos de inimigo: segue a rota, mas com a mira virada para o barulho.
     olharRuido(ent, c, mundo, dt, cmd);
   }
+  if (mundo.fogos?.length) destino = evitarFogo(ent, mundo, destino, cmd);
   if (destino) {
     const mov = andarPara(ent.pos, cmd.yaw, destino);
     cmd.frente = mov.frente;

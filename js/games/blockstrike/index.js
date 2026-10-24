@@ -370,7 +370,8 @@ function montar(raiz, ctx) {
       } else if (ev.tipo === 'pouso') {
         sons.pouso(distDe(ev.id), panDe(ev.id));
       } else if (ev.tipo === 'arremesso' || ev.tipo === 'granada-quique' || ev.tipo === 'explosao-he' ||
-        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca') {
+        ev.tipo === 'flash' || ev.tipo === 'cegueira' || ev.tipo === 'fumaca' ||
+        ev.tipo === 'fogo' || ev.tipo === 'fogo-apagado' || ev.tipo === 'molotov-ar') {
         reagirGranada(p, ev, { eu, ouvido });
       } else {
         reagirBomba(p, ev, { eu, ouvido });
@@ -393,6 +394,12 @@ function montar(raiz, ctx) {
       sons.flash(dist, pan);
       render.clarao(pt);
     } else if (ev.tipo === 'fumaca') sons.fumaca(dist, pan);
+    else if (ev.tipo === 'fogo') sons.molotov(dist, pan);
+    else if (ev.tipo === 'fogo-apagado') sons.apagar(dist, pan);
+    else if (ev.tipo === 'molotov-ar') {
+      sons.molotov(dist, pan);
+      render.clarao(pt, 0xff8a1f); // estourou no ar: só o clarão laranja, sem fogo
+    }
     else if (ev.tipo === 'cegueira' && ev.id === eu.id) sons.zumbido(ev.dur);
   }
 
@@ -419,6 +426,18 @@ function montar(raiz, ctx) {
     } else if (ev.tipo === 'bomba-pega') {
       if (mundo.bomba?.terroristas === eu.time) hud.anuncio(`${mundo.entidades[ev.id].nome} pegou a C4`, 'aviso');
     }
+  }
+
+  // Crepitar do fogo das molotovs, de cada poça, enquanto o round corre.
+  const CREPITAR_A_CADA = 0.13;
+  function crepitarFogos(p, dt) {
+    const fogos = p.mundo.fogos;
+    if (!fogos?.length || p.partida.fase !== 'jogo') return;
+    p.proxCrepito = (p.proxCrepito ?? 0) - dt;
+    if (p.proxCrepito > 0) return;
+    p.proxCrepito = CREPITAR_A_CADA;
+    const eu = p.mundo.entidades[p.mundo.jogadorId];
+    for (const f of fogos) sons.crepitar(distancia(olho(eu), f.pos), panPonto(eu, f.pos));
   }
 
   // Bipe da C4 plantada, cada vez mais rápido; sai do ponto onde ela está.
@@ -587,6 +606,7 @@ function montar(raiz, ctx) {
     if (!p.treino) contarEventos(carreira, eventos, mundo.jogadorId);
     reagir(p, eventos);
     bipesDaBomba(p, dt);
+    crepitarFogos(p, dt);
     if (p.treino) regras.tempo += dt;
     else if (regras.fase !== 'fim-partida') {
       const segAntes = Math.ceil(regras.tempo);
