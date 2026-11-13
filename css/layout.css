@@ -288,6 +288,18 @@
   border-color: rgba(234, 179, 8, 0.3);
 }
 
+/* Card externo do Block Strike (o jogo vive em outro site): mantém o tom laranja do card. */
+.nav-badge.orange {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fb923c;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.bs-icon {
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+}
+
 .drawer-footer {
   padding-top: 1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
