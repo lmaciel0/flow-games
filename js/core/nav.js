@@ -1,6 +1,8 @@
 /**
  * Navegação — rotas por hash (#/ = home, #/<id> = jogo), drawer e home com cards.
  * Não conhece nenhum jogo: só lê o registro e chama mount/pause/resume.
+ * `externos` são jogos hospedados em outro site: só viram card na home (link para fora,
+ * em nova aba), sem rota, sem item no drawer e fora da contagem de jogos do hub.
  */
 import { listar, buscar } from './registry.js';
 
@@ -41,7 +43,7 @@ function itemDrawer({ href, icone, iconeClasse = '', titulo, subtitulo, badge })
   return a;
 }
 
-export function iniciarNav({ app, audio, confetti, escopo, conta }) {
+export function iniciarNav({ app, audio, confetti, escopo, conta, externos = [] }) {
   const drawer = document.getElementById('sidebar-drawer');
   const backdrop = document.getElementById('drawer-backdrop');
   const menuBtn = document.getElementById('menu-toggle-btn');
@@ -118,7 +120,27 @@ export function iniciarNav({ app, audio, confetti, escopo, conta }) {
     </footer>`;
   const grade = home.querySelector('.home-grid');
   const recordes = new Map();
+  const adicionarExternos = () => {
+    for (const e of externos) {
+      const card = document.createElement('a');
+      card.className = 'game-card';
+      card.href = e.url;
+      card.target = '_blank';
+      card.rel = 'noopener';
+      card.innerHTML = `
+        <div class="nav-icon game-card-icon ${e.iconeClasse ?? ''}">${e.icone}</div>
+        <div class="game-card-body">
+          <span class="game-card-title">${e.nome}</span>
+          <span class="game-card-desc">${e.descricao}</span>
+        </div>
+        ${e.badge ? `<span class="nav-badge ${e.badge.cor}">${e.badge.texto}</span>` : ''}`;
+      grade.append(card);
+    }
+  };
+  let externosAdicionados = false;
   for (const j of jogos) {
+    // Os externos ficam depois dos jogos e antes das páginas (Placar).
+    if (j.pagina && !externosAdicionados) { adicionarExternos(); externosAdicionados = true; }
     const card = document.createElement('a');
     card.className = 'game-card';
     card.href = `#/${j.id}`;
@@ -133,6 +155,7 @@ export function iniciarNav({ app, audio, confetti, escopo, conta }) {
     recordes.set(j.id, card.querySelector('.game-card-record'));
     grade.append(card);
   }
+  if (!externosAdicionados) adicionarExternos();
   app.append(home);
 
   function atualizarRecordes() {

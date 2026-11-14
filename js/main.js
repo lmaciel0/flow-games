@@ -1,6 +1,7 @@
 /**
  * Boot: migra o storage, liga o confete, registra os jogos e inicia a navegação.
  * Para adicionar um jogo: criar js/games/x.js, css/games/x.css e uma linha de registro aqui.
+ * Jogos que vivem em outro site entram em `externos`: card que abre o link, sem rota nem drawer.
  */
 import { migrar, escopo } from './core/storage.js';
 import * as audio from './core/audio.js';
@@ -16,7 +17,6 @@ import snake from './games/snake.js';
 import minesweeper from './games/minesweeper.js';
 import tetris from './games/tetris.js';
 import termo from './games/termo.js';
-import blockstrike from './games/blockstrike/index.js';
 import placar from './games/placar.js';
 
 migrar();
@@ -28,15 +28,28 @@ registrar(snake);
 registrar(minesweeper);
 registrar(tetris);
 registrar(termo);
-registrar(blockstrike);
 registrar(placar);
+
+// Block Strike agora vive em repositório e site próprios.
+const externos = [
+  {
+    id: 'blockstrike',
+    nome: 'Block Strike',
+    icone: '🔫',
+    iconeClasse: 'bs-icon',
+    descricao: 'FPS 5x5 contra bots',
+    badge: { texto: 'FPS', cor: 'orange' },
+    url: 'https://blockstrike-three.vercel.app'
+  }
+];
 
 iniciarNav({
   app: document.getElementById('app'),
   audio,
   confetti: triggerConfetti,
   escopo,
-  conta
+  conta,
+  externos
 });
 
 iniciarContaUI({ conta, audio });
